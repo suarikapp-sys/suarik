@@ -14,7 +14,7 @@ import {
 import { saveAs } from "file-saver";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-interface VideoOption     { url: string; source?: string; vault_category?: string; }
+interface VideoOption     { url: string; source?: string; vault_category?: string; thumb?: string; }
 interface BackgroundTrack { url: string; title: string; is_premium_vault: boolean; }
 interface Scene {
   segment: string; text_chunk?: string; vault_category?: string;
@@ -32,6 +32,7 @@ interface TimelineClip {
   id: string;           // unique — used as React key
   sceneIdx: number;
   url: string | null;   // null = gap placeholder (colored, not black)
+  thumb?: string;       // static preview image (always visible, no video loading needed)
   startSec: number;     // global timeline start
   durSec: number;       // how long this block lasts
   label: string;
@@ -181,6 +182,61 @@ const TEMPLATES = [
 const ASPECTS   = ["📺 16:9 · VSL","📱 9:16 · Reels","🎬 Cinemático"];
 const CLIP_COLS = ["#3b5bdb","#7048e8","#4c6ef5","#9c36b5","#1971c2","#6741d9"];
 
+// ─── Keyword → curated static photo (always visible, no video loading delay) ─
+const BROLL_IMAGES: Record<string, string> = {
+  // 💻 Tech / Finance
+  bug:         "https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=480&q=80",
+  sistema:     "https://images.unsplash.com/photo-1518770660439-4636190af475?w=480&q=80",
+  financeiro:  "https://images.pexels.com/photos/534216/pexels-photo-534216.jpeg?auto=compress&w=480",
+  dinheiro:    "https://images.pexels.com/photos/4386442/pexels-photo-4386442.jpeg?auto=compress&w=480",
+  conta:       "https://images.pexels.com/photos/4386442/pexels-photo-4386442.jpeg?auto=compress&w=480",
+  bilhões:     "https://images.pexels.com/photos/4386442/pexels-photo-4386442.jpeg?auto=compress&w=480",
+  bilhoes:     "https://images.pexels.com/photos/4386442/pexels-photo-4386442.jpeg?auto=compress&w=480",
+  acordos:     "https://images.pexels.com/photos/3729464/pexels-photo-3729464.jpeg?auto=compress&w=480",
+  judicial:    "https://images.pexels.com/photos/3729464/pexels-photo-3729464.jpeg?auto=compress&w=480",
+  governo:     "https://images.pexels.com/photos/259200/pexels-photo-259200.jpeg?auto=compress&w=480",
+  celular:     "https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?w=480&q=80",
+  lista:       "https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&w=480",
+  nome:        "https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&w=480",
+  renda:       "https://images.pexels.com/photos/3729464/pexels-photo-3729464.jpeg?auto=compress&w=480",
+  lucro:       "https://images.pexels.com/photos/4386442/pexels-photo-4386442.jpeg?auto=compress&w=480",
+  retorno:     "https://images.pexels.com/photos/4386442/pexels-photo-4386442.jpeg?auto=compress&w=480",
+  // 🌿 Nutra / Health
+  médicos:     "https://images.pexels.com/photos/4386466/pexels-photo-4386466.jpeg?auto=compress&w=480",
+  medicos:     "https://images.pexels.com/photos/4386466/pexels-photo-4386466.jpeg?auto=compress&w=480",
+  composto:    "https://images.pexels.com/photos/3683074/pexels-photo-3683074.jpeg?auto=compress&w=480",
+  amazônia:    "https://images.pexels.com/photos/1166209/pexels-photo-1166209.jpeg?auto=compress&w=480",
+  amazonia:    "https://images.pexels.com/photos/1166209/pexels-photo-1166209.jpeg?auto=compress&w=480",
+  cristal:     "https://images.pexels.com/photos/3683074/pexels-photo-3683074.jpeg?auto=compress&w=480",
+  cirurgia:    "https://images.pexels.com/photos/4386466/pexels-photo-4386466.jpeg?auto=compress&w=480",
+  // 🔒 Impact / Secret
+  segredo:     "https://images.unsplash.com/photo-1508739773434-c26b3d09e071?w=480&q=80",
+  proibido:    "https://images.pexels.com/photos/3683074/pexels-photo-3683074.jpeg?auto=compress&w=480",
+  estratégia:  "https://images.pexels.com/photos/3184291/pexels-photo-3184291.jpeg?auto=compress&w=480",
+  estrategia:  "https://images.pexels.com/photos/3184291/pexels-photo-3184291.jpeg?auto=compress&w=480",
+  padrão:      "https://images.pexels.com/photos/2510428/pexels-photo-2510428.jpeg?auto=compress&w=480",
+  padrao:      "https://images.pexels.com/photos/2510428/pexels-photo-2510428.jpeg?auto=compress&w=480",
+  // 🎰 iGaming
+  cassino:     "https://images.pexels.com/photos/2263436/pexels-photo-2263436.jpeg?auto=compress&w=480",
+  rodadas:     "https://images.pexels.com/photos/2263436/pexels-photo-2263436.jpeg?auto=compress&w=480",
+  jogadores:   "https://images.pexels.com/photos/2263436/pexels-photo-2263436.jpeg?auto=compress&w=480",
+  // 🌟 Generic premium
+  exclusivo:   "https://images.pexels.com/photos/323780/pexels-photo-323780.jpeg?auto=compress&w=480",
+  lifestyle:   "https://images.pexels.com/photos/323780/pexels-photo-323780.jpeg?auto=compress&w=480",
+  descoberto:  "https://images.pexels.com/photos/3771807/pexels-photo-3771807.jpeg?auto=compress&w=480",
+  revelado:    "https://images.pexels.com/photos/3762800/pexels-photo-3762800.jpeg?auto=compress&w=480",
+};
+
+// Returns a guaranteed-visible thumbnail for a scene
+function getSceneThumb(sc: Scene, idx: number): string {
+  const txt = (sc.text_chunk ?? sc.segment ?? "").toLowerCase();
+  for (const w of txt.split(/\s+/)) {
+    const clean = w.replace(/[^a-záéíóúãõçêâîôû]/g, "");
+    if (BROLL_IMAGES[clean]) return BROLL_IMAGES[clean];
+  }
+  return GALLERY_CARDS[idx % GALLERY_CARDS.length].src;
+}
+
 const GALLERY_TAGS  = ["All","Finanças","Nutra","Renda Extra","VFX","Retenção Agressiva","Cinematic"];
 const GALLERY_CARDS = [
   {id:1, tag:"Finanças",           title:"Estrutura VSL Finanças",     src:"https://images.pexels.com/photos/4386442/pexels-photo-4386442.jpeg?auto=compress&w=400", tall:true },
@@ -216,33 +272,76 @@ function fmtTime(s: number) {
   return `${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`;
 }
 
-// ─── Zero Black Screen algorithm ─────────────────────────────────────────────
-// Divides every scene into one or more TimelineClips so the V1 track is always
-// 100% filled. If a scene has N video_options we tile them evenly across the
-// scene's duration. Scenes with no video get a colored placeholder (not black).
+// ─── Zero Black Screen + Rapid-Cut algorithm ─────────────────────────────────
+// 1) Scans each scene's copy for BROLL_IMAGES keywords → creates 2-3s micro-clips
+//    (rapid-cut feel — multiple cuts per sentence, like a DR editor would do)
+// 2) Falls back to distributing video_options if < 2 keyword hits
+// 3) Never produces a black screen — colored gradient placeholder when no media
 function buildTimelineClips(scenes: Scene[]): TimelineClip[] {
   const clips: TimelineClip[] = [];
   let cursor = 0;
+
   for (let i = 0; i < scenes.length; i++) {
-    const sc     = scenes[i];
-    const dur    = sc.estimated_duration_seconds ?? 5;
-    const col    = CLIP_COLS[i % CLIP_COLS.length];
-    // Collect unique video URLs for this scene
+    const sc  = scenes[i];
+    const dur = sc.estimated_duration_seconds ?? 5;
+    const col = CLIP_COLS[i % CLIP_COLS.length];
+
+    // ── Scan text for keyword-based rapid-cut hits ───────────────────────────
+    const txt   = (sc.text_chunk ?? sc.segment ?? "").toLowerCase();
+    const words = txt.split(/\s+/);
+    const hits: Array<{ word: string; img: string }> = [];
+    const seen  = new Set<string>();
+    for (const w of words) {
+      const clean = w.replace(/[^a-záéíóúãõçêâîôû]/g, "");
+      if (BROLL_IMAGES[clean] && !seen.has(clean)) {
+        seen.add(clean);
+        hits.push({ word: clean, img: BROLL_IMAGES[clean] });
+      }
+    }
+
+    // ── Collect real video URLs from scene ────────────────────────────────────
     const urls: string[] = [];
     const add = (u?: string | null) => { if (u && !urls.includes(u)) urls.push(u); };
     add(sc.video_url);
     (sc.video_options ?? []).forEach(o => add(o.url));
 
-    if (urls.length === 0) {
-      // Placeholder — colored gradient, never solid black
-      clips.push({ id:`sc${i}-0`, sceneIdx:i, url:null, startSec:cursor, durSec:dur, label:sc.segment, color:col });
-    } else {
-      // Distribute all available clips evenly across scene duration
+    if (hits.length >= 2) {
+      // ── RAPID-CUT: 2-3s per keyword hit ──────────────────────────────────
+      const clipDur = Math.max(1.5, Math.min(3, dur / hits.length));
+      hits.forEach((hit, j) => {
+        const isLast = j === hits.length - 1;
+        const d      = isLast ? Math.max(0.5, dur - j * clipDur) : clipDur;
+        clips.push({
+          id:       `sc${i}-kw${j}`,
+          sceneIdx: i,
+          url:      urls[j % Math.max(urls.length, 1)] ?? null,
+          thumb:    hit.img,
+          startSec: cursor + j * clipDur,
+          durSec:   d,
+          label:    `${sc.segment} · ${hit.word}`,
+          color:    col,
+        });
+      });
+    } else if (urls.length > 0) {
+      // ── STANDARD: distribute video options evenly ─────────────────────────
       const segDur = dur / urls.length;
       urls.forEach((url, j) =>
-        clips.push({ id:`sc${i}-${j}`, sceneIdx:i, url, startSec:cursor + j*segDur, durSec:segDur,
-          label: urls.length > 1 ? `${sc.segment} · ${j+1}/${urls.length}` : sc.segment, color:col })
+        clips.push({
+          id: `sc${i}-${j}`, sceneIdx: i, url,
+          thumb: getSceneThumb(sc, i),
+          startSec: cursor + j * segDur, durSec: segDur,
+          label: urls.length > 1 ? `${sc.segment} · ${j+1}/${urls.length}` : sc.segment,
+          color: col,
+        })
       );
+    } else {
+      // ── PLACEHOLDER: colored gradient, never black ────────────────────────
+      clips.push({
+        id: `sc${i}-0`, sceneIdx: i, url: null,
+        thumb: getSceneThumb(sc, i),
+        startSec: cursor, durSec: dur,
+        label: sc.segment, color: col,
+      });
     }
     cursor += dur;
   }
@@ -804,10 +903,10 @@ function WorkstationView({ result, copy: initialCopy, onBack }: {
 
               {/* ── V1: Video (absolutely positioned sub-clips) ── */}
               <div className="flex border-b" style={{borderColor:"rgba(255,255,255,0.04)"}}>
-                <div className="w-10 h-10 shrink-0 flex items-center justify-center border-r" style={{borderColor:"rgba(255,255,255,0.04)"}}>
+                <div className="w-10 h-20 shrink-0 flex items-center justify-center border-r" style={{borderColor:"rgba(255,255,255,0.04)"}}>
                   <span className="text-[8px] font-black text-gray-700">V1</span>
                 </div>
-                <div className="flex-1 relative h-10">
+                <div className="flex-1 relative h-20">
                   {timelineClips.map(clip=>{
                     const left=(clip.startSec/totalDur)*100;
                     const width=(clip.durSec/totalDur)*100;
@@ -817,34 +916,39 @@ function WorkstationView({ result, copy: initialCopy, onBack }: {
                     return(
                       <div key={clip.id}
                         className={`v1clip absolute top-1 bottom-1 rounded cursor-pointer overflow-hidden transition-all
-                          ${isAct?"ring-1 ring-cyan-400/80":""}
+                          ${isAct?"ring-2 ring-cyan-400/90 brightness-110":""}
                           ${isDT?"ring-2 ring-purple-500 brightness-125":""}`}
                         style={{
                           left:`calc(${left}% + 1px)`,width:`calc(${width}% - 2px)`,
-                          background:clip.url?`${clip.color}28`:`${clip.color}0d`,
-                          border:`1px ${clip.url?"solid":"dashed"} ${clip.color}${clip.url?"55":"33"}`,
+                          background: clip.thumb
+                            ? `url(${clip.thumb}) center/cover no-repeat`
+                            : clip.url ? `${clip.color}28` : `${clip.color}0d`,
+                          border:`1px ${clip.url||clip.thumb?"solid":"dashed"} ${clip.color}${clip.url||clip.thumb?"77":"33"}`,
                         }}
                         onClick={e=>{e.stopPropagation();seekToTime(clip.startSec+0.01);}}
                         onDragOver={e=>{e.preventDefault();setDragOverClipId(clip.id);}}
                         onDragLeave={()=>setDragOverClipId(null)}
                         onDrop={e=>{e.preventDefault();if(dragSrcUrl)handleDropOnClip(clip.id,dragSrcUrl);}}>
+                        {/* Dark gradient overlay so label stays readable over thumbnail */}
+                        {clip.thumb&&<div className="absolute inset-0" style={{background:"linear-gradient(to top,rgba(0,0,0,0.72) 0%,rgba(0,0,0,0.18) 60%,transparent 100%)"}}/>}
                         {isLoad?(
-                          <div className="w-full h-full flex items-center justify-center">
-                            <div className="w-3 h-3 rounded-full border-2 border-t-transparent animate-spin"
-                              style={{borderColor:`${clip.color}99`,borderTopColor:"transparent"}}/>
+                          <div className="absolute inset-0 flex items-center justify-center" style={{background:"rgba(0,0,0,0.5)"}}>
+                            <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin"
+                              style={{borderColor:`${clip.color}cc`,borderTopColor:"transparent"}}/>
                           </div>
                         ):(
                           <>
-                            <div className="flex items-center h-full px-1.5">
-                              {!clip.url&&<div className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0 mr-0.5" style={{background:clip.color+"88"}}/>}
-                              <span className="text-[7px] font-bold text-white/60 truncate">{clip.label}</span>
+                            <div className="absolute bottom-0 left-0 right-0 flex items-center px-1.5 pb-1">
+                              {!clip.url&&!clip.thumb&&<div className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0 mr-0.5" style={{background:clip.color+"88"}}/>}
+                              <span className="text-[7px] font-bold text-white/80 truncate drop-shadow">{clip.label}</span>
                             </div>
                             <div className="v1clip-overlay absolute inset-0 flex items-center justify-center"
-                              style={{background:"rgba(0,0,0,0.65)"}}>
+                              style={{background:"rgba(0,0,0,0.55)"}}>
                               <button title="Sugerir outra mídia"
                                 onClick={e=>{e.stopPropagation();suggestAnother(clip.id);}}
-                                className="flex items-center gap-1 hover:scale-110 transition-transform">
+                                className="flex items-center gap-1.5 hover:scale-110 transition-transform bg-black/60 rounded-full px-2 py-1">
                                 <RefreshCw className="w-3 h-3 text-white"/>
+                                <span className="text-[8px] text-white font-bold">Trocar</span>
                               </button>
                             </div>
                           </>
@@ -857,10 +961,10 @@ function WorkstationView({ result, copy: initialCopy, onBack }: {
 
               {/* ── T1: Subtitle ── */}
               <div className="flex border-b" style={{borderColor:"rgba(255,255,255,0.04)"}}>
-                <div className="w-10 h-8 shrink-0 flex items-center justify-center border-r" style={{borderColor:"rgba(255,255,255,0.04)"}}>
+                <div className="w-10 h-12 shrink-0 flex items-center justify-center border-r" style={{borderColor:"rgba(255,255,255,0.04)"}}>
                   <span className="text-[8px] font-black text-gray-700">T1</span>
                 </div>
-                <div className="flex-1 relative h-8">
+                <div className="flex-1 relative h-12">
                   {localScenes.map((sc,i)=>{
                     const left=(sceneStarts[i]/totalDur)*100;
                     const width=((sc.estimated_duration_seconds??5)/totalDur)*100;
@@ -880,11 +984,11 @@ function WorkstationView({ result, copy: initialCopy, onBack }: {
 
               {/* ── SFX: Scoring / Pontuação Layer ── */}
               <div className="flex border-b" style={{borderColor:"rgba(255,255,255,0.04)"}}>
-                <div className="w-10 h-7 shrink-0 flex items-center justify-center border-r" style={{borderColor:"rgba(255,255,255,0.04)"}}>
+                <div className="w-10 h-10 shrink-0 flex items-center justify-center border-r" style={{borderColor:"rgba(255,255,255,0.04)"}}>
                   <span className="text-[7px] font-black uppercase tracking-tight" style={{color:"rgba(6,182,212,0.55)"}}>SFX</span>
                 </div>
                 {/* overflow-visible so tooltip pokes above the track */}
-                <div className="flex-1 relative h-7 overflow-visible">
+                <div className="flex-1 relative h-10 overflow-visible">
                   {sfxMarkers.length===0 && (
                     <div className="absolute inset-0 flex items-center px-2">
                       <span className="text-[7px] text-gray-800 italic">Nenhum gatilho detectado</span>
@@ -934,22 +1038,22 @@ function WorkstationView({ result, copy: initialCopy, onBack }: {
 
               {/* ── A1: Waveform ── */}
               <div className="flex border-b" style={{borderColor:"rgba(255,255,255,0.04)"}}>
-                <div className="w-10 h-8 shrink-0 flex items-center justify-center border-r" style={{borderColor:"rgba(255,255,255,0.04)"}}>
+                <div className="w-10 h-14 shrink-0 flex items-center justify-center border-r" style={{borderColor:"rgba(255,255,255,0.04)"}}>
                   <span className="text-[8px] font-black text-gray-700">A1</span>
                 </div>
-                <div className="flex-1 h-8 flex items-end overflow-hidden gap-px px-1" style={{background:"rgba(16,185,129,0.04)"}}>
-                  {Array.from({length:90}).map((_,i)=>(
-                    <div key={i} className="flex-1 rounded-full opacity-55" style={{background:"#10b981",height:`${18+Math.abs(Math.sin(i*1.7)*Math.cos(i*0.5))*82}%`}}/>
+                <div className="flex-1 h-14 flex items-end overflow-hidden gap-px px-1" style={{background:"rgba(16,185,129,0.04)"}}>
+                  {Array.from({length:110}).map((_,i)=>(
+                    <div key={i} className="flex-1 rounded-full opacity-60" style={{background:"#10b981",height:`${14+Math.abs(Math.sin(i*1.7)*Math.cos(i*0.5))*86}%`}}/>
                   ))}
                 </div>
               </div>
 
               {/* ── A2: SFX ── */}
               <div className="flex" style={{borderColor:"rgba(255,255,255,0.04)"}}>
-                <div className="w-10 h-8 shrink-0 flex items-center justify-center border-r" style={{borderColor:"rgba(255,255,255,0.04)"}}>
+                <div className="w-10 h-10 shrink-0 flex items-center justify-center border-r" style={{borderColor:"rgba(255,255,255,0.04)"}}>
                   <span className="text-[8px] font-black text-gray-700">A2</span>
                 </div>
-                <div className="flex-1 relative h-8">
+                <div className="flex-1 relative h-10">
                   {localScenes.map((sc,i)=>sc.sfx_url&&(
                     <div key={i} className="absolute top-0.5 bottom-0.5 rounded flex items-center gap-0.5 px-1.5 overflow-hidden"
                       style={{left:`calc(${(sceneStarts[i]/totalDur)*100}%+1px)`,width:`calc(${((sc.estimated_duration_seconds??5)/totalDur)*100}%-2px)`,background:"rgba(239,68,68,0.07)",border:"1px solid rgba(239,68,68,0.2)"}}>
@@ -1033,12 +1137,18 @@ function WorkstationView({ result, copy: initialCopy, onBack }: {
               </p>
             ):(
               <div className="grid grid-cols-2 gap-1.5">
-                {alternatives.slice(0,6).map((opt,i)=>(
+                {alternatives.slice(0,6).map((opt,i)=>{
+                  const altThumb = opt.thumb ?? GALLERY_CARDS[(activeScene*3+i) % GALLERY_CARDS.length].src;
+                  return (
                   <div key={i}
                     className="relative rounded-lg overflow-hidden cursor-grab active:cursor-grabbing group/drag"
                     style={{aspectRatio:"16/9",border:"1px solid rgba(255,255,255,0.08)"}}
                     draggable onDragStart={()=>setDragSrcUrl(opt.url)} onDragEnd={()=>setDragSrcUrl(null)}>
-                    <video src={opt.url} className="w-full h-full object-cover opacity-50 group-hover/drag:opacity-75 transition-opacity" muted preload="metadata"/>
+                    {/* Static img — always visible, no grey loading state */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={altThumb} alt={`Alt ${i+1}`}
+                      className="w-full h-full object-cover opacity-70 group-hover/drag:opacity-90 transition-opacity"
+                      loading="lazy"/>
                     <div className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover/drag:opacity-100 transition-opacity gap-0.5"
                       style={{background:"rgba(0,0,0,0.5)"}}>
                       <GripVertical className="w-4 h-4 text-white/80"/>
@@ -1051,7 +1161,7 @@ function WorkstationView({ result, copy: initialCopy, onBack }: {
                     </button>
                     <div className="absolute top-1 left-1 px-1 py-0.5 rounded text-[7px] font-black text-white/60" style={{background:"rgba(0,0,0,0.6)"}}>Alt {i+1}</div>
                   </div>
-                ))}
+                )})}
               </div>
             )}
           </div>
@@ -1070,8 +1180,11 @@ function WorkstationView({ result, copy: initialCopy, onBack }: {
                     <div className="flex gap-2 p-2.5">
                       <div className="w-16 h-10 rounded-lg shrink-0 overflow-hidden relative"
                         style={{background:`${col}18`,border:`1px solid ${col}33`}}>
-                        {vid?<video src={vid} className="w-full h-full object-cover opacity-65" muted preload="metadata"/>
-                          :<div className="w-full h-full flex items-center justify-center"><Film className="w-3.5 h-3.5" style={{color:col+"99"}}/></div>}
+                        {/* Always use static <img> — video elements are grey until loaded */}
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={getSceneThumb(sc, i)} alt={sc.segment}
+                          className="w-full h-full object-cover opacity-85"
+                          loading="lazy"/>
                         <div className="absolute bottom-0.5 right-0.5 text-[7px] font-black px-1 rounded" style={{background:col+"aa",color:"#fff"}}>{i+1}</div>
                       </div>
                       <div className="flex-1 min-w-0">
