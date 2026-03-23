@@ -38,6 +38,119 @@ interface TimelineClip {
   color: string;
 }
 
+// ─── SFX Scoring Layer ────────────────────────────────────────────────────────
+interface SFXMarker {
+  id: string;
+  type: "transition" | "emphasis";
+  timeSec: number;      // global position in seconds
+  label: string;        // tooltip text (e.g. "Caixa Registradora")
+  kind: "zap" | "bell"; // zap = whoosh/impact, bell = chime/ding
+  color: string;
+  keyword?: string;     // which keyword triggered this
+}
+
+// Keywords → SFX label + visual style
+const SFX_KEYWORDS: Record<string, { label: string; kind: "zap"|"bell"; color: string }> = {
+  // 💰 Money
+  dinheiro:    { label:"Caixa Registradora",   kind:"bell", color:"#fbbf24" },
+  bilhões:     { label:"Caixa Registradora",   kind:"bell", color:"#fbbf24" },
+  bilhoes:     { label:"Caixa Registradora",   kind:"bell", color:"#fbbf24" },
+  renda:       { label:"Ping de Depósito",      kind:"bell", color:"#fbbf24" },
+  lucro:       { label:"Moedas Caindo",         kind:"bell", color:"#fbbf24" },
+  indenizações:{ label:"Sela de Contrato",      kind:"bell", color:"#fbbf24" },
+  acordo:      { label:"Sela de Contrato",      kind:"bell", color:"#fbbf24" },
+  // 🚨 Urgência
+  urgente:     { label:"Alarm de Alerta",       kind:"zap",  color:"#ef4444" },
+  atenção:     { label:"Bell de Aviso",         kind:"bell", color:"#f59e0b" },
+  atencao:     { label:"Bell de Aviso",         kind:"bell", color:"#f59e0b" },
+  agora:       { label:"Swoosh Rápido",         kind:"zap",  color:"#8b5cf6" },
+  rápido:      { label:"Swoosh Rápido",         kind:"zap",  color:"#8b5cf6" },
+  rapido:      { label:"Swoosh Rápido",         kind:"zap",  color:"#8b5cf6" },
+  nunca:       { label:"Impact Boom",           kind:"zap",  color:"#ef4444" },
+  // 🔒 Poder
+  segredo:     { label:"Whoosh Místico",        kind:"zap",  color:"#6366f1" },
+  proibido:    { label:"Stamp Impact",          kind:"zap",  color:"#ef4444" },
+  revelado:    { label:"Reveal Sting",          kind:"zap",  color:"#ec4899" },
+  descoberto:  { label:"Discovery Chime",       kind:"bell", color:"#10b981" },
+  grátis:      { label:"Pop de Confirmação",    kind:"bell", color:"#10b981" },
+  gratis:      { label:"Pop de Confirmação",    kind:"bell", color:"#10b981" },
+  exclusivo:   { label:"Whoosh Premium",        kind:"zap",  color:"#6366f1" },
+  verdade:     { label:"Dramatic Sting",        kind:"zap",  color:"#f59e0b" },
+  // ✅ Ações
+  escrever:    { label:"Teclado Click",         kind:"bell", color:"#22d3ee" },
+  resultado:   { label:"Achievement Bell",      kind:"bell", color:"#10b981" },
+  verificar:   { label:"Confirmation Beep",     kind:"bell", color:"#10b981" },
+  garantido:   { label:"Seal Pop",              kind:"bell", color:"#10b981" },
+  confirmar:   { label:"Confirmation Beep",     kind:"bell", color:"#10b981" },
+  // 💥 Impacto
+  médicos:     { label:"Dramatic Sting",        kind:"zap",  color:"#ef4444" },
+  medicos:     { label:"Dramatic Sting",        kind:"zap",  color:"#ef4444" },
+  destroi:     { label:"Impact Boom",           kind:"zap",  color:"#ef4444" },
+  dissolve:    { label:"Dissolve Whoosh",       kind:"zap",  color:"#8b5cf6" },
+  estratégia:  { label:"Tactical Click",        kind:"bell", color:"#22d3ee" },
+  estrategia:  { label:"Tactical Click",        kind:"bell", color:"#22d3ee" },
+  detecta:     { label:"Ping Eletrônico",       kind:"bell", color:"#22d3ee" },
+  bloqueado:   { label:"Block Impact",          kind:"zap",  color:"#ef4444" },
+  bug:         { label:"Glitch SFX",            kind:"zap",  color:"#f472b6" },
+  padrão:      { label:"Reveal Sting",          kind:"zap",  color:"#8b5cf6" },
+  padrao:      { label:"Reveal Sting",          kind:"zap",  color:"#8b5cf6" },
+  esconder:    { label:"Whoosh Místico",        kind:"zap",  color:"#6366f1" },
+  cassino:     { label:"Slot Machine",          kind:"bell", color:"#fbbf24" },
+  composto:    { label:"Science Beep",          kind:"bell", color:"#22d3ee" },
+  amazônia:    { label:"Nature Ambience",       kind:"bell", color:"#10b981" },
+  amazonia:    { label:"Nature Ambience",       kind:"bell", color:"#10b981" },
+};
+
+// Scans all scenes, emits SFXMarker for each keyword hit + scene-boundary transitions.
+// Debounced: max 1 marker per 1.5s to avoid visual noise.
+function buildSFXMarkers(scenes: Scene[]): SFXMarker[] {
+  const raw: SFXMarker[] = [];
+  let cursor = 0;
+
+  for (let i = 0; i < scenes.length; i++) {
+    const sc  = scenes[i];
+    const dur = sc.estimated_duration_seconds ?? 5;
+    const txt = (sc.text_chunk ?? sc.segment ?? "").toLowerCase();
+    const words = txt.split(/\s+/).filter(Boolean);
+
+    // Scene-boundary transition (every scene except first)
+    if (i > 0) {
+      raw.push({ id:`tr-${i}`, type:"transition", timeSec:cursor,
+        label:"Swoosh de Transição", kind:"zap", color:"#7c3aed" });
+    }
+    // Mid-scene transition for long scenes (> 7s)
+    if (dur > 7) {
+      raw.push({ id:`tr-mid-${i}`, type:"transition", timeSec:cursor + dur / 2,
+        label:"Cut de Transição", kind:"zap", color:"#7c3aed" });
+    }
+
+    // Keyword scan — proportional timestamp within the scene
+    words.forEach((word, wi) => {
+      const clean = word.replace(/[^a-záéíóúãõçêâîôû]/g, "");
+      const def = SFX_KEYWORDS[clean];
+      if (def) {
+        raw.push({
+          id: `kw-${i}-${wi}`,
+          type: "emphasis",
+          timeSec: cursor + (wi / Math.max(words.length - 1, 1)) * dur,
+          label: def.label, kind: def.kind, color: def.color, keyword: clean,
+        });
+      }
+    });
+
+    cursor += dur;
+  }
+
+  // Sort chronologically, then debounce (min 1.5s gap)
+  raw.sort((a, b) => a.timeSec - b.timeSec);
+  const out: SFXMarker[] = [];
+  for (const m of raw) {
+    const last = out[out.length - 1];
+    if (!last || m.timeSec - last.timeSec >= 1.5) out.push(m);
+  }
+  return out;
+}
+
 // ─── Static data ──────────────────────────────────────────────────────────────
 const NICHES = [
   { group:"Direct Response", options:[
@@ -501,6 +614,40 @@ function WorkstationView({ result, copy: initialCopy, onBack }: {
     return (sc.video_options??[]).filter(o=>o.url!==cur);
   },[localScenes,activeScene]);
 
+  // ── SFX Scoring Layer ────────────────────────────────────────────────────
+  const sfxMarkers = useMemo(()=>buildSFXMarkers(localScenes),[localScenes]);
+
+  // Web-Audio preview — generates a synthetic tone per sfx kind
+  const playSFXPreview = useCallback((marker: SFXMarker)=>{
+    try {
+      type WACtx = typeof AudioContext;
+      const ACtx: WACtx = (window.AudioContext
+        || (window as Window & { webkitAudioContext?: WACtx }).webkitAudioContext) as WACtx;
+      const ctx = new ACtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      const t = ctx.currentTime;
+      if (marker.kind === "zap") {
+        // Downward sweep — whoosh / impact feel
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(1400, t);
+        osc.frequency.exponentialRampToValueAtTime(60, t + 0.22);
+        gain.gain.setValueAtTime(0.18, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+        osc.start(t); osc.stop(t + 0.22);
+      } else {
+        // Bell / chime — two-note ring
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(880, t);
+        osc.frequency.setValueAtTime(1320, t + 0.06);
+        gain.gain.setValueAtTime(0.14, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+        osc.start(t); osc.stop(t + 0.45);
+      }
+    } catch { /* AudioContext not available */ }
+  },[]);
+
   // ── Music ────────────────────────────────────────────────────────────────
   const toggleMusic=(idx:number)=>{
     if(playingMusic===idx){musicRefs[idx]?.current?.pause();setPlayingMusic(null);}
@@ -731,6 +878,60 @@ function WorkstationView({ result, copy: initialCopy, onBack }: {
                 </div>
               </div>
 
+              {/* ── SFX: Scoring / Pontuação Layer ── */}
+              <div className="flex border-b" style={{borderColor:"rgba(255,255,255,0.04)"}}>
+                <div className="w-10 h-7 shrink-0 flex items-center justify-center border-r" style={{borderColor:"rgba(255,255,255,0.04)"}}>
+                  <span className="text-[7px] font-black uppercase tracking-tight" style={{color:"rgba(6,182,212,0.55)"}}>SFX</span>
+                </div>
+                {/* overflow-visible so tooltip pokes above the track */}
+                <div className="flex-1 relative h-7 overflow-visible">
+                  {sfxMarkers.length===0 && (
+                    <div className="absolute inset-0 flex items-center px-2">
+                      <span className="text-[7px] text-gray-800 italic">Nenhum gatilho detectado</span>
+                    </div>
+                  )}
+                  {sfxMarkers.map(marker=>{
+                    const left=(marker.timeSec/totalDur)*100;
+                    const isNear=Math.abs(currentTime-marker.timeSec)<0.5;
+                    return (
+                      <div key={marker.id}
+                        className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-10 group/sfxpin"
+                        style={{left:`calc(40px + (100% - 40px) * ${left/100})`}}>
+
+                        {/* Tooltip */}
+                        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 pointer-events-none
+                          opacity-0 group-hover/sfxpin:opacity-100 transition-opacity duration-150 z-50">
+                          <div className="whitespace-nowrap text-[8px] font-bold text-white px-2 py-1 rounded-md shadow-2xl"
+                            style={{background:"#18181b",border:"1px solid rgba(255,255,255,0.13)",boxShadow:"0 8px 24px rgba(0,0,0,0.7)"}}>
+                            {marker.label}
+                            {marker.keyword&&<span className="text-gray-500 ml-1">· "{marker.keyword}"</span>}
+                          </div>
+                          {/* Caret */}
+                          <div className="w-2 h-2 mx-auto rotate-45 -mt-px"
+                            style={{background:"#18181b",borderRight:"1px solid rgba(255,255,255,0.13)",borderBottom:"1px solid rgba(255,255,255,0.13)"}}/>
+                        </div>
+
+                        {/* Icon bubble */}
+                        <button
+                          onClick={e=>{e.stopPropagation();playSFXPreview(marker);seekToTime(marker.timeSec);}}
+                          className="w-5 h-5 rounded-full flex items-center justify-center transition-all duration-200 cursor-pointer hover:scale-110"
+                          style={{
+                            background:"#27272a",
+                            border:`1px solid ${isNear?marker.color:"rgba(6,182,212,0.5)"}`,
+                            boxShadow:isNear?`0 0 8px ${marker.color},0 0 18px ${marker.color}44`:"none",
+                            transform:isNear?"scale(1.45)":"scale(1)",
+                          }}>
+                          {marker.kind==="zap"
+                            ?<Zap      className="w-2.5 h-2.5" style={{color:isNear?marker.color:"#22d3ee"}} fill={isNear?marker.color:"none"}/>
+                            :<Volume2  className="w-2.5 h-2.5" style={{color:isNear?marker.color:"#22d3ee"}}/>
+                          }
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* ── A1: Waveform ── */}
               <div className="flex border-b" style={{borderColor:"rgba(255,255,255,0.04)"}}>
                 <div className="w-10 h-8 shrink-0 flex items-center justify-center border-r" style={{borderColor:"rgba(255,255,255,0.04)"}}>
@@ -893,6 +1094,68 @@ function WorkstationView({ result, copy: initialCopy, onBack }: {
                 );
               })}
             </div>
+          </div>
+
+          {/* ── SFX Sugeridos ── */}
+          <div className="p-3 border-b" style={{borderColor:"rgba(255,255,255,0.05)"}}>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[9px] uppercase tracking-[0.18em] text-gray-700 font-bold">SFX · Pontuação</p>
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                style={{color:"#22d3ee",background:"rgba(6,182,212,0.1)",border:"1px solid rgba(6,182,212,0.25)"}}>
+                {sfxMarkers.length} eventos
+              </span>
+            </div>
+
+            {sfxMarkers.length===0?(
+              <p className="text-[10px] text-gray-700 py-3 text-center">Nenhuma keyword detectada na copy</p>
+            ):(
+              <div className="space-y-1 max-h-[220px] overflow-y-auto pr-0.5">
+                {sfxMarkers.map(marker=>{
+                  const isActive=Math.abs(currentTime-marker.timeSec)<0.5;
+                  return (
+                    <div key={marker.id}
+                      className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 transition-all ${isActive?"border-cyan-500/30":"border-transparent"}`}
+                      style={{
+                        border:`1px solid`,
+                        borderColor:isActive?"rgba(6,182,212,0.3)":"transparent",
+                        background:isActive?"rgba(6,182,212,0.06)":"rgba(255,255,255,0.025)",
+                        boxShadow:isActive?`0 0 12px rgba(6,182,212,0.1)`:"none",
+                      }}>
+
+                      {/* Play preview via Web Audio */}
+                      <button onClick={()=>playSFXPreview(marker)}
+                        className="w-5 h-5 rounded-full shrink-0 flex items-center justify-center transition-all hover:scale-110"
+                        style={{background:"rgba(34,211,238,0.1)",border:"1px solid rgba(34,211,238,0.3)"}}>
+                        <Play className="w-2 h-2 text-cyan-400 ml-0.5" fill="currentColor"/>
+                      </button>
+
+                      {/* Icon bubble */}
+                      <div className="w-5 h-5 rounded-full shrink-0 flex items-center justify-center"
+                        style={{background:"#27272a",border:`1px solid ${marker.color}55`}}>
+                        {marker.kind==="zap"
+                          ?<Zap     className="w-2.5 h-2.5" style={{color:marker.color}}/>
+                          :<Volume2 className="w-2.5 h-2.5" style={{color:marker.color}}/>
+                        }
+                      </div>
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[9px] font-bold truncate" style={{color:isActive?"#22d3ee":"#d1d5db"}}>{marker.label}</p>
+                        <p className="text-[8px] text-gray-700 mt-0.5">
+                          {fmtTime(marker.timeSec)}
+                          {marker.keyword?<span className="text-gray-600"> · "{marker.keyword}"</span>:<span className="text-gray-700"> · transição</span>}
+                        </p>
+                      </div>
+
+                      {/* Seek to */}
+                      <button onClick={()=>seekToTime(marker.timeSec)}
+                        className="text-[10px] font-black text-gray-700 hover:text-cyan-400 transition-colors shrink-0"
+                        title="Ir para este momento">→</button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Trilha Sonora */}
