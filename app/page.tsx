@@ -33,10 +33,20 @@ interface TimelineClip {
   sceneIdx: number;
   url: string | null;   // null = gap placeholder (colored, not black)
   thumb?: string;       // static preview image (always visible, no video loading needed)
+  triggerWord?: string; // exact keyword that caused this image to be selected
   startSec: number;     // global timeline start
   durSec: number;       // how long this block lasts
   label: string;
   color: string;
+}
+
+// ─── SubtitleWord: karaoke timing model ──────────────────────────────────────
+interface SubtitleWord {
+  word: string;
+  startSec: number;
+  endSec: number;
+  isKeyword: boolean;   // in BROLL_IMAGES (triggers image swap)
+  cleanWord: string;    // normalized for lookup
 }
 
 // ─── SFX Scoring Layer ────────────────────────────────────────────────────────
@@ -182,49 +192,69 @@ const TEMPLATES = [
 const ASPECTS   = ["📺 16:9 · VSL","📱 9:16 · Reels","🎬 Cinemático"];
 const CLIP_COLS = ["#3b5bdb","#7048e8","#4c6ef5","#9c36b5","#1971c2","#6741d9"];
 
-// ─── Keyword → curated static photo (always visible, no video loading delay) ─
+// ─── VSL Brain: keyword → premium curated image (exact match, high quality) ──
+// Each entry maps a PT-BR trigger word to a Pexels HD photo that visually
+// represents that concept. This drives both the timeline rapid-cut thumbnails
+// and the karaoke subtitle glow effect.
 const BROLL_IMAGES: Record<string, string> = {
-  // 💻 Tech / Finance
-  bug:         "https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=480&q=80",
-  sistema:     "https://images.unsplash.com/photo-1518770660439-4636190af475?w=480&q=80",
-  financeiro:  "https://images.pexels.com/photos/534216/pexels-photo-534216.jpeg?auto=compress&w=480",
-  dinheiro:    "https://images.pexels.com/photos/4386442/pexels-photo-4386442.jpeg?auto=compress&w=480",
-  conta:       "https://images.pexels.com/photos/4386442/pexels-photo-4386442.jpeg?auto=compress&w=480",
-  bilhões:     "https://images.pexels.com/photos/4386442/pexels-photo-4386442.jpeg?auto=compress&w=480",
-  bilhoes:     "https://images.pexels.com/photos/4386442/pexels-photo-4386442.jpeg?auto=compress&w=480",
-  acordos:     "https://images.pexels.com/photos/3729464/pexels-photo-3729464.jpeg?auto=compress&w=480",
-  judicial:    "https://images.pexels.com/photos/3729464/pexels-photo-3729464.jpeg?auto=compress&w=480",
-  governo:     "https://images.pexels.com/photos/259200/pexels-photo-259200.jpeg?auto=compress&w=480",
-  celular:     "https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?w=480&q=80",
-  lista:       "https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&w=480",
-  nome:        "https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&w=480",
-  renda:       "https://images.pexels.com/photos/3729464/pexels-photo-3729464.jpeg?auto=compress&w=480",
-  lucro:       "https://images.pexels.com/photos/4386442/pexels-photo-4386442.jpeg?auto=compress&w=480",
-  retorno:     "https://images.pexels.com/photos/4386442/pexels-photo-4386442.jpeg?auto=compress&w=480",
-  // 🌿 Nutra / Health
-  médicos:     "https://images.pexels.com/photos/4386466/pexels-photo-4386466.jpeg?auto=compress&w=480",
-  medicos:     "https://images.pexels.com/photos/4386466/pexels-photo-4386466.jpeg?auto=compress&w=480",
-  composto:    "https://images.pexels.com/photos/3683074/pexels-photo-3683074.jpeg?auto=compress&w=480",
-  amazônia:    "https://images.pexels.com/photos/1166209/pexels-photo-1166209.jpeg?auto=compress&w=480",
-  amazonia:    "https://images.pexels.com/photos/1166209/pexels-photo-1166209.jpeg?auto=compress&w=480",
-  cristal:     "https://images.pexels.com/photos/3683074/pexels-photo-3683074.jpeg?auto=compress&w=480",
-  cirurgia:    "https://images.pexels.com/photos/4386466/pexels-photo-4386466.jpeg?auto=compress&w=480",
-  // 🔒 Impact / Secret
-  segredo:     "https://images.unsplash.com/photo-1508739773434-c26b3d09e071?w=480&q=80",
-  proibido:    "https://images.pexels.com/photos/3683074/pexels-photo-3683074.jpeg?auto=compress&w=480",
-  estratégia:  "https://images.pexels.com/photos/3184291/pexels-photo-3184291.jpeg?auto=compress&w=480",
-  estrategia:  "https://images.pexels.com/photos/3184291/pexels-photo-3184291.jpeg?auto=compress&w=480",
-  padrão:      "https://images.pexels.com/photos/2510428/pexels-photo-2510428.jpeg?auto=compress&w=480",
-  padrao:      "https://images.pexels.com/photos/2510428/pexels-photo-2510428.jpeg?auto=compress&w=480",
+  // 👨‍⚕️ Health / Medical — "Médicos estão proibindo..."
+  médicos:     "https://images.pexels.com/photos/5452293/pexels-photo-5452293.jpeg?auto=compress&w=1280",
+  medicos:     "https://images.pexels.com/photos/5452293/pexels-photo-5452293.jpeg?auto=compress&w=1280",
+  médico:      "https://images.pexels.com/photos/5452293/pexels-photo-5452293.jpeg?auto=compress&w=1280",
+  medico:      "https://images.pexels.com/photos/5452293/pexels-photo-5452293.jpeg?auto=compress&w=1280",
+  cirurgia:    "https://images.pexels.com/photos/4173251/pexels-photo-4173251.jpeg?auto=compress&w=1280",
+  remédios:    "https://images.pexels.com/photos/159211/headache-pain-pills-medication-159211.jpeg?auto=compress&w=1280",
+  remedios:    "https://images.pexels.com/photos/159211/headache-pain-pills-medication-159211.jpeg?auto=compress&w=1280",
+  dores:       "https://images.pexels.com/photos/7176026/pexels-photo-7176026.jpeg?auto=compress&w=1280",
+  articulares: "https://images.pexels.com/photos/7176026/pexels-photo-7176026.jpeg?auto=compress&w=1280",
+  composto:    "https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&w=1280",
+  cristal:     "https://images.pexels.com/photos/3683074/pexels-photo-3683074.jpeg?auto=compress&w=1280",
+  dissolve:    "https://images.pexels.com/photos/3683074/pexels-photo-3683074.jpeg?auto=compress&w=1280",
+  amazônia:    "https://images.pexels.com/photos/975771/pexels-photo-975771.jpeg?auto=compress&w=1280",
+  amazonia:    "https://images.pexels.com/photos/975771/pexels-photo-975771.jpeg?auto=compress&w=1280",
+  // 🔒 Secret / Forbidden — "esconder essa informação"
+  proibindo:   "https://images.pexels.com/photos/4560133/pexels-photo-4560133.jpeg?auto=compress&w=1280",
+  proibido:    "https://images.pexels.com/photos/4560133/pexels-photo-4560133.jpeg?auto=compress&w=1280",
+  esconder:    "https://images.pexels.com/photos/5273751/pexels-photo-5273751.jpeg?auto=compress&w=1280",
+  escondendo:  "https://images.pexels.com/photos/5273751/pexels-photo-5273751.jpeg?auto=compress&w=1280",
+  informação:  "https://images.pexels.com/photos/6863183/pexels-photo-6863183.jpeg?auto=compress&w=1280",
+  informacao:  "https://images.pexels.com/photos/6863183/pexels-photo-6863183.jpeg?auto=compress&w=1280",
+  segredo:     "https://images.pexels.com/photos/6863183/pexels-photo-6863183.jpeg?auto=compress&w=1280",
+  revelado:    "https://images.pexels.com/photos/3771807/pexels-photo-3771807.jpeg?auto=compress&w=1280",
+  descoberto:  "https://images.pexels.com/photos/3771807/pexels-photo-3771807.jpeg?auto=compress&w=1280",
+  verdade:     "https://images.pexels.com/photos/3771807/pexels-photo-3771807.jpeg?auto=compress&w=1280",
+  // 📉 Market Crash — "destrói o mercado"
+  mercado:     "https://images.pexels.com/photos/6801648/pexels-photo-6801648.jpeg?auto=compress&w=1280",
+  destroi:     "https://images.pexels.com/photos/6801648/pexels-photo-6801648.jpeg?auto=compress&w=1280",
+  destrói:     "https://images.pexels.com/photos/6801648/pexels-photo-6801648.jpeg?auto=compress&w=1280",
+  queda:       "https://images.pexels.com/photos/6801648/pexels-photo-6801648.jpeg?auto=compress&w=1280",
+  // 💰 Finance / Money
+  bug:         "https://images.pexels.com/photos/1181244/pexels-photo-1181244.jpeg?auto=compress&w=1280",
+  sistema:     "https://images.pexels.com/photos/1181244/pexels-photo-1181244.jpeg?auto=compress&w=1280",
+  financeiro:  "https://images.pexels.com/photos/534216/pexels-photo-534216.jpeg?auto=compress&w=1280",
+  dinheiro:    "https://images.pexels.com/photos/4386442/pexels-photo-4386442.jpeg?auto=compress&w=1280",
+  conta:       "https://images.pexels.com/photos/4386442/pexels-photo-4386442.jpeg?auto=compress&w=1280",
+  bilhões:     "https://images.pexels.com/photos/4386442/pexels-photo-4386442.jpeg?auto=compress&w=1280",
+  bilhoes:     "https://images.pexels.com/photos/4386442/pexels-photo-4386442.jpeg?auto=compress&w=1280",
+  acordos:     "https://images.pexels.com/photos/3729464/pexels-photo-3729464.jpeg?auto=compress&w=1280",
+  judicial:    "https://images.pexels.com/photos/3729464/pexels-photo-3729464.jpeg?auto=compress&w=1280",
+  governo:     "https://images.pexels.com/photos/259200/pexels-photo-259200.jpeg?auto=compress&w=1280",
+  celular:     "https://images.pexels.com/photos/607812/pexels-photo-607812.jpeg?auto=compress&w=1280",
+  lista:       "https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&w=1280",
+  renda:       "https://images.pexels.com/photos/3729464/pexels-photo-3729464.jpeg?auto=compress&w=1280",
+  lucro:       "https://images.pexels.com/photos/4386442/pexels-photo-4386442.jpeg?auto=compress&w=1280",
+  retorno:     "https://images.pexels.com/photos/4386442/pexels-photo-4386442.jpeg?auto=compress&w=1280",
   // 🎰 iGaming
-  cassino:     "https://images.pexels.com/photos/2263436/pexels-photo-2263436.jpeg?auto=compress&w=480",
-  rodadas:     "https://images.pexels.com/photos/2263436/pexels-photo-2263436.jpeg?auto=compress&w=480",
-  jogadores:   "https://images.pexels.com/photos/2263436/pexels-photo-2263436.jpeg?auto=compress&w=480",
-  // 🌟 Generic premium
-  exclusivo:   "https://images.pexels.com/photos/323780/pexels-photo-323780.jpeg?auto=compress&w=480",
-  lifestyle:   "https://images.pexels.com/photos/323780/pexels-photo-323780.jpeg?auto=compress&w=480",
-  descoberto:  "https://images.pexels.com/photos/3771807/pexels-photo-3771807.jpeg?auto=compress&w=480",
-  revelado:    "https://images.pexels.com/photos/3762800/pexels-photo-3762800.jpeg?auto=compress&w=480",
+  cassino:     "https://images.pexels.com/photos/2263436/pexels-photo-2263436.jpeg?auto=compress&w=1280",
+  rodadas:     "https://images.pexels.com/photos/2263436/pexels-photo-2263436.jpeg?auto=compress&w=1280",
+  jogadores:   "https://images.pexels.com/photos/2263436/pexels-photo-2263436.jpeg?auto=compress&w=1280",
+  padrão:      "https://images.pexels.com/photos/2510428/pexels-photo-2510428.jpeg?auto=compress&w=1280",
+  padrao:      "https://images.pexels.com/photos/2510428/pexels-photo-2510428.jpeg?auto=compress&w=1280",
+  estratégia:  "https://images.pexels.com/photos/3184291/pexels-photo-3184291.jpeg?auto=compress&w=1280",
+  estrategia:  "https://images.pexels.com/photos/3184291/pexels-photo-3184291.jpeg?auto=compress&w=1280",
+  // 🌟 Lifestyle / Premium
+  exclusivo:   "https://images.pexels.com/photos/323780/pexels-photo-323780.jpeg?auto=compress&w=1280",
+  lifestyle:   "https://images.pexels.com/photos/323780/pexels-photo-323780.jpeg?auto=compress&w=1280",
 };
 
 // Returns a guaranteed-visible thumbnail for a scene
@@ -312,14 +342,15 @@ function buildTimelineClips(scenes: Scene[]): TimelineClip[] {
         const isLast = j === hits.length - 1;
         const d      = isLast ? Math.max(0.5, dur - j * clipDur) : clipDur;
         clips.push({
-          id:       `sc${i}-kw${j}`,
-          sceneIdx: i,
-          url:      urls[j % Math.max(urls.length, 1)] ?? null,
-          thumb:    hit.img,
-          startSec: cursor + j * clipDur,
-          durSec:   d,
-          label:    `${sc.segment} · ${hit.word}`,
-          color:    col,
+          id:          `sc${i}-kw${j}`,
+          sceneIdx:    i,
+          url:         urls[j % Math.max(urls.length, 1)] ?? null,
+          thumb:       hit.img,
+          triggerWord: hit.word,   // ← karaoke glow key
+          startSec:    cursor + j * clipDur,
+          durSec:      d,
+          label:       `${sc.segment} · ${hit.word}`,
+          color:       col,
         });
       });
     } else if (urls.length > 0) {
@@ -346,6 +377,35 @@ function buildTimelineClips(scenes: Scene[]): TimelineClip[] {
     cursor += dur;
   }
   return clips;
+}
+
+// ─── Karaoke subtitle model ───────────────────────────────────────────────────
+// Divides each scene's text into per-word timestamps so the subtitle renderer
+// knows exactly when to highlight each word as the playhead moves.
+function buildSubtitleWords(scenes: Scene[]): SubtitleWord[] {
+  const out: SubtitleWord[] = [];
+  let cursor = 0;
+  for (const sc of scenes) {
+    const dur  = sc.estimated_duration_seconds ?? 5;
+    const text = (sc.text_chunk ?? sc.segment ?? "").trim();
+    const raw  = text.split(/\s+/).filter(Boolean);
+    if (raw.length === 0) { cursor += dur; continue; }
+    // Each word gets an equal slice of the scene duration.
+    // Words spoken faster feel more dynamic — matches DR pacing.
+    const perWord = dur / raw.length;
+    raw.forEach((w, wi) => {
+      const clean = w.toLowerCase().replace(/[^a-záéíóúãõçêâîôû]/g, "");
+      out.push({
+        word:      w,
+        startSec:  cursor + wi * perWord,
+        endSec:    cursor + (wi + 1) * perWord,
+        isKeyword: !!BROLL_IMAGES[clean] || POWER_WORDS.has(clean),
+        cleanWord: clean,
+      });
+    });
+    cursor += dur;
+  }
+  return out;
 }
 
 function generateSRT(scenes: Scene[]): string {
@@ -510,6 +570,7 @@ function WorkstationView({ result, copy: initialCopy, onBack }: {
 }) {
   // ── Refs ──
   const videoRef    = useRef<HTMLVideoElement>(null);
+  const bgAudioRef  = useRef<HTMLAudioElement>(null);  // background suspense track
   const timelineRef = useRef<HTMLDivElement>(null);
   const musicRefs   = [useRef<HTMLAudioElement>(null), useRef<HTMLAudioElement>(null), useRef<HTMLAudioElement>(null)];
   const rafRef        = useRef<number>(0);
@@ -533,6 +594,7 @@ function WorkstationView({ result, copy: initialCopy, onBack }: {
   const [editCopy,       setEditCopy]       = useState(initialCopy);
   const [dragSrcUrl,     setDragSrcUrl]     = useState<string|null>(null);
   const [dragOverClipId, setDragOverClipId] = useState<string|null>(null);
+  const [bgVolume,       setBgVolume]       = useState(0.35);
 
   const tracks   = result.background_tracks ?? [];
   const totalDur = useMemo(()=>
@@ -604,13 +666,29 @@ function WorkstationView({ result, copy: initialCopy, onBack }: {
       videoRef.current.play().catch(()=>null);
   },[]);
 
+  // ── Background audio volume sync ─────────────────────────────────────────
+  useEffect(()=>{
+    if(bgAudioRef.current) bgAudioRef.current.volume=bgVolume;
+  },[bgVolume]);
+
   // ── Play / Pause ─────────────────────────────────────────────────────────
   const togglePlay=useCallback(()=>{
-    if(playing){setPlaying(false);videoRef.current?.pause();}
-    else{
-      if(globalTimeRef.current>=totalDur){globalTimeRef.current=0;setCurrentTime(0);setPlayheadPct(0);}
+    if(playing){
+      setPlaying(false);
+      videoRef.current?.pause();
+      bgAudioRef.current?.pause();
+    } else {
+      if(globalTimeRef.current>=totalDur){
+        globalTimeRef.current=0;setCurrentTime(0);setPlayheadPct(0);
+        if(bgAudioRef.current) bgAudioRef.current.currentTime=0;
+      }
       setPlaying(true);
       videoRef.current?.play().catch(()=>null);
+      // Seek bg audio to match playhead position, then play
+      if(bgAudioRef.current){
+        bgAudioRef.current.currentTime=globalTimeRef.current % (bgAudioRef.current.duration||999);
+        bgAudioRef.current.play().catch(()=>null);
+      }
     }
   },[playing,totalDur]);
 
@@ -620,6 +698,9 @@ function WorkstationView({ result, copy: initialCopy, onBack }: {
     globalTimeRef.current=clamped;
     setCurrentTime(clamped);
     setPlayheadPct((clamped/totalDur)*100);
+    // Sync bg audio to new position
+    if(bgAudioRef.current&&isFinite(bgAudioRef.current.duration))
+      bgAudioRef.current.currentTime=clamped % bgAudioRef.current.duration;
     const clip=timelineClips.find(c=>clamped>=c.startSec&&clamped<c.startSec+c.durSec);
     if(clip&&videoRef.current){
       const local=clamped-clip.startSec;
@@ -713,6 +794,23 @@ function WorkstationView({ result, copy: initialCopy, onBack }: {
     return (sc.video_options??[]).filter(o=>o.url!==cur);
   },[localScenes,activeScene]);
 
+  // ── Karaoke Subtitle Words ───────────────────────────────────────────────
+  const subtitleWords = useMemo(()=>buildSubtitleWords(localScenes),[localScenes]);
+
+  // Active word: the word whose time window contains currentTime
+  const activeWordIdx = useMemo(()=>{
+    if(!subtitleWords.length) return -1;
+    // Binary-search-style: find last word that has started
+    let lo=0,hi=subtitleWords.length-1,found=-1;
+    while(lo<=hi){
+      const mid=Math.floor((lo+hi)/2);
+      if(subtitleWords[mid].startSec<=currentTime){found=mid;lo=mid+1;}
+      else hi=mid-1;
+    }
+    // Only highlight if still within the word's window
+    return found>=0&&currentTime<subtitleWords[found].endSec ? found : -1;
+  },[subtitleWords,currentTime]);
+
   // ── SFX Scoring Layer ────────────────────────────────────────────────────
   const sfxMarkers = useMemo(()=>buildSFXMarkers(localScenes),[localScenes]);
 
@@ -765,8 +863,16 @@ function WorkstationView({ result, copy: initialCopy, onBack }: {
   // ── Render ───────────────────────────────────────────────────────────────
   return (
     <>
+    {/* ── Hidden background audio — suspense/cinematic track ── */}
+    <audio
+      ref={bgAudioRef}
+      src="https://pub-9937ef38e0a744128bd67f59e5476f23.r2.dev/Epic%20Orchestral%20Cinematic%20Documentary%201.mp3"
+      loop preload="auto" style={{display:"none"}}
+    />
+
     <style>{`
       @keyframes wsIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+      @keyframes karaGlow{0%,100%{opacity:1}50%{opacity:0.75}}
       .ws-in{animation:wsIn .35s ease both}
       .v1clip:hover .v1clip-overlay{opacity:1!important}
       .v1clip-overlay{opacity:0;transition:opacity .15s ease}
@@ -827,6 +933,26 @@ function WorkstationView({ result, copy: initialCopy, onBack }: {
               <video ref={videoRef} key={currentClip?.id} src={videoUrl}
                 loop playsInline onLoadedMetadata={handleLoadedMetadata}
                 className="w-full h-full object-cover"/>
+            ):currentClip?.thumb?(
+              /* VSL Brain: show curated keyword image when no video yet */
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={currentClip.thumb} alt={currentClip.triggerWord??currentClip.label}
+                  className="w-full h-full object-cover transition-all duration-500"
+                  style={{filter:"brightness(0.72) saturate(1.15)"}}/>
+                {/* Subtle scanline overlay for cinematic feel */}
+                <div className="absolute inset-0 pointer-events-none"
+                  style={{background:"repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.08) 2px,rgba(0,0,0,0.08) 4px)"}}/>
+                {/* Keyword badge — shows what triggered this image */}
+                {currentClip.triggerWord&&(
+                  <div className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full"
+                    style={{background:"rgba(0,0,0,0.7)",border:"1px solid rgba(0,255,204,0.4)",backdropFilter:"blur(4px)"}}>
+                    <span className="text-[9px] font-black uppercase tracking-wider" style={{color:"#00FFCC"}}>
+                      ⚡ {currentClip.triggerWord}
+                    </span>
+                  </div>
+                )}
+              </>
             ):(
               <div className="w-full h-full flex flex-col items-center justify-center gap-3"
                 style={{background:`linear-gradient(135deg,${currentClip?.color??"#111"}18,#040408)`}}>
@@ -838,19 +964,66 @@ function WorkstationView({ result, copy: initialCopy, onBack }: {
               </div>
             )}
 
-            {/* Subtitle overlay — always visible */}
-            {currentSubtitle&&(
-              <div className="absolute bottom-10 left-0 right-0 flex justify-center px-6 pointer-events-none">
-                <div className="text-center px-3 py-1.5 rounded-lg max-w-lg" style={{background:"rgba(0,0,0,0.78)",backdropFilter:"blur(4px)"}}>
-                  <p className="text-sm font-bold leading-snug">
-                    {currentSubtitle.split(" ").slice(0,10).map((w,i)=>{
-                      const isPW=POWER_WORDS.has(w.toLowerCase().replace(/[^a-záéíóúãõç]/g,""));
-                      return <span key={i} className={`mr-1 ${isPW?"text-yellow-400":"text-white"}`}>{w}</span>;
-                    })}
-                  </p>
+            {/* ── Karaoke Subtitle — word-by-word glow ── */}
+            {subtitleWords.length>0&&(()=>{
+              // Show a ±7 word window centered on the active word
+              const win  = 7;
+              const lo   = Math.max(0, activeWordIdx < 0 ? 0 : activeWordIdx - 3);
+              const hi   = Math.min(subtitleWords.length, lo + win * 2);
+              const vis  = subtitleWords.slice(lo, hi);
+              const triggerW = currentClip?.triggerWord ?? "";
+              return (
+                <div className="absolute bottom-10 left-0 right-0 flex justify-center px-4 pointer-events-none">
+                  <div className="text-center px-5 py-2.5 rounded-2xl max-w-2xl"
+                    style={{background:"rgba(0,0,0,0.82)",backdropFilter:"blur(8px)",
+                      border:"1px solid rgba(255,255,255,0.06)"}}>
+                    <p className="text-base leading-loose flex flex-wrap justify-center gap-x-1.5 gap-y-0.5">
+                      {vis.map((sw,vi)=>{
+                        const gIdx   = lo + vi;
+                        const isPast = gIdx < activeWordIdx;
+                        const isAct  = gIdx === activeWordIdx;
+                        // Trigger word = the keyword that caused the current clip image
+                        const isTrig = isAct && triggerW && sw.cleanWord === triggerW;
+                        // Keyword (any BROLL/POWER word) gets yellow when active
+                        const isKwAct= isAct && sw.isKeyword && !isTrig;
+
+                        return (
+                          <span key={gIdx}
+                            className="inline-block transition-all duration-100"
+                            style={{
+                              color: isTrig  ? "#00FFCC"
+                                   : isKwAct ? "#facc15"
+                                   : isAct   ? "#ffffff"
+                                   : isPast  ? "#4b5563"
+                                   : "#9ca3af",
+                              fontWeight: isAct ? 900 : 600,
+                              fontSize:   isAct ? "1rem" : "0.875rem",
+                              transform:  isAct ? "scale(1.15)" : "scale(1)",
+                              textShadow: isTrig
+                                ? "0 0 10px #00FFCC, 0 0 28px #00FFCCaa, 0 0 56px #00FFCC55"
+                                : isKwAct
+                                ? "0 0 8px #facc1599"
+                                : isAct
+                                ? "0 0 6px rgba(255,255,255,0.35)"
+                                : "none",
+                              opacity: isPast ? 0.4 : isAct ? 1 : 0.7,
+                            }}>
+                            {sw.word}
+                          </span>
+                        );
+                      })}
+                    </p>
+                    {/* Trigger match badge */}
+                    {triggerW&&activeWordIdx>=0&&(
+                      <p className="text-[9px] font-bold mt-1 tracking-wider"
+                        style={{color:"rgba(0,255,204,0.55)"}}>
+                        ⚡ match visual: <span style={{color:"#00FFCC"}}>{triggerW}</span>
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Play overlay */}
             <div className={`absolute inset-0 flex items-center justify-center transition-opacity ${playing?"opacity-0 group-hover:opacity-100":"opacity-100"}`}>
@@ -868,11 +1041,21 @@ function WorkstationView({ result, copy: initialCopy, onBack }: {
                 {playing?<Pause className="w-4 h-4 text-white" fill="currentColor"/>:<Play className="w-4 h-4 text-white" fill="currentColor"/>}
               </button>
               <button onClick={e=>{e.stopPropagation();seekToTime(sceneStarts[Math.min(localScenes.length-1,activeScene+1)]);}}><SkipForward className="w-4 h-4 text-white/50 hover:text-white"/></button>
-              <div className="flex items-center gap-1.5 ml-auto" onClick={e=>e.stopPropagation()}>
-                <Volume2 className="w-3.5 h-3.5 text-white/40"/>
-                <input type="range" min="0" max="1" step="0.05" defaultValue="0.8"
-                  onChange={e=>{if(videoRef.current)videoRef.current.volume=+e.target.value;}}
-                  className="w-16 h-0.5 cursor-pointer accent-cyan-500"/>
+              <div className="flex items-center gap-3 ml-auto" onClick={e=>e.stopPropagation()}>
+                {/* Video volume */}
+                <div className="flex items-center gap-1">
+                  <Volume2 className="w-3.5 h-3.5 text-white/40"/>
+                  <input type="range" min="0" max="1" step="0.05" defaultValue="0.8"
+                    onChange={e=>{if(videoRef.current)videoRef.current.volume=+e.target.value;}}
+                    className="w-14 h-0.5 cursor-pointer accent-cyan-500"/>
+                </div>
+                {/* Bg music volume */}
+                <div className="flex items-center gap-1" title="Volume da trilha">
+                  <span className="text-[8px] text-purple-400 font-bold">♪</span>
+                  <input type="range" min="0" max="1" step="0.05" value={bgVolume}
+                    onChange={e=>setBgVolume(+e.target.value)}
+                    className="w-14 h-0.5 cursor-pointer accent-purple-500"/>
+                </div>
               </div>
             </div>
           </div>
