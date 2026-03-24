@@ -49,6 +49,18 @@ interface SubtitleWord {
   cleanWord: string;    // normalized for lookup
 }
 
+// ─── DirectResponseScene: output of the AI Art Director ──────────────────────
+// This is the SOURCE OF TRUTH for the timeline. Every clip, subtitle word,
+// and SFX event is derived from this structure — not from raw Scene data.
+interface DirectResponseScene {
+  id:            string;
+  textSnippet:   string;        // exact phrase being spoken in this segment
+  duration:      number;        // seconds, calculated from reading time (words/2.8)
+  emotion:       string;        // e.g. "Revelação", "Urgência", "Choque"
+  searchQueries: string[];      // 3 English Pexels-optimized visual concepts
+  suggestedSfx:  string | null; // "riser" | "impact" | "glitch" | "bell" | etc.
+}
+
 // ─── SFX Scoring Layer ────────────────────────────────────────────────────────
 interface SFXMarker {
   id: string;
@@ -408,6 +420,224 @@ function buildSubtitleWords(scenes: Scene[]): SubtitleWord[] {
   return out;
 }
 
+// ─── PEXELS_CONCEPTS: English concept → curated HD image ─────────────────────
+// Maps the English search queries emitted by analyzeCopyForDirectResponse
+// to guaranteed-visible Pexels photos. English because image banks index
+// in English — direct PT-BR translations often return poor results.
+const PEXELS_CONCEPTS: Record<string, string> = {
+  // Financial system anomaly / hack
+  "financial system hack glitch":         "https://images.pexels.com/photos/1181244/pexels-photo-1181244.jpeg?auto=compress&w=1280",
+  "money disappearing digital":           "https://images.pexels.com/photos/4386442/pexels-photo-4386442.jpeg?auto=compress&w=1280",
+  "banking vulnerability exposed":        "https://images.pexels.com/photos/60504/security-protection-anti-virus-software-60504.jpeg?auto=compress&w=1280",
+  // Medical authority suppression
+  "serious doctor authority figure":      "https://images.pexels.com/photos/5452293/pexels-photo-5452293.jpeg?auto=compress&w=1280",
+  "medical secret forbidden":             "https://images.pexels.com/photos/5273751/pexels-photo-5273751.jpeg?auto=compress&w=1280",
+  "pharmaceutical suppression":           "https://images.pexels.com/photos/4386466/pexels-photo-4386466.jpeg?auto=compress&w=1280",
+  // Market crash / economic destruction
+  "stock market crash red":               "https://images.pexels.com/photos/6801648/pexels-photo-6801648.jpeg?auto=compress&w=1280",
+  "financial collapse graph":             "https://images.pexels.com/photos/534216/pexels-photo-534216.jpeg?auto=compress&w=1280",
+  "economy destruction system":           "https://images.pexels.com/photos/6801648/pexels-photo-6801648.jpeg?auto=compress&w=1280",
+  // Classified / hidden information
+  "classified document vault":            "https://images.pexels.com/photos/6863183/pexels-photo-6863183.jpeg?auto=compress&w=1280",
+  "secret information hidden":            "https://images.pexels.com/photos/5273751/pexels-photo-5273751.jpeg?auto=compress&w=1280",
+  "whistleblower exposure reveal":        "https://images.pexels.com/photos/3771807/pexels-photo-3771807.jpeg?auto=compress&w=1280",
+  // Natural / Amazon
+  "amazon rainforest dense green":        "https://images.pexels.com/photos/975771/pexels-photo-975771.jpeg?auto=compress&w=1280",
+  "natural compound herbal remedy":       "https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&w=1280",
+  "joint pain relief healing":            "https://images.pexels.com/photos/7176026/pexels-photo-7176026.jpeg?auto=compress&w=1280",
+  // Legal / money opportunity
+  "legal document court settlement":      "https://images.pexels.com/photos/3729464/pexels-photo-3729464.jpeg?auto=compress&w=1280",
+  "government building authority":        "https://images.pexels.com/photos/259200/pexels-photo-259200.jpeg?auto=compress&w=1280",
+  "money cash opportunity found":         "https://images.pexels.com/photos/4386442/pexels-photo-4386442.jpeg?auto=compress&w=1280",
+  // CTA / urgency
+  "urgency red alert warning":            "https://images.pexels.com/photos/4560133/pexels-photo-4560133.jpeg?auto=compress&w=1280",
+  "person looking down phone surprised":  "https://images.pexels.com/photos/607812/pexels-photo-607812.jpeg?auto=compress&w=1280",
+  "watch video now urgent cta":           "https://images.pexels.com/photos/3762800/pexels-photo-3762800.jpeg?auto=compress&w=1280",
+  // Casino / gaming
+  "casino gambling strategy":             "https://images.pexels.com/photos/2263436/pexels-photo-2263436.jpeg?auto=compress&w=1280",
+  // Pain / suffering
+  "joint pain arthritis suffering":       "https://images.pexels.com/photos/7176026/pexels-photo-7176026.jpeg?auto=compress&w=1280",
+  "medical problem chronic":              "https://images.pexels.com/photos/4386466/pexels-photo-4386466.jpeg?auto=compress&w=1280",
+  // Generic DR cinematic
+  "pattern interrupt shock visual":       "https://images.pexels.com/photos/3762800/pexels-photo-3762800.jpeg?auto=compress&w=1280",
+  "cinematic dramatic tension":           "https://images.pexels.com/photos/2510428/pexels-photo-2510428.jpeg?auto=compress&w=1280",
+  "proof evidence testimonial social":    "https://images.pexels.com/photos/3184291/pexels-photo-3184291.jpeg?auto=compress&w=1280",
+  "exclusive insider advantage":          "https://images.pexels.com/photos/323780/pexels-photo-323780.jpeg?auto=compress&w=1280",
+};
+
+// Fuzzy lookup: returns best matching image for any English concept query
+function lookupConcept(query: string): string {
+  if (PEXELS_CONCEPTS[query]) return PEXELS_CONCEPTS[query];
+  const qwords = new Set(query.toLowerCase().split(/\s+/));
+  let best = "", bestScore = 0;
+  for (const [key, url] of Object.entries(PEXELS_CONCEPTS)) {
+    const score = key.toLowerCase().split(/\s+/).filter(w => qwords.has(w)).length;
+    if (score > bestScore) { bestScore = score; best = url; }
+  }
+  return best || GALLERY_CARDS[0].src;
+}
+
+// ─── AI Art Director: semantic intent classification ──────────────────────────
+// Each rule tests the raw lowercased text and returns visual intent metadata.
+// Rules are ordered most-specific → least-specific (first match wins).
+// IMPORTANT: visual concepts are in English — not literal PT-BR translations.
+// "bug no sistema" → "financial system hack glitch" (NOT "insect in the system").
+// "médicos escondendo" → "serious doctor authority figure" (NOT "hiding doctors").
+type IntentResult = { emotion: string; searchQueries: string[]; suggestedSfx: string | null };
+const SEMANTIC_RULES: Array<{ test: (t: string) => boolean; result: IntentResult }> = [
+  {
+    test: t => /bug|falha|brecha|exploit/.test(t) && /financ|sistema|banco|dinheiro/.test(t),
+    result: { emotion:"Revelação", suggestedSfx:"glitch",
+      searchQueries:["financial system hack glitch","money disappearing digital","banking vulnerability exposed"] },
+  },
+  {
+    test: t => /médic|medic|doutor|especialista/.test(t) && /proib|escond|ocult|impedir|pedir/.test(t),
+    result: { emotion:"Urgência", suggestedSfx:"riser",
+      searchQueries:["serious doctor authority figure","medical secret forbidden","pharmaceutical suppression"] },
+  },
+  {
+    test: t => /destro|colapso|queda|crash|ruin/.test(t) && /mercado|bolsa|econom|financ/.test(t),
+    result: { emotion:"Choque", suggestedSfx:"impact",
+      searchQueries:["stock market crash red","financial collapse graph","economy destruction system"] },
+  },
+  {
+    test: t => /informaç|informac|segredo|verdade|descobr/.test(t) && /escond|ocult|proib|sigiloso/.test(t),
+    result: { emotion:"Mistério", suggestedSfx:"suspense_sting",
+      searchQueries:["classified document vault","secret information hidden","whistleblower exposure reveal"] },
+  },
+  {
+    test: t => /composto|natural|erva|planta|amazôn|amazôni|cristal|dissolv/.test(t),
+    result: { emotion:"Esperança", suggestedSfx:"bell",
+      searchQueries:["amazon rainforest dense green","natural compound herbal remedy","joint pain relief healing"] },
+  },
+  {
+    test: t => /dor|articular|crise|sofr|problema|sintoma/.test(t),
+    result: { emotion:"Dor", suggestedSfx:"heartbeat",
+      searchQueries:["joint pain arthritis suffering","medical problem chronic","person holding knee pain"] },
+  },
+  {
+    test: t => /bilh|acordo|judicial|indeniz|governo|lista/.test(t),
+    result: { emotion:"Oportunidade", suggestedSfx:"cash_register",
+      searchQueries:["legal document court settlement","government building authority","money cash opportunity found"] },
+  },
+  {
+    test: t => /cassino|jogador|rodada|padrão|estratégi/.test(t),
+    result: { emotion:"Vantagem", suggestedSfx:"bell",
+      searchQueries:["casino gambling strategy","pattern recognition winning","exclusive insider advantage"] },
+  },
+  {
+    test: t => /assista|clique|acesse|agora|grátis|gratuito|saiba|vídeo pode sair/.test(t),
+    result: { emotion:"CTA", suggestedSfx:"riser",
+      searchQueries:["watch video now urgent cta","person looking down phone surprised","urgency red alert warning"] },
+  },
+  {
+    test: () => true,
+    result: { emotion:"Gancho", suggestedSfx:null,
+      searchQueries:["pattern interrupt shock visual","cinematic dramatic tension","proof evidence testimonial social"] },
+  },
+];
+function classifyIntent(lower: string): IntentResult {
+  for (const rule of SEMANTIC_RULES) if (rule.test(lower)) return rule.result;
+  return SEMANTIC_RULES[SEMANTIC_RULES.length - 1].result;
+}
+
+// ─── analyzeCopyForDirectResponse ────────────────────────────────────────────
+// Simulates an LLM Art Director call:
+// "Slice this copy into 3-5s retention chunks. For each, identify the
+//  emotional subtext and generate English Pexels search queries based on
+//  VISUAL CONCEPT — not literal translation. Suggest a sound effect type."
+function analyzeCopyForDirectResponse(copyText: string): DirectResponseScene[] {
+  const WPS = 2.8, MIN_DUR = 3.0, MAX_DUR = 5.0;
+
+  // 1. Split on sentence boundaries
+  const raw = copyText.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean);
+
+  // 2. Sub-split long sentences at clause connectors, clamp word count
+  const chunks: string[] = [];
+  for (const sent of raw) {
+    const wc = sent.split(/\s+/).length;
+    if (wc <= 13) { chunks.push(sent); continue; }
+    const parts = sent.split(/(?<=\w)\s+(?=que |para |porque |enquanto |quando |como )/);
+    if (parts.length > 1) { chunks.push(...parts.map(p => p.trim()).filter(Boolean)); continue; }
+    const ws = sent.split(/\s+/);
+    const h  = Math.ceil(ws.length / 2);
+    chunks.push(ws.slice(0, h).join(" "), ws.slice(h).join(" "));
+  }
+
+  // 3. Merge chunks that are too short (< 6 words)
+  const merged: string[] = [];
+  let buf = "";
+  for (const chunk of chunks) {
+    if (!buf) { buf = chunk; continue; }
+    if (buf.split(/\s+/).length < 6) { buf += " " + chunk; }
+    else { merged.push(buf); buf = chunk; }
+  }
+  if (buf) merged.push(buf);
+
+  // 4. Classify each chunk and build DirectResponseScene
+  return merged.map((text, i) => {
+    const wc       = text.split(/\s+/).length;
+    const duration = Math.max(MIN_DUR, Math.min(MAX_DUR, wc / WPS));
+    const { emotion, searchQueries, suggestedSfx } = classifyIntent(text.toLowerCase());
+    return { id:`drs-${i}`, textSnippet:text, duration, emotion, searchQueries, suggestedSfx };
+  });
+}
+
+// ─── buildTimelineClipsFromDRS ────────────────────────────────────────────────
+// Uses DirectResponseScene as the source of truth.
+// Each of the 3 searchQueries → one rapid-cut clip (1.5-3s).
+// Image is resolved from PEXELS_CONCEPTS by English concept — not PT-BR keyword.
+function buildTimelineClipsFromDRS(drScenes: DirectResponseScene[]): TimelineClip[] {
+  const clips: TimelineClip[] = [];
+  let cursor = 0;
+  for (let i = 0; i < drScenes.length; i++) {
+    const drs = drScenes[i];
+    const col = CLIP_COLS[i % CLIP_COLS.length];
+    const n   = drs.searchQueries.length;
+    const clipDur = Math.max(1.5, Math.min(3.0, drs.duration / n));
+    drs.searchQueries.forEach((query, j) => {
+      const isLast = j === n - 1;
+      const d      = isLast ? Math.max(1.0, drs.duration - j * clipDur) : clipDur;
+      clips.push({
+        id:          `drs${i}-q${j}`,
+        sceneIdx:    i,
+        url:         null,
+        thumb:       lookupConcept(query),
+        triggerWord: query,
+        startSec:    cursor + j * clipDur,
+        durSec:      d,
+        label:       `${drs.emotion} · ${query.split(" ")[0]}`,
+        color:       col,
+      });
+    });
+    cursor += drs.duration;
+  }
+  return clips;
+}
+
+// ─── buildSubtitleWordsFromDRS ────────────────────────────────────────────────
+function buildSubtitleWordsFromDRS(drScenes: DirectResponseScene[]): SubtitleWord[] {
+  const out: SubtitleWord[] = [];
+  let cursor = 0;
+  for (const drs of drScenes) {
+    const raw = drs.textSnippet.trim().split(/\s+/).filter(Boolean);
+    if (!raw.length) { cursor += drs.duration; continue; }
+    const perWord = drs.duration / raw.length;
+    raw.forEach((w, wi) => {
+      const clean = w.toLowerCase().replace(/[^a-záéíóúãõçêâîôû]/g, "");
+      out.push({
+        word:      w,
+        startSec:  cursor + wi * perWord,
+        endSec:    cursor + (wi + 1) * perWord,
+        isKeyword: !!BROLL_IMAGES[clean] || POWER_WORDS.has(clean),
+        cleanWord: clean,
+      });
+    });
+    cursor += drs.duration;
+  }
+  return out;
+}
+
 function generateSRT(scenes: Scene[]): string {
   let srt = ""; let idx = 1; let elapsed = 0;
   for (const sc of scenes) {
@@ -563,9 +793,10 @@ function PaywallModal({ onClose }: { onClose: () => void }) {
 
 
 // ─── WorkstationView ──────────────────────────────────────────────────────────
-function WorkstationView({ result, copy: initialCopy, onBack }: {
+function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes, onBack }: {
   result: GenerateResponse;
   copy: string;
+  drScenes: DirectResponseScene[];
   onBack: () => void;
 }) {
   // ── Refs ──
@@ -581,6 +812,9 @@ function WorkstationView({ result, copy: initialCopy, onBack }: {
   const prevClipId    = useRef("");
 
   // ── State ──
+  // localDrScenes is the SOURCE OF TRUTH for timeline layout, durations, and subtitles.
+  // localScenes (legacy) is kept for B-Roll media management (video_options, suggestAnother).
+  const [localDrScenes,  setLocalDrScenes]  = useState<DirectResponseScene[]>(()=>initialDrScenes.length?initialDrScenes:[]);
   const [localScenes,    setLocalScenes]    = useState<Scene[]>(()=>result.scenes??[]);
   const [loadingClipIds, setLoadingClipIds] = useState<Set<string>>(new Set());
   const [playing,        setPlaying]        = useState(false);
@@ -597,13 +831,24 @@ function WorkstationView({ result, copy: initialCopy, onBack }: {
   const [bgVolume,       setBgVolume]       = useState(0.35);
 
   const tracks   = result.background_tracks ?? [];
+
+  // DRS is the source of truth for duration — not the legacy Scene durations
   const totalDur = useMemo(()=>
-    Math.max(localScenes.reduce((s,sc)=>s+(sc.estimated_duration_seconds??5),0),1),
-    [localScenes]
+    Math.max(
+      localDrScenes.length
+        ? localDrScenes.reduce((s, drs) => s + drs.duration, 0)
+        : localScenes.reduce((s,sc)=>s+(sc.estimated_duration_seconds??5),0),
+      1),
+    [localDrScenes, localScenes]
   );
 
-  // ── Zero Black Screen: timeline clips ──
-  const timelineClips = useMemo(()=>buildTimelineClips(localScenes),[localScenes]);
+  // ── DRS-powered timeline — searchQueries drive clips, not PT-BR keywords ──
+  const timelineClips = useMemo(()=>
+    localDrScenes.length
+      ? buildTimelineClipsFromDRS(localDrScenes)
+      : buildTimelineClips(localScenes),
+    [localDrScenes, localScenes]
+  );
 
   // Clip currently under the playhead
   const currentClip = useMemo(()=>
@@ -615,12 +860,16 @@ function WorkstationView({ result, copy: initialCopy, onBack }: {
   const activeScene = currentClip?.sceneIdx??0;
   const videoUrl    = currentClip?.url??"";
 
-  // Cumulative scene starts for left-panel navigation
+  // Cumulative scene starts — driven by DRS durations when available
   const sceneStarts = useMemo(()=>{
     const s:number[]=[];let a=0;
-    for(const sc of localScenes){s.push(a);a+=sc.estimated_duration_seconds??5;}
+    const src = localDrScenes.length ? localDrScenes : localScenes;
+    for(const sc of src){
+      s.push(a);
+      a += localDrScenes.length ? (sc as DirectResponseScene).duration : (sc as Scene).estimated_duration_seconds??5;
+    }
     return s;
-  },[localScenes]);
+  },[localDrScenes, localScenes]);
 
   // ── RAF Tick — drives playhead in real time ──────────────────────────────
   const tickRef = useRef<(ts:number)=>void>(()=>{});
@@ -780,11 +1029,12 @@ function WorkstationView({ result, copy: initialCopy, onBack }: {
     setDragSrcUrl(null);setDragOverClipId(null);
   },[timelineClips]);
 
-  // ── Current subtitle text ────────────────────────────────────────────────
+  // ── Current subtitle — from DRS when available ───────────────────────────
   const currentSubtitle=useMemo(()=>{
+    if(localDrScenes.length) return localDrScenes[activeScene]?.textSnippet??"";
     const sc=localScenes[activeScene];
     return sc?.text_chunk??sc?.segment??"";
-  },[localScenes,activeScene]);
+  },[localDrScenes,localScenes,activeScene]);
 
   // ── Sidebar alternatives ─────────────────────────────────────────────────
   const alternatives=useMemo(()=>{
@@ -794,8 +1044,13 @@ function WorkstationView({ result, copy: initialCopy, onBack }: {
     return (sc.video_options??[]).filter(o=>o.url!==cur);
   },[localScenes,activeScene]);
 
-  // ── Karaoke Subtitle Words ───────────────────────────────────────────────
-  const subtitleWords = useMemo(()=>buildSubtitleWords(localScenes),[localScenes]);
+  // ── Karaoke Subtitle Words — DRS gives precise per-word timing ──────────
+  const subtitleWords = useMemo(()=>
+    localDrScenes.length
+      ? buildSubtitleWordsFromDRS(localDrScenes)
+      : buildSubtitleWords(localScenes),
+    [localDrScenes,localScenes]
+  );
 
   // Active word: the word whose time window contains currentTime
   const activeWordIdx = useMemo(()=>{
@@ -850,7 +1105,13 @@ function WorkstationView({ result, copy: initialCopy, onBack }: {
     if(playingMusic===idx){musicRefs[idx]?.current?.pause();setPlayingMusic(null);}
     else{musicRefs.forEach((r,i)=>{if(i!==idx)r.current?.pause();});musicRefs[idx]?.current?.play().catch(()=>null);setPlayingMusic(idx);}
   };
-  const downloadSRT=()=>saveAs(new Blob([generateSRT(localScenes)],{type:"text/plain;charset=utf-8"}),"suarik-legendas.srt");
+  const downloadSRT=()=>{
+    // Convert DRS to Scene-compatible format for SRT generation
+    const srtScenes: Scene[] = localDrScenes.length
+      ? localDrScenes.map(drs=>({ segment:drs.emotion, text_chunk:drs.textSnippet, estimated_duration_seconds:drs.duration }))
+      : localScenes;
+    saveAs(new Blob([generateSRT(srtScenes)],{type:"text/plain;charset=utf-8"}),"suarik-legendas.srt");
+  };
   const downloadMusic=()=>{const t=tracks[selectedMusic];if(t?.url)window.open(t.url,"_blank");};
   const musicOptions:BackgroundTrack[]=[
     ...tracks.slice(0,3),
@@ -894,18 +1155,52 @@ function WorkstationView({ result, copy: initialCopy, onBack }: {
           className="flex-1 w-full bg-transparent text-[13px] text-gray-400 leading-relaxed px-4 py-4 resize-none focus:outline-none placeholder-gray-700"
           placeholder="Cole ou edite o roteiro aqui…" style={{fontFamily:"inherit"}}/>
         <div className="border-t" style={{borderColor:"rgba(255,255,255,0.05)"}}>
-          <p className="text-[9px] uppercase tracking-[0.18em] text-gray-700 font-bold px-4 pt-3 pb-2">Cenas</p>
+          <div className="flex items-center justify-between px-4 pt-3 pb-2">
+            <p className="text-[9px] uppercase tracking-[0.18em] text-gray-700 font-bold">Cenas</p>
+            {localDrScenes.length>0&&(
+              <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full"
+                style={{color:"#a78bfa",background:"rgba(139,92,246,0.1)",border:"1px solid rgba(139,92,246,0.2)"}}>
+                IA · {localDrScenes.length} blocos
+              </span>
+            )}
+          </div>
           <div className="overflow-y-auto max-h-[200px] px-2 pb-3 space-y-0.5">
-            {localScenes.map((sc,i)=>(
-              <button key={i} onClick={()=>seekToTime(sceneStarts[i]+0.01)}
-                className={`w-full flex items-start gap-2 px-3 py-2.5 rounded-xl text-left transition-all ${activeScene===i?"bg-cyan-500/10 border border-cyan-500/25":"hover:bg-white/4 border border-transparent"}`}>
-                <span className="text-[9px] font-black mt-0.5 shrink-0" style={{color:activeScene===i?"#22d3ee":CLIP_COLS[i%CLIP_COLS.length]}}>{String(i+1).padStart(2,"0")}</span>
-                <div className="min-w-0">
-                  <p className={`text-[11px] font-semibold truncate ${activeScene===i?"text-cyan-300":"text-gray-400"}`}>{sc.segment}</p>
-                  <p className="text-[9px] text-gray-700 mt-0.5 line-clamp-1">{sc.text_chunk?.slice(0,55)??""}…</p>
-                </div>
-              </button>
-            ))}
+            {localDrScenes.length>0
+              ? localDrScenes.map((drs,i)=>{
+                  const col=CLIP_COLS[i%CLIP_COLS.length];
+                  return (
+                  <button key={i} onClick={()=>seekToTime(sceneStarts[i]+0.01)}
+                    className={`w-full flex items-start gap-2 px-3 py-2.5 rounded-xl text-left transition-all ${activeScene===i?"bg-cyan-500/10 border border-cyan-500/25":"hover:bg-white/4 border border-transparent"}`}>
+                    <span className="text-[9px] font-black mt-0.5 shrink-0" style={{color:activeScene===i?"#22d3ee":col}}>{String(i+1).padStart(2,"0")}</span>
+                    <div className="min-w-0 flex-1">
+                      {/* Emotion tag — the key DRS field */}
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <span className="text-[8px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full"
+                          style={{background:`${col}22`,color:col,border:`1px solid ${col}44`}}>
+                          {drs.emotion}
+                        </span>
+                        <span className="text-[8px] text-gray-700">{drs.duration.toFixed(1)}s</span>
+                      </div>
+                      <p className={`text-[11px] font-medium truncate ${activeScene===i?"text-cyan-300":"text-gray-400"}`}>
+                        {drs.textSnippet.slice(0,50)}{drs.textSnippet.length>50?"…":""}
+                      </p>
+                      <p className="text-[8px] text-gray-700 mt-0.5 truncate">
+                        🔍 {drs.searchQueries[0]}
+                      </p>
+                    </div>
+                  </button>
+                );})
+              : localScenes.map((sc,i)=>(
+                <button key={i} onClick={()=>seekToTime(sceneStarts[i]+0.01)}
+                  className={`w-full flex items-start gap-2 px-3 py-2.5 rounded-xl text-left transition-all ${activeScene===i?"bg-cyan-500/10 border border-cyan-500/25":"hover:bg-white/4 border border-transparent"}`}>
+                  <span className="text-[9px] font-black mt-0.5 shrink-0" style={{color:activeScene===i?"#22d3ee":CLIP_COLS[i%CLIP_COLS.length]}}>{String(i+1).padStart(2,"0")}</span>
+                  <div className="min-w-0">
+                    <p className={`text-[11px] font-semibold truncate ${activeScene===i?"text-cyan-300":"text-gray-400"}`}>{sc.segment}</p>
+                    <p className="text-[9px] text-gray-700 mt-0.5 line-clamp-1">{sc.text_chunk?.slice(0,55)??""}…</p>
+                  </div>
+                </button>
+              ))
+            }
           </div>
         </div>
       </div>
@@ -1349,25 +1644,69 @@ function WorkstationView({ result, copy: initialCopy, onBack }: {
             )}
           </div>
 
-          {/* B-Rolls per scene */}
+          {/* B-Rolls / Visual Concepts per scene */}
           <div className="p-3 border-b" style={{borderColor:"rgba(255,255,255,0.05)"}}>
-            <p className="text-[9px] uppercase tracking-[0.18em] text-gray-700 font-bold mb-2">B-Rolls por Cena</p>
+            <p className="text-[9px] uppercase tracking-[0.18em] text-gray-700 font-bold mb-2">
+              {localDrScenes.length>0?"Conceitos Visuais · IA":"B-Rolls por Cena"}
+            </p>
             <div className="space-y-2">
-              {localScenes.map((sc,i)=>{
-                const vid=sc.video_url??sc.video_options?.[0]?.url;
+              {(localDrScenes.length>0?localDrScenes:localScenes).map((_row,i)=>{
                 const col=CLIP_COLS[i%CLIP_COLS.length];
                 const isAct=activeScene===i;
+                // DRS mode: show concept thumbnail + searchQuery
+                if(localDrScenes.length>0){
+                  const drs=localDrScenes[i];
+                  const thumb=lookupConcept(drs.searchQueries[0]);
+                  return(
+                  <div key={i} className={`rounded-xl overflow-hidden border transition-all ${isAct?"border-purple-500/40":"border-transparent"}`}
+                    style={{background:"rgba(255,255,255,0.025)"}}>
+                    <div className="flex gap-2 p-2.5">
+                      <div className="w-16 h-10 rounded-lg shrink-0 overflow-hidden relative"
+                        style={{border:`1px solid ${col}44`}}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={thumb} alt={drs.emotion} className="w-full h-full object-cover opacity-85" loading="lazy"/>
+                        <div className="absolute bottom-0.5 right-0.5 text-[7px] font-black px-1 rounded" style={{background:col+"aa",color:"#fff"}}>{i+1}</div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1 mb-0.5">
+                          <span className="text-[7px] font-black uppercase px-1 py-0.5 rounded"
+                            style={{background:`${col}22`,color:col}}>{drs.emotion}</span>
+                          <span className="text-[7px] text-gray-700">{drs.duration.toFixed(1)}s</span>
+                        </div>
+                        {drs.searchQueries.map((q,qi)=>(
+                          <p key={qi} className="text-[8px] truncate" style={{color:qi===0?"#9ca3af":"#4b5563"}}>
+                            {qi===0?"🎯":"  ·"} {q}
+                          </p>
+                        ))}
+                        {drs.suggestedSfx&&(
+                          <p className="text-[7px] mt-0.5 text-cyan-700">⚡ sfx: {drs.suggestedSfx}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex border-t" style={{borderColor:"rgba(255,255,255,0.04)"}}>
+                      <button onClick={()=>{const cl=timelineClips.find(c=>c.sceneIdx===i);if(cl)suggestAnother(cl.id);}}
+                        className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[9px] text-gray-600 hover:text-purple-400 transition-colors border-r" style={{borderColor:"rgba(255,255,255,0.04)"}}>
+                        <RefreshCw className="w-2.5 h-2.5"/>Sugerir Vídeo
+                      </button>
+                      <button onClick={()=>setPaywallOpen(true)}
+                        className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[9px] text-gray-600 hover:text-cyan-400 transition-colors">
+                        <Download className="w-2.5 h-2.5"/>Baixar
+                      </button>
+                    </div>
+                  </div>
+                  );
+                }
+                // Legacy Scene mode
+                const sc=localScenes[i];
+                const vid=sc.video_url??sc.video_options?.[0]?.url;
                 return(
                   <div key={i} className={`rounded-xl overflow-hidden border transition-all ${isAct?"border-purple-500/40":"border-transparent"}`}
                     style={{background:"rgba(255,255,255,0.025)"}}>
                     <div className="flex gap-2 p-2.5">
                       <div className="w-16 h-10 rounded-lg shrink-0 overflow-hidden relative"
                         style={{background:`${col}18`,border:`1px solid ${col}33`}}>
-                        {/* Always use static <img> — video elements are grey until loaded */}
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={getSceneThumb(sc, i)} alt={sc.segment}
-                          className="w-full h-full object-cover opacity-85"
-                          loading="lazy"/>
+                        <img src={getSceneThumb(sc, i)} alt={sc.segment} className="w-full h-full object-cover opacity-85" loading="lazy"/>
                         <div className="absolute bottom-0.5 right-0.5 text-[7px] font-black px-1 rounded" style={{background:col+"aa",color:"#fff"}}>{i+1}</div>
                       </div>
                       <div className="flex-1 min-w-0">
@@ -1518,6 +1857,7 @@ export default function SuarikHome() {
   const [isCopyOpen,       setCopyOpen]      = useState(false);
   const [error,            setError]         = useState<string|null>(null);
   const [result,           setResult]        = useState<GenerateResponse|null>(null);
+  const [drScenes,         setDrScenes]      = useState<DirectResponseScene[]>([]);
   const [isUploadModalOpen,setUploadOpen]    = useState(false);
   const [isGenerating,     setIsGenerating]  = useState(false);
   const [isGenerated,      setIsGenerated]   = useState(false);
@@ -1544,6 +1884,9 @@ export default function SuarikHome() {
       sessionStorage.setItem("vb_project_result",JSON.stringify(data));
       sessionStorage.setItem("vb_project_copy",copy);
       setResult(data as GenerateResponse);
+      // Run the AI Art Director analysis on the copy text — this becomes
+      // the source of truth for the timeline, overriding the raw Scene array.
+      setDrScenes(analyzeCopyForDirectResponse(copy));
       setIsGenerated(true);
     } catch(e:unknown){
       setError(e instanceof Error?e.message:"Erro ao gerar.");
@@ -1558,7 +1901,7 @@ export default function SuarikHome() {
 
   // Full-screen workstation mode
   if (isGenerated && result) {
-    return <WorkstationView result={result} copy={copy} onBack={handleBack}/>;
+    return <WorkstationView result={result} copy={copy} drScenes={drScenes} onBack={handleBack}/>;
   }
 
   return (
