@@ -1871,22 +1871,44 @@ export default function SuarikHome() {
     if (!copy.trim() || isGenerating) return;
     setIsGenerating(true); setIsGenerated(false); setError(null); setResult(null);
     try {
-      const [data] = await Promise.all([
-        fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({copy,videoFormat:themeMap[aspect],videoTheme:niche,format:aspectFormats[aspect]})})
-          .then(async res=>{
+      // ── Fire both API calls in parallel ─────────────────────────────────
+      // /api/generate        → media enrichment (Pexels, Freesound, vault)
+      // /api/generate-timeline → real OpenAI DRS analysis (source of truth)
+      // Promise.all guarantees minimum 3s loading animation even on fast connections.
+      const [[data, drs]] = await Promise.all([
+        Promise.all([
+          // 1. Media + legacy scene structure
+          fetch("/api/generate", {
+            method:"POST", headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({copy, videoFormat:themeMap[aspect], videoTheme:niche, format:aspectFormats[aspect]}),
+          }).then(async res=>{
             const d = await res.json() as GenerateResponse;
-            if(!res.ok) throw new Error((d as {error?:string}).error??"Erro.");
+            if(!res.ok) throw new Error((d as {error?:string}).error??"Erro ao gerar.");
             return d;
           }),
-        new Promise(r=>setTimeout(r,3000)),
+          // 2. OpenAI DRS analysis — timeline source of truth
+          fetch("/api/generate-timeline", {
+            method:"POST", headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({copy}),
+          }).then(async res=>{
+            if(!res.ok) {
+              // Graceful fallback to client-side analysis if API fails
+              console.warn("[generate-timeline] API falhou, usando análise local.");
+              return analyzeCopyForDirectResponse(copy);
+            }
+            const d = await res.json();
+            // Validate response is a non-empty DirectResponseScene array
+            if(Array.isArray(d) && d.length > 0) return d as DirectResponseScene[];
+            return analyzeCopyForDirectResponse(copy);
+          }),
+        ]),
+        new Promise<void>(r=>setTimeout(r,3000)), // minimum 3s loading screen
       ]);
-      sessionStorage.setItem("vb_project_result",JSON.stringify(data));
-      sessionStorage.setItem("vb_project_copy",copy);
-      setResult(data as GenerateResponse);
-      // Run the AI Art Director analysis on the copy text — this becomes
-      // the source of truth for the timeline, overriding the raw Scene array.
-      setDrScenes(analyzeCopyForDirectResponse(copy));
+
+      sessionStorage.setItem("vb_project_result", JSON.stringify(data));
+      sessionStorage.setItem("vb_project_copy", copy);
+      setResult(data);
+      setDrScenes(drs);
       setIsGenerated(true);
     } catch(e:unknown){
       setError(e instanceof Error?e.message:"Erro ao gerar.");
