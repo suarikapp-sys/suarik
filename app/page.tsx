@@ -8,8 +8,9 @@ import {
   Lock, X, Zap, Check, Brain, Film,
   Music2, Download, FileCode2, Play, Pause,
   Home, BookOpen, Wand2, CloudUpload, Upload,
-  SkipBack, SkipForward, Volume2, RefreshCw,
-  ArrowLeft, ChevronUp, GripVertical,
+  SkipBack, SkipForward, Volume2, VolumeX, RefreshCw,
+  ArrowLeft, ChevronUp, GripVertical, Flame,
+  Eye, EyeOff, TrendingUp,
 } from "lucide-react";
 import { saveAs } from "file-saver";
 
@@ -52,13 +53,20 @@ interface SubtitleWord {
 // ─── DirectResponseScene: output of the AI Art Director ──────────────────────
 // This is the SOURCE OF TRUTH for the timeline. Every clip, subtitle word,
 // and SFX event is derived from this structure — not from raw Scene data.
+// Media fields (videoUrl, thumbUrl, sfxPreviewUrl, videoOptions) are populated
+// server-side by /api/generate-timeline via Pexels + Freesound fetches.
 interface DirectResponseScene {
-  id:            string;
-  textSnippet:   string;        // exact phrase being spoken in this segment
-  duration:      number;        // seconds, calculated from reading time (words/2.8)
-  emotion:       string;        // e.g. "Revelação", "Urgência", "Choque"
-  searchQueries: string[];      // 3 English Pexels-optimized visual concepts
-  suggestedSfx:  string | null; // "riser" | "impact" | "glitch" | "bell" | etc.
+  id:              string;
+  textSnippet:     string;        // exact phrase being spoken in this segment
+  duration:        number;        // seconds, calculated from reading time (words/2.8)
+  emotion:         string;        // e.g. "Revelação", "Urgência", "Choque"
+  searchQueries:   string[];      // 3 English Pexels-optimized visual concepts
+  suggestedSfx:    string | null; // "riser" | "impact" | "glitch" | "bell" | etc.
+  // ── Real media populated by backend ──
+  videoUrl?:       string | null; // Pexels HD .mp4 URL
+  thumbUrl?:       string | null; // Pexels video cover image URL
+  sfxPreviewUrl?:  string | null; // Freesound .mp3 preview URL
+  videoOptions?:   Array<{ url: string; thumb: string; query: string }>; // alternatives
 }
 
 // ─── SFX Scoring Layer ────────────────────────────────────────────────────────
@@ -114,7 +122,7 @@ const SFX_KEYWORDS: Record<string, { label: string; kind: "zap"|"bell"; color: s
   estrategia:  { label:"Tactical Click",        kind:"bell", color:"#22d3ee" },
   detecta:     { label:"Ping Eletrônico",       kind:"bell", color:"#22d3ee" },
   bloqueado:   { label:"Block Impact",          kind:"zap",  color:"#ef4444" },
-  bug:         { label:"Glitch SFX",            kind:"zap",  color:"#f472b6" },
+  bug:         { label:"Glitch SFX",            kind:"zap",  color:"#FF7A5C" },
   padrão:      { label:"Reveal Sting",          kind:"zap",  color:"#8b5cf6" },
   padrao:      { label:"Reveal Sting",          kind:"zap",  color:"#8b5cf6" },
   esconder:    { label:"Whoosh Místico",        kind:"zap",  color:"#6366f1" },
@@ -139,12 +147,12 @@ function buildSFXMarkers(scenes: Scene[]): SFXMarker[] {
     // Scene-boundary transition (every scene except first)
     if (i > 0) {
       raw.push({ id:`tr-${i}`, type:"transition", timeSec:cursor,
-        label:"Swoosh de Transição", kind:"zap", color:"#7c3aed" });
+        label:"Swoosh de Transição", kind:"zap", color:"#E8593C" });
     }
     // Mid-scene transition for long scenes (> 7s)
     if (dur > 7) {
       raw.push({ id:`tr-mid-${i}`, type:"transition", timeSec:cursor + dur / 2,
-        label:"Cut de Transição", kind:"zap", color:"#7c3aed" });
+        label:"Cut de Transição", kind:"zap", color:"#E8593C" });
     }
 
     // Keyword scan — proportional timestamp within the scene
@@ -202,7 +210,7 @@ const TEMPLATES = [
 ];
 
 const ASPECTS   = ["📺 16:9 · VSL","📱 9:16 · Reels","🎬 Cinemático"];
-const CLIP_COLS = ["#3b5bdb","#7048e8","#4c6ef5","#9c36b5","#1971c2","#6741d9"];
+const CLIP_COLS = ["#E8593C","#D4513A","#FF7A5C","#C44B35","#B8422F","#FF9478"];
 
 // ─── VSL Brain: keyword → premium curated image (exact match, high quality) ──
 // Each entry maps a PT-BR trigger word to a Pexels HD photo that visually
@@ -279,20 +287,34 @@ function getSceneThumb(sc: Scene, idx: number): string {
   return GALLERY_CARDS[idx % GALLERY_CARDS.length].src;
 }
 
-const GALLERY_TAGS  = ["All","Finanças","Nutra","Renda Extra","VFX","Retenção Agressiva","Cinematic"];
+const GALLERY_TAGS  = ["All","Renda Extra","Saúde","Finanças","Dor","Ansiedade","UGC"];
+// ── Mixkit CDN · IDs verificados · formato 360p ──────────────────────────────
+// 💰 Renda Extra — pessoas com dinheiro real
+const VA = "https://assets.mixkit.co/videos/18296/18296-360.mp4"; // homem contando maço de notas
+const VB = "https://assets.mixkit.co/videos/24354/24354-360.mp4"; // mulher contando dólares
+// 😣 Saúde / Dor física — pessoas sofrendo de verdade
+const VC = "https://assets.mixkit.co/videos/47583/47583-360.mp4"; // mulher massageando têmpora com dor
+const VD = "https://assets.mixkit.co/videos/33376/33376-360.mp4"; // garota na cama com dor forte no estômago
+// 💻 Finanças / Ansiedade — frustração real no dia a dia
+const VE = "https://assets.mixkit.co/videos/25575/25575-360.mp4"; // mulher jovem frustrada na frente do PC
+const VF = "https://assets.mixkit.co/videos/5601/5601-360.mp4";   // empresário estressado esfregando os olhos
 const GALLERY_CARDS = [
-  {id:1, tag:"Finanças",           title:"Estrutura VSL Finanças",     src:"https://images.pexels.com/photos/4386442/pexels-photo-4386442.jpeg?auto=compress&w=400", tall:true },
-  {id:2, tag:"Nutra",              title:"Gancho Rápido Nutra",         src:"https://images.pexels.com/photos/3683074/pexels-photo-3683074.jpeg?auto=compress&w=400", tall:false},
-  {id:3, tag:"Cinematic",          title:"Abertura Cinematográfica",    src:"https://images.pexels.com/photos/1166209/pexels-photo-1166209.jpeg?auto=compress&w=400", tall:false},
-  {id:4, tag:"Renda Extra",        title:"Hook Renda Extra 3s",         src:"https://images.pexels.com/photos/3729464/pexels-photo-3729464.jpeg?auto=compress&w=400", tall:true },
-  {id:5, tag:"Retenção Agressiva", title:"Pattern Interrupt Agressivo", src:"https://images.pexels.com/photos/3184291/pexels-photo-3184291.jpeg?auto=compress&w=400", tall:false},
-  {id:6, tag:"VFX",                title:"Transição VFX Zoom",          src:"https://images.pexels.com/photos/2263436/pexels-photo-2263436.jpeg?auto=compress&w=400", tall:true },
-  {id:7, tag:"Finanças",           title:"Credibilidade & Selos",       src:"https://images.pexels.com/photos/259200/pexels-photo-259200.jpeg?auto=compress&w=400",   tall:false},
-  {id:8, tag:"Nutra",              title:"Antes & Depois Saúde",        src:"https://images.pexels.com/photos/4386466/pexels-photo-4386466.jpeg?auto=compress&w=400", tall:false},
-  {id:9, tag:"Cinematic",          title:"Drone Lifestyle Premium",     src:"https://images.pexels.com/photos/323780/pexels-photo-323780.jpeg?auto=compress&w=400",   tall:true },
-  {id:10,tag:"Renda Extra",        title:"Depoimento Prova Social",     src:"https://images.pexels.com/photos/3771807/pexels-photo-3771807.jpeg?auto=compress&w=400", tall:false},
-  {id:11,tag:"Retenção Agressiva", title:"Choque Emocional Opening",    src:"https://images.pexels.com/photos/3762800/pexels-photo-3762800.jpeg?auto=compress&w=400", tall:false},
-  {id:12,tag:"VFX",                title:"Glitch Title Screen",         src:"https://images.pexels.com/photos/2510428/pexels-photo-2510428.jpeg?auto=compress&w=400", tall:true },
+  // 💰 Renda Extra
+  {id:1,  tag:"Renda Extra", title:"Hook 'Olha quanto eu recebi hoje'",   src:"https://images.pexels.com/photos/4386442/pexels-photo-4386442.jpeg?auto=compress&w=400", tall:true,  videoUrl:VA},
+  {id:2,  tag:"Renda Extra", title:"Prova Social — Dinheiro na Mão",      src:"https://images.pexels.com/photos/3729464/pexels-photo-3729464.jpeg?auto=compress&w=400", tall:false, videoUrl:VB},
+  // 😣 Saúde / Dor
+  {id:3,  tag:"Saúde",       title:"Dor de cabeça — gancho Nutra",        src:"https://images.pexels.com/photos/3683074/pexels-photo-3683074.jpeg?auto=compress&w=400", tall:false, videoUrl:VC},
+  {id:4,  tag:"Saúde",       title:"Dor abdominal — abertura VSL Saúde",  src:"https://images.pexels.com/photos/4386466/pexels-photo-4386466.jpeg?auto=compress&w=400", tall:true,  videoUrl:VD},
+  // 💻 Finanças / Ansiedade
+  {id:5,  tag:"Finanças",    title:"Frustração com contas atrasadas",      src:"https://images.pexels.com/photos/3184291/pexels-photo-3184291.jpeg?auto=compress&w=400", tall:false, videoUrl:VE},
+  {id:6,  tag:"Finanças",    title:"Estresse financeiro no trabalho",      src:"https://images.pexels.com/photos/259200/pexels-photo-259200.jpeg?auto=compress&w=400",   tall:true,  videoUrl:VF},
+  // Cruzamento de nichos (combos de alta conversão)
+  {id:7,  tag:"Dor",         title:"Dor que vende — gancho emocional",     src:"https://images.pexels.com/photos/3762800/pexels-photo-3762800.jpeg?auto=compress&w=400", tall:false, videoUrl:VC},
+  {id:8,  tag:"Dor",         title:"'Não aguento mais' — abertura forte",  src:"https://images.pexels.com/photos/3771807/pexels-photo-3771807.jpeg?auto=compress&w=400", tall:false, videoUrl:VD},
+  {id:9,  tag:"Ansiedade",   title:"Colapso financeiro — cena de abertura",src:"https://images.pexels.com/photos/3684307/pexels-photo-3684307.jpeg?auto=compress&w=400", tall:true,  videoUrl:VE},
+  {id:10, tag:"Ansiedade",   title:"Burnout — esgotamento total",          src:"https://images.pexels.com/photos/1166209/pexels-photo-1166209.jpeg?auto=compress&w=400", tall:false, videoUrl:VF},
+  {id:11, tag:"UGC",         title:"Prova de renda — notificação ao vivo", src:"https://images.pexels.com/photos/4386442/pexels-photo-4386442.jpeg?auto=compress&w=400", tall:false, videoUrl:VA},
+  {id:12, tag:"UGC",         title:"Depoimento UGC — antes e depois",      src:"https://images.pexels.com/photos/2263436/pexels-photo-2263436.jpeg?auto=compress&w=400", tall:true,  videoUrl:VB},
 ];
 
 const LOADING_MSGS = [
@@ -547,7 +569,8 @@ function classifyIntent(lower: string): IntentResult {
 //  emotional subtext and generate English Pexels search queries based on
 //  VISUAL CONCEPT — not literal translation. Suggest a sound effect type."
 function analyzeCopyForDirectResponse(copyText: string): DirectResponseScene[] {
-  const WPS = 2.8, MIN_DUR = 3.0, MAX_DUR = 5.0;
+  // VSL presenters speak ~2.2 words/sec with dramatic pauses between phrases.
+  const WPS = 2.2, MIN_DUR = 3.5, MAX_DUR = 9.0;
 
   // 1. Split on sentence boundaries
   const raw = copyText.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean);
@@ -576,41 +599,51 @@ function analyzeCopyForDirectResponse(copyText: string): DirectResponseScene[] {
 
   // 4. Classify each chunk and build DirectResponseScene
   return merged.map((text, i) => {
-    const wc       = text.split(/\s+/).length;
-    const duration = Math.max(MIN_DUR, Math.min(MAX_DUR, wc / WPS));
+    const wc = text.split(/\s+/).length;
+    // Add dramatic pause at sentence boundaries (VSL pacing feels sluggish without it)
+    const pause = /[.!?]$/.test(text.trim()) ? 0.6 : /[…,]$/.test(text.trim()) ? 0.3 : 0;
+    const duration = Math.max(MIN_DUR, Math.min(MAX_DUR, wc / WPS + pause));
     const { emotion, searchQueries, suggestedSfx } = classifyIntent(text.toLowerCase());
     return { id:`drs-${i}`, textSnippet:text, duration, emotion, searchQueries, suggestedSfx };
   });
 }
 
 // ─── buildTimelineClipsFromDRS ────────────────────────────────────────────────
-// Uses DirectResponseScene as the source of truth.
-// Each of the 3 searchQueries → one rapid-cut clip (1.5-3s).
-// Image is resolved from PEXELS_CONCEPTS by English concept — not PT-BR keyword.
+// ONE B-roll clip per DRS scene — covers ~65% of the scene duration.
+// The remaining ~35% is an intentional GAP where only the Avatar/A-Roll shows.
+// This creates the natural "breathe" rhythm of professional NLE editing:
+//   [B-ROLL 3s] ──── [GAP 1.5s: avatar] ──── [B-ROLL 3s] ──── …
+// Cursor advances by the FULL scene duration so subtitles/SFX stay in sync.
 function buildTimelineClipsFromDRS(drScenes: DirectResponseScene[]): TimelineClip[] {
   const clips: TimelineClip[] = [];
   let cursor = 0;
   for (let i = 0; i < drScenes.length; i++) {
-    const drs = drScenes[i];
-    const col = CLIP_COLS[i % CLIP_COLS.length];
-    const n   = drs.searchQueries.length;
-    const clipDur = Math.max(1.5, Math.min(3.0, drs.duration / n));
-    drs.searchQueries.forEach((query, j) => {
-      const isLast = j === n - 1;
-      const d      = isLast ? Math.max(1.0, drs.duration - j * clipDur) : clipDur;
-      clips.push({
-        id:          `drs${i}-q${j}`,
-        sceneIdx:    i,
-        url:         null,
-        thumb:       lookupConcept(query),
-        triggerWord: query,
-        startSec:    cursor + j * clipDur,
-        durSec:      d,
-        label:       `${drs.emotion} · ${query.split(" ")[0]}`,
-        color:       col,
-      });
+    const drs   = drScenes[i];
+    const col   = CLIP_COLS[i % CLIP_COLS.length];
+    const query = drs.searchQueries[0] ?? "";
+
+    const url   = drs.videoUrl ?? null;
+    const thumb = drs.thumbUrl ?? lookupConcept(query);
+
+    const shortLabel = drs.textSnippet.split(" ").slice(0, 4).join(" ")
+      + (drs.textSnippet.split(" ").length > 4 ? "…" : "");
+
+    // B-roll covers 60–70% of the scene — alternating rhythm feels organic
+    const brollRatio = i % 2 === 0 ? 0.65 : 0.60;
+    const brollDur   = Math.max(1.5, drs.duration * brollRatio);
+
+    clips.push({
+      id:          `drs${i}`,
+      sceneIdx:    i,
+      url,
+      thumb:       thumb || lookupConcept(query),
+      triggerWord: query,
+      startSec:    cursor,
+      durSec:      brollDur,          // ← only covers part of the scene
+      label:       `${drs.emotion} · ${shortLabel}`,
+      color:       col,
     });
-    cursor += drs.duration;
+    cursor += drs.duration;           // ← full duration — gap = drs.duration - brollDur
   }
   return clips;
 }
@@ -663,25 +696,25 @@ function UploadModal({ onClose }: { onClose: () => void }) {
         onClick={e=>e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-5 border-b" style={{borderColor:"rgba(255,255,255,0.07)"}}>
           <div>
-            <h2 className="text-base font-black text-white" style={{letterSpacing:"-0.02em"}}>Faça upload dos seus ativos</h2>
-            <p className="text-xs text-gray-600 mt-0.5">Locução, takes brutos de vídeo ou trilha</p>
+            <h2 className="text-lg font-black text-white" style={{fontFamily:"'Bebas Neue',sans-serif",letterSpacing:"1.5px"}}>Faça upload dos seus ativos</h2>
+            <p className="text-xs text-gray-400 mt-0.5">Locução, takes brutos de vídeo ou trilha</p>
           </div>
           <button onClick={onClose} className="p-2 rounded-xl text-gray-600 hover:text-gray-300 hover:bg-white/6 transition-colors"><X className="w-4 h-4"/></button>
         </div>
         <div className="p-6">
           <div onDragOver={e=>{e.preventDefault();setDragging(true);}} onDragLeave={()=>setDragging(false)} onDrop={e=>{e.preventDefault();setDragging(false);}}
             className="flex flex-col items-center justify-center py-14 rounded-2xl border-2 border-dashed transition-all cursor-pointer"
-            style={{borderColor:dragging?"rgba(59,130,246,0.7)":"rgba(255,255,255,0.12)",background:dragging?"rgba(37,99,235,0.06)":"rgba(255,255,255,0.02)"}}>
+            style={{borderColor:dragging?"rgba(232,89,60,0.7)":"rgba(255,255,255,0.12)",background:dragging?"rgba(232,89,60,0.06)":"rgba(255,255,255,0.02)"}}>
             <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4 transition-all"
-              style={{background:dragging?"rgba(37,99,235,0.2)":"rgba(255,255,255,0.05)",border:dragging?"1px solid rgba(59,130,246,0.4)":"1px solid rgba(255,255,255,0.08)",boxShadow:dragging?"0 0 30px rgba(37,99,235,0.3)":"none"}}>
-              <CloudUpload className={`w-8 h-8 transition-colors ${dragging?"text-blue-400":"text-gray-600"}`}/>
+              style={{background:dragging?"rgba(232,89,60,0.2)":"rgba(255,255,255,0.05)",border:dragging?"1px solid rgba(232,89,60,0.4)":"1px solid rgba(255,255,255,0.08)",boxShadow:dragging?"0 0 30px rgba(232,89,60,0.3)":"none"}}>
+              <CloudUpload className={`w-8 h-8 transition-colors ${dragging?"text-orange-400":"text-gray-500"}`}/>
             </div>
             <p className="text-sm font-semibold text-gray-300 mb-1">Arraste seus arquivos aqui</p>
-            <p className="text-xs text-gray-600 text-center max-w-xs leading-relaxed">Suporta <span className="text-gray-500">.mp3 .wav</span> e takes de vídeo <span className="text-gray-500">.mp4 .mov</span></p>
+            <p className="text-xs text-gray-500 text-center max-w-xs leading-relaxed">Suporta <span className="text-gray-400">.mp3 .wav</span> e takes de vídeo <span className="text-gray-400">.mp4 .mov</span></p>
           </div>
           <div className="flex items-center gap-3 my-4">
             <div className="flex-1 h-px" style={{background:"rgba(255,255,255,0.06)"}}/>
-            <span className="text-[10px] text-gray-700 uppercase tracking-widest">ou</span>
+            <span className="text-[10px] text-gray-500 uppercase tracking-widest">ou</span>
             <div className="flex-1 h-px" style={{background:"rgba(255,255,255,0.06)"}}/>
           </div>
           <button className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold text-gray-300 border transition-all hover:bg-white/6" style={{borderColor:"rgba(255,255,255,0.1)"}}>
@@ -690,7 +723,7 @@ function UploadModal({ onClose }: { onClose: () => void }) {
         </div>
         <div className="px-6 pb-5 flex items-center gap-2 flex-wrap">
           {[".mp3",".wav",".mp4",".mov",".mkv"].map(f=>(
-            <span key={f} className="text-[9px] font-bold px-2 py-0.5 rounded text-gray-600" style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.07)"}}>{f}</span>
+            <span key={f} className="text-[9px] font-bold px-2 py-0.5 rounded text-gray-500" style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.07)"}}>{f}</span>
           ))}
         </div>
       </div>
@@ -712,52 +745,121 @@ function GeneratingView() {
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-8 px-8">
       <div className="relative w-24 h-24 flex items-center justify-center">
-        <div className="absolute inset-0 rounded-full animate-ping opacity-20" style={{background:"radial-gradient(circle,rgba(99,102,241,0.6),transparent)",animationDuration:"1.4s"}}/>
-        <div className="absolute inset-2 rounded-full animate-spin" style={{border:"2px solid transparent",borderTopColor:"rgba(99,102,241,0.8)",borderRightColor:"rgba(99,102,241,0.3)",animationDuration:"1s"}}/>
-        <div className="absolute inset-5 rounded-full animate-spin" style={{border:"2px solid transparent",borderBottomColor:"rgba(139,92,246,0.9)",borderLeftColor:"rgba(139,92,246,0.3)",animationDuration:"1.8s",animationDirection:"reverse"}}/>
-        <Brain className="w-8 h-8 text-indigo-400" style={{filter:"drop-shadow(0 0 8px rgba(99,102,241,0.8))"}}/>
+        <div className="absolute inset-0 rounded-full animate-ping opacity-20" style={{background:"radial-gradient(circle,rgba(232,89,60,0.6),transparent)",animationDuration:"1.4s"}}/>
+        <div className="absolute inset-2 rounded-full animate-spin" style={{border:"2px solid transparent",borderTopColor:"rgba(232,89,60,0.8)",borderRightColor:"rgba(232,89,60,0.3)",animationDuration:"1s"}}/>
+        <div className="absolute inset-5 rounded-full animate-spin" style={{border:"2px solid transparent",borderBottomColor:"rgba(232,89,60,0.9)",borderLeftColor:"rgba(232,89,60,0.3)",animationDuration:"1.8s",animationDirection:"reverse"}}/>
+        <Brain className="w-8 h-8 text-orange-400" style={{filter:"drop-shadow(0 0 8px rgba(232,89,60,0.8))"}}/>
       </div>
       <div className="text-center space-y-2">
         <p className={`text-base font-semibold text-white transition-all duration-300 ${fade?"opacity-100 translate-y-0":"opacity-0 translate-y-1"}`} style={{letterSpacing:"-0.01em"}}>{LOADING_MSGS[msgIdx]}</p>
-        <p className="text-xs text-gray-600">GPT-4o · Pexels HD · Freesound · Cofre Kraft</p>
+        <p className="text-xs text-gray-500">GPT-4o · Pexels HD · Freesound · Cofre Kraft</p>
       </div>
       <div className="w-48 h-0.5 rounded-full overflow-hidden" style={{background:"rgba(255,255,255,0.06)"}}>
-        <div className="h-full rounded-full animate-pulse" style={{background:"linear-gradient(90deg,#4f46e5,#7c3aed,#4f46e5)",width:"70%"}}/>
+        <div className="h-full rounded-full animate-pulse" style={{background:"linear-gradient(90deg,#E8593C,#E8593C,#E8593C)",width:"70%"}}/>
       </div>
     </div>
   );
 }
 
-// ─── GalleryView ──────────────────────────────────────────────────────────────
-function GalleryView({ activeTag, setActiveTag }: { activeTag:string; setActiveTag:(t:string)=>void }) {
+// ─── HomeRightPanel — Hooks Virais (grid TikTok, só vídeos) ──────────────────
+function HomeRightPanel({ activeTag, setActiveTag }: {
+  activeTag: string; setActiveTag:(t:string)=>void;
+  onRaioX:(ad:WinningAd)=>void; // mantido na assinatura para compatibilidade
+}) {
   const cards = activeTag==="All" ? GALLERY_CARDS : GALLERY_CARDS.filter(c=>c.tag===activeTag);
+
   return (
-    <>
-      <div className="flex items-center gap-1 px-5 py-3.5 border-b shrink-0 overflow-x-auto" style={{borderColor:"rgba(255,255,255,0.05)"}}>
-        {GALLERY_TAGS.map(tag=>(
-          <button key={tag} onClick={()=>setActiveTag(tag)}
-            className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${activeTag===tag?"text-white bg-white/10 border border-white/15":"text-gray-600 hover:text-gray-300 border border-transparent"}`}>{tag}</button>
-        ))}
+    <div className="flex-1 flex flex-col overflow-hidden" style={{background:"#0a0a0a"}}>
+
+      {/* ── Header + filtros ── */}
+      <div className="shrink-0 px-4 pt-4 pb-0">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full"
+              style={{background:"rgba(232,89,60,0.1)",border:"1px solid rgba(232,89,60,0.25)"}}>
+              <Film className="w-3 h-3 text-orange-400"/>
+              <span className="text-[13px] font-black uppercase tracking-wide" style={{fontFamily:"'Bebas Neue',sans-serif",letterSpacing:"2px",color:"#FF7A5C"}}>Hooks Virais</span>
+              <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full"
+                style={{background:"rgba(232,89,60,0.15)",color:"#FF7A5C",border:"1px solid rgba(232,89,60,0.25)"}}>
+                {GALLERY_CARDS.length} clips
+              </span>
+            </div>
+          </div>
+          <span className="text-[9px] text-gray-500 italic">autoplay · loop · muted</span>
+        </div>
+
+        {/* Tag filters */}
+        <div className="flex items-center gap-1.5 pb-3 overflow-x-auto" style={{scrollbarWidth:"none"}}>
+          {GALLERY_TAGS.map(tag=>(
+            <button key={tag} onClick={()=>setActiveTag(tag)}
+              className="shrink-0 px-3 py-1 rounded-full text-[9px] font-black transition-all"
+              style={{
+                background:activeTag===tag?"rgba(232,89,60,0.18)":"rgba(255,255,255,0.04)",
+                border:`1px solid ${activeTag===tag?"rgba(232,89,60,0.5)":"rgba(255,255,255,0.07)"}`,
+                color:activeTag===tag?"#FF7A5C":"#4b5563",
+                boxShadow:activeTag===tag?"0 0 14px rgba(232,89,60,0.2)":"none",
+              }}>
+              {tag}
+            </button>
+          ))}
+        </div>
       </div>
-      <div className="flex-1 overflow-y-auto px-4 py-4">
-        <div style={{columnCount:3,columnGap:"10px"}}>
+
+      {/* ── Grid de vídeos virais — 3 colunas, masonry por tall ── */}
+      <div className="flex-1 overflow-y-auto px-3 pb-4"
+        style={{scrollbarWidth:"thin",scrollbarColor:"rgba(255,255,255,0.06) transparent"}}>
+        <div style={{columnCount:3,columnGap:"8px"}}>
           {cards.map(card=>(
-            <div key={card.id} className="break-inside-avoid mb-2.5 group relative rounded-xl overflow-hidden cursor-pointer" style={{border:"1px solid rgba(255,255,255,0.06)"}}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={card.src} alt={card.title} className="w-full object-cover opacity-65 group-hover:opacity-90 transition-all duration-300" style={{aspectRatio:card.tall?"9/13":"4/3",display:"block"}}/>
-              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/10 to-transparent"/>
-              <div className="absolute bottom-0 left-0 right-0 p-2.5">
-                <p className="text-[8px] font-bold text-gray-600 uppercase tracking-widest mb-0.5">{card.tag}</p>
-                <p className="text-[11px] font-semibold text-white leading-snug">{card.title}</p>
+            <div key={card.id} className="break-inside-avoid mb-2 group relative rounded-xl overflow-hidden cursor-pointer"
+              style={{border:"1px solid rgba(255,255,255,0.07)",background:"#0e0e0e"}}>
+
+              {/* Vídeo viral rodando — fallback para img se o src bloquear */}
+              <video
+                src={card.videoUrl}
+                autoPlay loop muted playsInline
+                className="w-full h-56 object-cover rounded-t-lg"
+                style={{aspectRatio:card.tall?"9/13":"4/3",display:"block",filter:"brightness(0.82) saturate(1.15)"}}
+                onError={e=>{
+                  const v = e.currentTarget;
+                  const img = document.createElement("img");
+                  img.src = card.src;
+                  img.className = v.className;
+                  img.style.cssText = v.style.cssText;
+                  v.parentNode?.replaceChild(img, v);
+                }}
+              />
+
+              {/* Gradiente overlay */}
+              <div className="absolute inset-0 rounded-xl pointer-events-none"
+                style={{background:"linear-gradient(to bottom,rgba(0,0,0,0.25) 0%,transparent 40%,rgba(0,0,0,0.88) 100%)"}}/>
+
+              {/* Tag badge — topo esquerdo */}
+              <div className="absolute top-2 left-2">
+                <span className="text-[7px] font-black uppercase px-2 py-0.5 rounded-full"
+                  style={{background:"rgba(232,89,60,0.25)",color:"#FF7A5C",border:"1px solid rgba(232,89,60,0.4)",backdropFilter:"blur(6px)"}}>
+                  {card.tag}
+                </span>
               </div>
-              <div className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" style={{background:"rgba(255,255,255,0.15)",backdropFilter:"blur(6px)"}}>
-                <Play className="w-3 h-3 text-white ml-0.5" fill="white"/>
+
+              {/* Indicador live — topo direito */}
+              <div className="absolute top-2 right-2 flex items-center gap-1 px-1.5 py-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                style={{background:"rgba(0,0,0,0.6)",backdropFilter:"blur(6px)",border:"1px solid rgba(52,211,153,0.35)"}}>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"/>
+                <span className="text-[7px] font-black text-emerald-400">LIVE</span>
+              </div>
+
+              {/* Título embaixo */}
+              <div className="absolute bottom-0 left-0 right-0 px-2.5 pb-2.5 pt-5">
+                <p className="text-[9px] font-black text-white leading-snug"
+                  style={{textShadow:"0 1px 6px rgba(0,0,0,0.9)",letterSpacing:"-0.01em"}}>
+                  {card.title}
+                </p>
               </div>
             </div>
           ))}
         </div>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -766,25 +868,25 @@ function PaywallModal({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:"rgba(0,0,0,0.85)",backdropFilter:"blur(14px)"}} onClick={onClose}>
-      <div className="relative w-full max-w-sm rounded-2xl p-7 text-center" style={{background:"#0f0f14",border:"1px solid rgba(79,70,229,0.35)",boxShadow:"0 0 80px rgba(79,70,229,0.2)"}} onClick={e=>e.stopPropagation()}>
+      <div className="relative w-full max-w-sm rounded-2xl p-7 text-center" style={{background:"#0e0e0e",border:"1px solid rgba(232,89,60,0.35)",boxShadow:"0 0 80px rgba(232,89,60,0.2)"}} onClick={e=>e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-4 right-4 p-1.5 rounded-lg text-gray-600 hover:text-gray-300 hover:bg-white/5 transition-colors"><X className="w-4 h-4"/></button>
-        <div className="absolute inset-0 rounded-2xl pointer-events-none" style={{background:"radial-gradient(ellipse at 50% 0%,rgba(79,70,229,0.2) 0%,transparent 65%)"}}/>
+        <div className="absolute inset-0 rounded-2xl pointer-events-none" style={{background:"radial-gradient(ellipse at 50% 0%,rgba(232,89,60,0.2) 0%,transparent 65%)"}}/>
         <div className="relative z-10">
-          <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{background:"rgba(79,70,229,0.15)",border:"1px solid rgba(79,70,229,0.3)"}}>
-            <Lock className="w-6 h-6 text-indigo-400"/>
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{background:"rgba(232,89,60,0.15)",border:"1px solid rgba(232,89,60,0.3)"}}>
+            <Lock className="w-6 h-6" style={{color:"#E8593C"}}/>
           </div>
-          <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-[0.2em] mb-2">Recurso PRO</p>
-          <h3 className="text-lg font-black text-white mb-2" style={{letterSpacing:"-0.02em"}}>Desbloqueie o poder total</h3>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] mb-2" style={{color:"#E8593C"}}>Recurso PRO</p>
+          <h3 className="text-2xl font-black text-white mb-2" style={{fontFamily:"'Bebas Neue',sans-serif",letterSpacing:"1.5px"}}>Desbloqueie o poder total</h3>
           <p className="text-xs text-gray-500 leading-relaxed mb-5">Exporte e baixe suas mídias com qualidade máxima, sem marca d'água.</p>
           <ul className="space-y-2 mb-6 text-left">
             {["Exportar XML para Premiere","Download de mídias HD","Acervo Kraft Premium","Projetos ilimitados"].map(f=>(
-              <li key={f} className="flex items-center gap-2.5 text-xs text-gray-400"><Check className="w-3.5 h-3.5 text-indigo-400 shrink-0"/>{f}</li>
+              <li key={f} className="flex items-center gap-2.5 text-xs text-gray-400"><Check className="w-3.5 h-3.5 shrink-0" style={{color:"#E8593C"}}/>{f}</li>
             ))}
           </ul>
-          <button onClick={()=>router.push("/pricing")} className="w-full py-3 rounded-xl text-sm font-black text-white flex items-center justify-center gap-2" style={{background:"linear-gradient(135deg,#4f46e5,#7c3aed)",boxShadow:"0 8px 28px rgba(79,70,229,0.45)"}}>
+          <button onClick={()=>router.push("/pricing")} className="w-full py-3 rounded-xl text-sm font-black text-white flex items-center justify-center gap-2" style={{background:"linear-gradient(135deg,#E8593C,#E8593C)",boxShadow:"0 8px 28px rgba(232,89,60,0.45)"}}>
             <Zap className="w-4 h-4 text-yellow-300"/>⚡ Desbloquear Recursos PRO
           </button>
-          <p className="text-[10px] text-gray-700 mt-2.5">Cancele quando quiser · Sem fidelidade</p>
+          <p className="text-[10px] text-gray-500 mt-2.5">Cancele quando quiser · Sem fidelidade</p>
         </div>
       </div>
     </div>
@@ -792,17 +894,270 @@ function PaywallModal({ onClose }: { onClose: () => void }) {
 }
 
 
+// ─── Winning Ads Library — Mock Data ─────────────────────────────────────────
+interface WinningAd {
+  id: string; title: string; niche: string; daysActive: string;
+  thumbnailUrl: string; videoUrl?: string | null;
+  hookText: string; views: string; spend: string;
+}
+const WINNING_ADS: WinningAd[] = [
+  {
+    id:"w1", title:"VSL – Planilha do Governo",       niche:"Renda Extra",
+    daysActive:"Rodando há 67 dias",
+    thumbnailUrl:"https://images.pexels.com/photos/4386442/pexels-photo-4386442.jpeg?auto=compress&w=600",
+    videoUrl:"https://player.vimeo.com/external/541258672.sd.mp4?s=4b6c318534ac06b6f0012584d4b1f486663f94e9&profile_id=165",
+    views:"2.1M views", spend:"~R$45k investido",
+    hookText:"Você sabia que existem planilhas do governo que pagam até R$1.200 por mês sem fazer nada?",
+  },
+  {
+    id:"w2", title:"VSL – Composto Articular 21 Dias", niche:"Saúde",
+    daysActive:"Rodando há 112 dias",
+    thumbnailUrl:"https://images.pexels.com/photos/7176026/pexels-photo-7176026.jpeg?auto=compress&w=600",
+    videoUrl:"https://player.vimeo.com/external/391104990.sd.mp4?s=5517f699f579d98416d86a60a7470659a888a75e&profile_id=165",
+    views:"5.8M views", spend:"~R$130k investido",
+    hookText:"Médicos odeiam esse truque: composto natural elimina dor articular em 21 dias, sem cirurgia.",
+  },
+  {
+    id:"w3", title:"VSL – Método Slot Secreto",        niche:"iGaming",
+    daysActive:"Rodando há 33 dias",
+    thumbnailUrl:"https://images.pexels.com/photos/2263436/pexels-photo-2263436.jpeg?auto=compress&w=600",
+    videoUrl:"https://player.vimeo.com/external/494285880.sd.mp4?s=7b6c3f6f96216a652e75e92534570077c5e53c40&profile_id=165",
+    views:"890k views", spend:"~R$22k investido",
+    hookText:"Esse padrão nos slots que os cassinos tentam esconder deu +R$3.200 em apenas 48 horas.",
+  },
+  {
+    id:"w4", title:"VSL – Licença Master PLR",          niche:"PLR",
+    daysActive:"Rodando há 89 dias",
+    thumbnailUrl:"https://images.pexels.com/photos/3184291/pexels-photo-3184291.jpeg?auto=compress&w=600",
+    videoUrl:"https://player.vimeo.com/external/541258672.sd.mp4?s=4b6c318534ac06b6f0012584d4b1f486663f94e9&profile_id=165",
+    views:"3.4M views", spend:"~R$78k investido",
+    hookText:"Como eu ganho R$8.000 por mês revendendo produtos digitais que eu nunca criei.",
+  },
+  {
+    id:"w5", title:"VSL – Glicemia Controle Total",     niche:"Saúde",
+    daysActive:"Rodando há 156 dias",
+    thumbnailUrl:"https://images.pexels.com/photos/4386466/pexels-photo-4386466.jpeg?auto=compress&w=600",
+    videoUrl:"https://player.vimeo.com/external/391104990.sd.mp4?s=5517f699f579d98416d86a60a7470659a888a75e&profile_id=165",
+    views:"12.3M views", spend:"~R$290k investido",
+    hookText:"Este fruto amazônico normaliza a glicemia em 14 dias. Farmácias tentam censurar.",
+  },
+  {
+    id:"w6", title:"VSL – Indenização Trabalhista",     niche:"Renda Extra",
+    daysActive:"Rodando há 44 dias",
+    thumbnailUrl:"https://images.pexels.com/photos/3729464/pexels-photo-3729464.jpeg?auto=compress&w=600",
+    videoUrl:"https://player.vimeo.com/external/494285880.sd.mp4?s=7b6c3f6f96216a652e75e92534570077c5e53c40&profile_id=165",
+    views:"1.9M views", spend:"~R$51k investido",
+    hookText:"47 bilhões em indenizações esquecidas pelo governo. Seu CPF pode estar na lista — confira grátis.",
+  },
+];
+const AD_NICHES  = ["Todos","Renda Extra","Saúde","iGaming","PLR"];
+const AD_COLORS: Record<string,string> = {
+  "Renda Extra":"#fbbf24","Saúde":"#34d399","iGaming":"#FF7A5C","PLR":"#B8B5AF",
+};
+
+// ─── WinningAdsDrawer ─────────────────────────────────────────────────────────
+function WinningAdsDrawer({ open, onClose, onRaioX }:{
+  open:boolean; onClose:()=>void; onRaioX:(ad:WinningAd)=>void;
+}) {
+  const [niche, setNiche] = useState("Todos");
+  const filtered = niche==="Todos" ? WINNING_ADS : WINNING_ADS.filter(a=>a.niche===niche);
+
+  return(
+    <>
+      {/* Backdrop */}
+      <div onClick={onClose}
+        className="fixed inset-0 z-40 transition-opacity duration-300"
+        style={{
+          background:"rgba(0,0,0,0.55)",
+          backdropFilter:"blur(5px)",
+          opacity:open?1:0,
+          pointerEvents:open?"auto":"none",
+        }}/>
+
+      {/* Sliding panel */}
+      <div className="fixed top-0 right-0 h-full z-50 flex flex-col"
+        style={{
+          width:"420px",
+          background:"#0e0e0e",
+          borderLeft:"1px solid rgba(255,255,255,0.07)",
+          boxShadow:"-32px 0 80px rgba(0,0,0,0.75)",
+          transform:open?"translateX(0)":"translateX(100%)",
+          transition:"transform 0.34s cubic-bezier(0.22,1,0.36,1)",
+        }}>
+
+        {/* ── Header ── */}
+        <div className="flex items-center justify-between px-5 py-4 shrink-0 border-b"
+          style={{borderColor:"rgba(255,255,255,0.07)",background:"rgba(255,255,255,0.02)"}}>
+          <div>
+            <div className="flex items-center gap-2 mb-0.5">
+              <Flame className="w-4 h-4 text-orange-400" style={{filter:"drop-shadow(0 0 6px rgba(251,146,60,0.6))"}}/>
+              <span className="text-[16px] font-black text-white" style={{fontFamily:"'Bebas Neue',sans-serif",letterSpacing:"1.5px"}}>
+                Biblioteca de Vencedores
+              </span>
+              <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full"
+                style={{background:"rgba(251,191,36,0.12)",color:"#fbbf24",border:"1px solid rgba(251,191,36,0.25)"}}>
+                SWIPE FILE
+              </span>
+            </div>
+            <p className="text-[9px] text-gray-400 flex items-center gap-1">
+              <TrendingUp className="w-2.5 h-2.5"/>
+              {WINNING_ADS.length} anúncios vencedores · Alta performance confirmada
+            </p>
+          </div>
+          <button onClick={onClose}
+            className="p-2 rounded-xl text-gray-400 hover:text-gray-100 hover:bg-white/6 transition-colors">
+            <X className="w-4 h-4"/>
+          </button>
+        </div>
+
+        {/* ── Niche filters ── */}
+        <div className="flex items-center gap-1.5 px-4 py-3 shrink-0 border-b overflow-x-auto"
+          style={{borderColor:"rgba(255,255,255,0.05)"}}>
+          {AD_NICHES.map(n=>{
+            const isAct = niche===n;
+            const col   = AD_COLORS[n]??"#9ca3af";
+            return(
+              <button key={n} onClick={()=>setNiche(n)}
+                className="shrink-0 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all"
+                style={{
+                  background:isAct?`${col}20`:"rgba(255,255,255,0.04)",
+                  border:`1px solid ${isAct?`${col}55`:"rgba(255,255,255,0.07)"}`,
+                  color:isAct?col:"#6b7280",
+                  boxShadow:isAct?`0 0 14px ${col}25`:"none",
+                }}>
+                {n==="Todos"?"🌐":n==="Saúde"?"🏥":n==="Renda Extra"?"💰":n==="iGaming"?"🎰":"📦"} {n}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* ── Count ── */}
+        <div className="px-5 pt-2.5 pb-1 shrink-0">
+          <p className="text-[9px] text-gray-500 font-semibold uppercase tracking-wider">
+            {filtered.length} anúncio{filtered.length!==1?"s":""} · clique em 🧬 para extrair a estrutura
+          </p>
+        </div>
+
+        {/* ── Cards ── */}
+        <div className="flex-1 overflow-y-auto px-3 pb-6 space-y-4"
+          style={{scrollbarWidth:"thin",scrollbarColor:"rgba(255,255,255,0.08) transparent"}}>
+          {filtered.map(ad=>{
+            const col = AD_COLORS[ad.niche]??"#9ca3af";
+            return(
+              <div key={ad.id} className="rounded-2xl overflow-hidden group/card"
+                style={{
+                  background:"#111111",
+                  border:"1px solid rgba(255,255,255,0.07)",
+                  boxShadow:"0 6px 28px rgba(0,0,0,0.45)",
+                  transition:"border-color 0.2s",
+                }}>
+
+                {/* Thumbnail — 9:16 crop, max 240px tall */}
+                <div className="relative overflow-hidden" style={{aspectRatio:"9/16",maxHeight:"240px"}}>
+                  {ad.videoUrl
+                    ? <video src={ad.videoUrl} autoPlay loop muted playsInline
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover/card:scale-105"
+                        style={{filter:"brightness(0.8) saturate(1.2)"}}/>
+                    : <>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={ad.thumbnailUrl} alt={ad.title}
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover/card:scale-105"
+                          style={{filter:"brightness(0.72) saturate(1.15)"}}
+                          loading="lazy"/>
+                      </>
+                  }
+                  {/* Gradient */}
+                  <div className="absolute inset-0"
+                    style={{background:"linear-gradient(to top,rgba(0,0,0,0.93) 0%,rgba(0,0,0,0.25) 55%,transparent 100%)"}}/>
+                  {/* Niche badge */}
+                  <div className="absolute top-2.5 left-2.5">
+                    <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full"
+                      style={{background:`${col}25`,color:col,border:`1px solid ${col}40`}}>
+                      {ad.niche}
+                    </span>
+                  </div>
+                  {/* Days active */}
+                  <div className="absolute top-2.5 right-2.5">
+                    <span className="text-[8px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1"
+                      style={{background:"rgba(0,0,0,0.75)",color:"#34d399",border:"1px solid rgba(52,211,153,0.3)"}}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block"/>
+                      {ad.daysActive}
+                    </span>
+                  </div>
+                  {/* Play circle */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-11 h-11 rounded-full flex items-center justify-center"
+                      style={{background:"rgba(255,255,255,0.14)",border:"1.5px solid rgba(255,255,255,0.3)",backdropFilter:"blur(6px)"}}>
+                      <Play className="w-4 h-4 text-white ml-0.5" fill="white"/>
+                    </div>
+                  </div>
+                  {/* Stats row */}
+                  <div className="absolute bottom-0 left-0 right-0 px-3 pb-2.5 flex items-center justify-between">
+                    <span className="text-[9px] font-bold text-white/75 flex items-center gap-1">
+                      <Eye className="w-2.5 h-2.5"/>{ad.views}
+                    </span>
+                    <span className="text-[9px] font-bold" style={{color:"#fbbf24"}}>
+                      💰 {ad.spend}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Card body */}
+                <div className="p-3.5">
+                  {/* Title */}
+                  <p className="text-[12px] font-black text-white mb-2" style={{letterSpacing:"-0.01em"}}>
+                    {ad.title}
+                  </p>
+                  {/* Hook text */}
+                  <div className="rounded-xl px-3 py-2.5 mb-3"
+                    style={{background:"rgba(255,255,255,0.035)",border:"1px solid rgba(255,255,255,0.06)"}}>
+                    <p className="text-[8px] font-black text-gray-400 uppercase tracking-[0.15em] mb-1.5 flex items-center gap-1">
+                      <Zap className="w-2.5 h-2.5 text-yellow-500"/> Hook dos 3 primeiros segundos
+                    </p>
+                    <p className="text-[11px] text-gray-300 leading-relaxed" style={{fontStyle:"italic"}}>
+                      "{ad.hookText}"
+                    </p>
+                  </div>
+                  {/* Raio-X button */}
+                  <button onClick={()=>onRaioX(ad)}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11px] font-black transition-all hover:brightness-125 active:scale-95"
+                    style={{
+                      background:"linear-gradient(135deg,rgba(232,89,60,0.22),rgba(232,89,60,0.14))",
+                      border:"1px solid rgba(232,89,60,0.45)",
+                      color:"#FF7A5C",
+                      boxShadow:"0 0 24px rgba(232,89,60,0.14)",
+                    }}>
+                    <span className="text-sm">🧬</span>
+                    <span>Extrair Raio-X (Estrutura)</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ─── WorkstationView ──────────────────────────────────────────────────────────
-function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes, onBack }: {
+interface WhisperWord { word: string; start: number; end: number; }
+
+function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes, initialBgMusicUrl, videoFile, whisperWords: rawWhisperWords, onBack }: {
   result: GenerateResponse;
   copy: string;
   drScenes: DirectResponseScene[];
+  initialBgMusicUrl?: string;
+  videoFile?: File | null;
+  whisperWords?: WhisperWord[];
   onBack: () => void;
 }) {
   // ── Refs ──
-  const videoRef    = useRef<HTMLVideoElement>(null);
-  const bgAudioRef  = useRef<HTMLAudioElement>(null);  // background suspense track
-  const timelineRef = useRef<HTMLDivElement>(null);
+  const videoRef         = useRef<HTMLVideoElement>(null);   // B-roll overlay
+  const avatarVideoRef   = useRef<HTMLVideoElement>(null);   // UGC / avatar base layer
+  const bgAudioRef       = useRef<HTMLAudioElement>(null);   // background suspense track
+  const timelineRef      = useRef<HTMLDivElement>(null);     // canvas (fixed pixel width)
+  const timelineScrollRef= useRef<HTMLDivElement>(null);     // scrollable outer wrapper
   const musicRefs   = [useRef<HTMLAudioElement>(null), useRef<HTMLAudioElement>(null), useRef<HTMLAudioElement>(null)];
   const rafRef        = useRef<number>(0);
   const globalTimeRef = useRef(0);
@@ -828,12 +1183,46 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
   const [editCopy,       setEditCopy]       = useState(initialCopy);
   const [dragSrcUrl,     setDragSrcUrl]     = useState<string|null>(null);
   const [dragOverClipId, setDragOverClipId] = useState<string|null>(null);
-  const [bgVolume,       setBgVolume]       = useState(0.35);
+  const [bgVolume,       setBgVolume]       = useState(videoFile ? 0.08 : 0.35);
+  const [showAdLib,      setShowAdLib]      = useState(false);
+  const [toast,          setToast]          = useState<string|null>(null);
+  const [voiceEnabled,   setVoiceEnabled]   = useState(false);
+  const voiceEnabledRef  = useRef(false);
+  const prevVoiceScene   = useRef(-1);
+  const [bgMusicUrl,     setBgMusicUrl]     = useState(
+    initialBgMusicUrl ??
+    "https://pub-9937ef38e0a744128bd67f59e5476f23.r2.dev/Epic%20Orchestral%20Cinematic%20Documentary%201.mp3"
+  );
+  // ── Track visibility / mute / volume controls (NLE-style) ──────────────
+  const [trackBrollVisible, setTrackBrollVisible] = useState(true);
+  const [trackAVVisible,    setTrackAVVisible]    = useState(true);
+  const [trackAVMuted,      setTrackAVMuted]      = useState(false);
+  const [avatarVolume,      setAvatarVolume]      = useState(1.0);
+  const [videoAspect,       setVideoAspect]       = useState<"landscape"|"portrait">("landscape");
+  // ── Uploaded UGC Avatar video object URL ─────────────────────────────────
+  const [uploadedVideoUrl,  setUploadedVideoUrl]  = useState<string|null>(null);
 
   const tracks   = result.background_tracks ?? [];
 
-  // DRS is the source of truth for duration — not the legacy Scene durations
-  const totalDur = useMemo(()=>
+  // ── Create object URL from uploaded videoFile ─────────────────────────────
+  useEffect(()=>{
+    if(!videoFile) return;
+    const url = URL.createObjectURL(videoFile);
+    setUploadedVideoUrl(url);
+    return ()=>URL.revokeObjectURL(url);
+  },[videoFile]);
+
+  // ── Sync avatarVideoRef muted + volume state ─────────────────────────────
+  useEffect(()=>{
+    if(!avatarVideoRef.current) return;
+    avatarVideoRef.current.muted  = trackAVMuted;
+    avatarVideoRef.current.volume = avatarVolume;
+  },[trackAVMuted, avatarVolume]);
+
+  // ── Real video duration (from avatar video) overrides DRS estimates ────────
+  const [realVideoDur, setRealVideoDur] = useState<number|null>(null);
+
+  const drsDur = useMemo(()=>
     Math.max(
       localDrScenes.length
         ? localDrScenes.reduce((s, drs) => s + drs.duration, 0)
@@ -841,6 +1230,24 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
       1),
     [localDrScenes, localScenes]
   );
+
+  // When a real UGC video is uploaded, its duration is the source of truth
+  const totalDur = (uploadedVideoUrl && realVideoDur && realVideoDur > 0)
+    ? realVideoDur
+    : drsDur;
+
+  // ── Timeline auto-scroll — keeps playhead ~30% from left edge ────────────
+  const lastAutoScrollSec = useRef(-999);
+  useEffect(()=>{
+    if(!playing||!timelineScrollRef.current) return;
+    if(Math.abs(currentTime - lastAutoScrollSec.current) < 1.5) return;
+    lastAutoScrollSec.current = currentTime;
+    const el = timelineScrollRef.current;
+    const canvasW = el.scrollWidth;
+    const pct = currentTime / Math.max(totalDur, 1);
+    const targetLeft = Math.max(0, pct * canvasW - el.clientWidth * 0.3);
+    el.scrollTo({ left: targetLeft, behavior: "smooth" });
+  },[playing, currentTime, totalDur]);
 
   // ── DRS-powered timeline — searchQueries drive clips, not PT-BR keywords ──
   const timelineClips = useMemo(()=>
@@ -850,14 +1257,28 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
     [localDrScenes, localScenes]
   );
 
-  // Clip currently under the playhead
+  // Clip currently under the playhead — null during gaps (no B-roll)
   const currentClip = useMemo(()=>
-    timelineClips.find(c=>currentTime>=c.startSec&&currentTime<c.startSec+c.durSec)
-    ??timelineClips[timelineClips.length-1]??null,
+    timelineClips.find(c=>currentTime>=c.startSec&&currentTime<c.startSec+c.durSec)??null,
     [timelineClips,currentTime]
   );
 
-  const activeScene = currentClip?.sceneIdx??0;
+  // Active scene index: which DRS/legacy scene contains the current time
+  const activeScene = useMemo(()=>{
+    if(currentClip) return currentClip.sceneIdx;
+    // During a gap: find the scene whose time window contains currentTime
+    const src = localDrScenes.length ? localDrScenes : localScenes;
+    let t = 0;
+    for(let i=0; i<src.length; i++){
+      const dur = localDrScenes.length
+        ? (src[i] as DirectResponseScene).duration
+        : (src[i] as Scene).estimated_duration_seconds??5;
+      if(currentTime >= t && currentTime < t+dur) return i;
+      t += dur;
+    }
+    return Math.max(0, src.length-1);
+  },[currentClip, currentTime, localDrScenes, localScenes]);
+
   const videoUrl    = currentClip?.url??"";
 
   // Cumulative scene starts — driven by DRS durations when available
@@ -871,11 +1292,14 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
     return s;
   },[localDrScenes, localScenes]);
 
-  // ── RAF Tick — drives playhead in real time ──────────────────────────────
+  // ── RAF Tick — drives playhead ONLY when no real video (copy-only mode) ──
+  // When uploadedVideoUrl exists, handleAvatarTimeUpdate is the sole clock.
   const tickRef = useRef<(ts:number)=>void>(()=>{});
   useEffect(()=>{
     tickRef.current=(ts:number)=>{
       if(!playingRef.current) return;
+      // Skip RAF tick when real video drives the clock
+      if(uploadedVideoUrl) { rafRef.current=requestAnimationFrame(tickRef.current); return; }
       if(lastTsRef.current===0) lastTsRef.current=ts;
       const delta=Math.min((ts-lastTsRef.current)/1000,0.1);
       lastTsRef.current=ts;
@@ -886,7 +1310,7 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
       if(newT>=totalDur){setPlaying(false);return;}
       rafRef.current=requestAnimationFrame(tickRef.current);
     };
-  },[totalDur]);
+  },[totalDur,uploadedVideoUrl]);
 
   useEffect(()=>{playingRef.current=playing;},[playing]);
 
@@ -915,31 +1339,121 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
       videoRef.current.play().catch(()=>null);
   },[]);
 
+  // ── Avatar video onLoadedMetadata — detects aspect ratio ─────────────────
+  const handleAvatarMetadata = useCallback(()=>{
+    const v = avatarVideoRef.current;
+    if(!v) return;
+    setVideoAspect(v.videoHeight > v.videoWidth ? "portrait" : "landscape");
+    if(isFinite(v.duration) && v.duration > 0) setRealVideoDur(v.duration);
+  },[]);
+
+  // ── Avatar video onTimeUpdate — AUTHORITATIVE clock when real video exists ─
+  // This fires ~4x/sec from the <video> element's native time.
+  // It is THE source of truth — the RAF tick is disabled when avatar is loaded.
+  const handleAvatarTimeUpdate=useCallback(()=>{
+    const v=avatarVideoRef.current;
+    if(!v) return;
+    const t=v.currentTime;
+    const dur = (isFinite(v.duration) && v.duration > 0) ? v.duration : totalDur;
+    if(t>=dur-0.1 && playingRef.current){ setPlaying(false); v.pause(); return; }
+    globalTimeRef.current=t;
+    setCurrentTime(t);
+    setPlayheadPct((t/Math.max(dur,1))*100);
+  },[totalDur]);
+
   // ── Background audio volume sync ─────────────────────────────────────────
   useEffect(()=>{
     if(bgAudioRef.current) bgAudioRef.current.volume=bgVolume;
   },[bgVolume]);
+
+  // ── Voz de Apoio — Web Speech API (pt-BR nativo do browser) ─────────────
+  // Keeps voiceEnabledRef in sync for use inside RAF/callbacks
+  useEffect(()=>{ voiceEnabledRef.current=voiceEnabled; },[voiceEnabled]);
+
+  // Cancels any ongoing speech safely
+  const cancelVoice = useCallback(()=>{
+    if(typeof window!=="undefined" && window.speechSynthesis)
+      window.speechSynthesis.cancel();
+  },[]);
+
+  // Speaks a text snippet with pt-BR voice at VSL pacing (rate 0.88)
+  const speakText = useCallback((text:string)=>{
+    if(typeof window==="undefined"||!window.speechSynthesis) return;
+    cancelVoice();
+    if(!voiceEnabledRef.current) return;
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang  = "pt-BR";
+    utter.rate  = 0.88;   // slightly slower than natural — dramatic VSL feel
+    utter.pitch = 1.0;
+    // Prefer an explicit pt-BR voice if the browser has one
+    const getVoice = ()=>{
+      const all = window.speechSynthesis.getVoices();
+      return all.find(v=>v.lang==="pt-BR")
+          ?? all.find(v=>v.lang.startsWith("pt"))
+          ?? null;
+    };
+    const setVoiceAndSpeak = ()=>{
+      const v = getVoice();
+      if(v) utter.voice = v;
+      window.speechSynthesis.speak(utter);
+    };
+    // getVoices() may be async on first call (Chrome quirk)
+    if(window.speechSynthesis.getVoices().length>0){
+      setVoiceAndSpeak();
+    } else {
+      window.speechSynthesis.onvoiceschanged = ()=>{ setVoiceAndSpeak(); };
+    }
+  },[cancelVoice]);
+
+  // When the active scene changes during playback → speak the new snippet
+  useEffect(()=>{
+    if(!playing) return;
+    if(activeScene===prevVoiceScene.current) return;
+    prevVoiceScene.current=activeScene;
+    if(voiceEnabled){
+      const text = localDrScenes[activeScene]?.textSnippet
+        ?? localScenes[activeScene]?.text_chunk
+        ?? localScenes[activeScene]?.segment ?? "";
+      speakText(text);
+    }
+  },[activeScene, playing, voiceEnabled, speakText, localDrScenes, localScenes]);
+
+  // Stop speech when component unmounts
+  useEffect(()=>cancelVoice,[cancelVoice]);
 
   // ── Play / Pause ─────────────────────────────────────────────────────────
   const togglePlay=useCallback(()=>{
     if(playing){
       setPlaying(false);
       videoRef.current?.pause();
+      avatarVideoRef.current?.pause();
       bgAudioRef.current?.pause();
+      cancelVoice();
     } else {
       if(globalTimeRef.current>=totalDur){
         globalTimeRef.current=0;setCurrentTime(0);setPlayheadPct(0);
         if(bgAudioRef.current) bgAudioRef.current.currentTime=0;
+        if(avatarVideoRef.current) avatarVideoRef.current.currentTime=0;
+        prevVoiceScene.current=-1;
       }
       setPlaying(true);
       videoRef.current?.play().catch(()=>null);
+      avatarVideoRef.current?.play().catch(()=>null);
       // Seek bg audio to match playhead position, then play
       if(bgAudioRef.current){
         bgAudioRef.current.currentTime=globalTimeRef.current % (bgAudioRef.current.duration||999);
         bgAudioRef.current.play().catch(()=>null);
       }
+      // Start voice on the current scene
+      if(voiceEnabledRef.current){
+        prevVoiceScene.current=activeScene;
+        const text = localDrScenes[activeScene]?.textSnippet
+          ?? localScenes[activeScene]?.text_chunk
+          ?? localScenes[activeScene]?.segment ?? "";
+        speakText(text);
+      }
     }
-  },[playing,totalDur]);
+  },[playing,totalDur,cancelVoice,speakText,activeScene,localDrScenes,localScenes]);
 
   // ── Seek to global time ──────────────────────────────────────────────────
   const seekToTime=useCallback((globalSec:number)=>{
@@ -947,9 +1461,12 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
     globalTimeRef.current=clamped;
     setCurrentTime(clamped);
     setPlayheadPct((clamped/totalDur)*100);
-    // Sync bg audio to new position
+    // Sync bg audio
     if(bgAudioRef.current&&isFinite(bgAudioRef.current.duration))
       bgAudioRef.current.currentTime=clamped % bgAudioRef.current.duration;
+    // Sync avatar video to exact global position
+    if(avatarVideoRef.current) avatarVideoRef.current.currentTime=clamped;
+    // Sync B-roll clip video to local offset
     const clip=timelineClips.find(c=>clamped>=c.startSec&&clamped<c.startSec+c.durSec);
     if(clip&&videoRef.current){
       const local=clamped-clip.startSec;
@@ -958,33 +1475,126 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
     }
   },[totalDur,timelineClips]);
 
-  // ── Timeline drag ────────────────────────────────────────────────────────
+  // ── Timeline drag — accounts for 56px track header + scroll offset ──────
+  const TRACK_HEADER_W = 56; // w-14 = 3.5rem = 56px
+  const timelineBodyPosFromEvent = (clientX: number) => {
+    if(!timelineRef.current) return 0;
+    const r = timelineRef.current.getBoundingClientRect();
+    const scrollLeft = timelineScrollRef.current?.scrollLeft ?? 0;
+    const bodyX = (clientX - r.left + scrollLeft) - TRACK_HEADER_W;
+    const bodyW = r.width - TRACK_HEADER_W;
+    return Math.max(0, Math.min(1, bodyX / bodyW)) * totalDur;
+  };
   const handleTimelineMouseDown=(e:React.MouseEvent<HTMLDivElement>)=>{
-    if(!timelineRef.current) return;
     setIsDragging(true);
-    const r=timelineRef.current.getBoundingClientRect();
-    seekToTime(((e.clientX-r.left)/r.width)*totalDur);
+    seekToTime(timelineBodyPosFromEvent(e.clientX));
   };
   useEffect(()=>{
     if(!isDragging) return;
-    const mv=(e:MouseEvent)=>{
-      if(!timelineRef.current) return;
-      const r=timelineRef.current.getBoundingClientRect();
-      seekToTime(Math.max(0,Math.min(1,(e.clientX-r.left)/r.width))*totalDur);
-    };
+    const mv=(e:MouseEvent)=>seekToTime(timelineBodyPosFromEvent(e.clientX));
     const up=()=>setIsDragging(false);
     window.addEventListener("mousemove",mv);window.addEventListener("mouseup",up);
     return()=>{window.removeEventListener("mousemove",mv);window.removeEventListener("mouseup",up);};
-  },[isDragging,seekToTime]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[isDragging,seekToTime,totalDur]);
+
+  // ── Keyboard Shortcuts (NLE-standard) ───────────────────────────────────────
+  useEffect(()=>{
+    const handleKeyDown=(e:KeyboardEvent)=>{
+      // Don't capture when typing in textarea/input
+      const tag=(e.target as HTMLElement)?.tagName;
+      if(tag==="TEXTAREA"||tag==="INPUT"||tag==="SELECT") return;
+
+      switch(e.code){
+        case "Space":        // Play / Pause
+          e.preventDefault();
+          togglePlay();
+          break;
+        case "ArrowLeft":    // Seek backward 5s (Shift = 1s)
+          e.preventDefault();
+          seekToTime(globalTimeRef.current - (e.shiftKey ? 1 : 5));
+          break;
+        case "ArrowRight":   // Seek forward 5s (Shift = 1s)
+          e.preventDefault();
+          seekToTime(globalTimeRef.current + (e.shiftKey ? 1 : 5));
+          break;
+        case "KeyJ":         // Seek backward 10s
+          seekToTime(globalTimeRef.current - 10);
+          break;
+        case "KeyK":         // Play / Pause (YouTube-style)
+          togglePlay();
+          break;
+        case "KeyL":         // Seek forward 10s
+          seekToTime(globalTimeRef.current + 10);
+          break;
+        case "Home":         // Go to start
+          e.preventDefault();
+          seekToTime(0);
+          break;
+        case "End":          // Go to end
+          e.preventDefault();
+          seekToTime(totalDur);
+          break;
+        case "KeyM":         // Mute/unmute avatar
+          setTrackAVMuted(m=>!m);
+          break;
+        case "KeyB":         // Toggle B-roll visibility
+          if(!e.metaKey&&!e.ctrlKey) setTrackBrollVisible(v=>!v);
+          break;
+      }
+    };
+    window.addEventListener("keydown",handleKeyDown);
+    return()=>window.removeEventListener("keydown",handleKeyDown);
+  },[togglePlay,seekToTime,totalDur]);
 
   // ── Suggest Another ──────────────────────────────────────────────────────
   const suggestAnother=useCallback(async(clipId:string)=>{
     const clip=timelineClips.find(c=>c.id===clipId);
     if(!clip) return;
-    const sc=localScenes[clip.sceneIdx];
-    const opts=sc.video_options??[];
     setLoadingClipIds(prev=>new Set(prev).add(clipId));
     try{
+      // ── DRS mode: rotate through videoOptions ─────────────────────────
+      if(localDrScenes.length>0){
+        const drs=localDrScenes[clip.sceneIdx];
+        const opts=drs?.videoOptions??[];
+        if(opts.length>1){
+          const cur=opts.findIndex(o=>o.url===clip.url);
+          const next=opts[(cur+1)%opts.length];
+          await new Promise(r=>setTimeout(r,500));
+          setLocalDrScenes(prev=>{
+            const u=[...prev];
+            const d=u[clip.sceneIdx];
+            u[clip.sceneIdx]={
+              ...d,
+              videoUrl:next.url,
+              thumbUrl:next.thumb,
+              videoOptions:[next,...(d.videoOptions??[]).filter(o=>o.url!==next.url)],
+            };
+            return u;
+          });
+        } else {
+          // Fetch new Pexels video using the scene's primary searchQuery
+          const q=drs?.searchQueries?.[0]??"cinematic broll";
+          const page=Math.floor(Math.random()*5)+1;
+          const res=await fetch(`/api/suggest-media?q=${encodeURIComponent(q)}&page=${page}`);
+          if(res.ok){
+            const data=await res.json();
+            const newVids:(typeof opts)=(data.videos??[]).map((v:{url:string;thumb?:string})=>({
+              url:v.url, thumb:v.thumb??lookupConcept(q), query:q,
+            }));
+            if(newVids.length>0)
+              setLocalDrScenes(prev=>{
+                const u=[...prev];
+                u[clip.sceneIdx]={...u[clip.sceneIdx],videoUrl:newVids[0].url,thumbUrl:newVids[0].thumb,videoOptions:newVids};
+                return u;
+              });
+          }
+        }
+        return;
+      }
+      // ── Legacy Scene mode ─────────────────────────────────────────────
+      const sc=localScenes[clip.sceneIdx];
+      const opts=sc?.video_options??[];
       if(opts.length>1){
         const cur=opts.findIndex(o=>o.url===clip.url);
         const next=opts[(cur+1)%opts.length];
@@ -996,7 +1606,7 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
           return u;
         });
       } else {
-        const q=sc.broll_search_keywords??sc.vault_category??sc.segment??"cinematic";
+        const q=sc?.broll_search_keywords??sc?.vault_category??sc?.segment??"cinematic";
         const page=Math.floor(Math.random()*5)+1;
         const res=await fetch(`/api/suggest-media?q=${encodeURIComponent(q)}&page=${page}`);
         if(res.ok){
@@ -1013,21 +1623,33 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
     } finally{
       setLoadingClipIds(prev=>{const s=new Set(prev);s.delete(clipId);return s;});
     }
-  },[timelineClips,localScenes]);
+  },[timelineClips,localDrScenes,localScenes]);
 
   // ── Drag & Drop from sidebar → V1 block ─────────────────────────────────
-  const handleDropOnClip=useCallback((clipId:string,url:string)=>{
+  const handleDropOnClip=useCallback((clipId:string,url:string,thumb?:string)=>{
     const clip=timelineClips.find(c=>c.id===clipId);
     if(!clip) return;
-    setLocalScenes(prev=>{
-      const u=[...prev];
-      const sc=u[clip.sceneIdx];
-      u[clip.sceneIdx]={...sc,video_url:url,
-        video_options:[{url},...(sc.video_options??[]).filter(o=>o.url!==url)]};
-      return u;
-    });
+    if(localDrScenes.length>0){
+      // DRS mode: update videoUrl + videoOptions
+      setLocalDrScenes(prev=>{
+        const u=[...prev];
+        const d=u[clip.sceneIdx];
+        const newOpt={url,thumb:thumb??lookupConcept(d.searchQueries?.[0]??""),query:d.searchQueries?.[0]??""};
+        u[clip.sceneIdx]={...d,videoUrl:url,thumbUrl:thumb??d.thumbUrl,
+          videoOptions:[newOpt,...(d.videoOptions??[]).filter(o=>o.url!==url)]};
+        return u;
+      });
+    } else {
+      setLocalScenes(prev=>{
+        const u=[...prev];
+        const sc=u[clip.sceneIdx];
+        u[clip.sceneIdx]={...sc,video_url:url,
+          video_options:[{url},...(sc.video_options??[]).filter(o=>o.url!==url)]};
+        return u;
+      });
+    }
     setDragSrcUrl(null);setDragOverClipId(null);
-  },[timelineClips]);
+  },[timelineClips,localDrScenes]);
 
   // ── Current subtitle — from DRS when available ───────────────────────────
   const currentSubtitle=useMemo(()=>{
@@ -1038,19 +1660,44 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
 
   // ── Sidebar alternatives ─────────────────────────────────────────────────
   const alternatives=useMemo(()=>{
+    // DRS mode: alternatives come from Pexels videoOptions (real thumbnails)
+    if(localDrScenes.length>0){
+      const drs=localDrScenes[activeScene];
+      if(!drs) return [];
+      // Skip first option (already the main video) — show options 1 & 2 as alternatives
+      return (drs.videoOptions??[]).slice(1).map(o=>({
+        url:   o.url,
+        thumb: o.thumb,
+        source:"Pexels",
+      }));
+    }
+    // Legacy mode
     const sc=localScenes[activeScene];
     if(!sc) return [];
     const cur=sc.video_url??sc.video_options?.[0]?.url;
     return (sc.video_options??[]).filter(o=>o.url!==cur);
-  },[localScenes,activeScene]);
+  },[localDrScenes,localScenes,activeScene]);
 
-  // ── Karaoke Subtitle Words — DRS gives precise per-word timing ──────────
-  const subtitleWords = useMemo(()=>
-    localDrScenes.length
-      ? buildSubtitleWordsFromDRS(localDrScenes)
-      : buildSubtitleWords(localScenes),
-    [localDrScenes,localScenes]
-  );
+  // ── Karaoke Subtitle Words — Whisper real timestamps when available ──────
+  const subtitleWords = useMemo(()=>{
+    // Priority 1: real Whisper word-level timestamps
+    if (rawWhisperWords && rawWhisperWords.length > 0) {
+      return rawWhisperWords.map((w): SubtitleWord => {
+        const clean = w.word.toLowerCase().replace(/[^a-záéíóúãõçêâîôû]/g, "");
+        return {
+          word:      w.word,
+          startSec:  w.start,
+          endSec:    w.end,
+          isKeyword: !!BROLL_IMAGES[clean] || POWER_WORDS.has(clean),
+          cleanWord: clean,
+        };
+      });
+    }
+    // Priority 2: DRS estimated timing
+    if (localDrScenes.length) return buildSubtitleWordsFromDRS(localDrScenes);
+    // Priority 3: legacy Scene timing
+    return buildSubtitleWords(localScenes);
+  },[rawWhisperWords,localDrScenes,localScenes]);
 
   // Active word: the word whose time window contains currentTime
   const activeWordIdx = useMemo(()=>{
@@ -1121,13 +1768,25 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
     })),
   ];
 
+  // ── Toast helper ─────────────────────────────────────────────────────────
+  const fireToast = useCallback((msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3500);
+  }, []);
+
+  const handleRaioX = useCallback((ad: WinningAd) => {
+    fireToast(`🧬 A IA está analisando "${ad.title}"…`);
+  }, [fireToast]);
+
   // ── Render ───────────────────────────────────────────────────────────────
   return (
     <>
-    {/* ── Hidden background audio — suspense/cinematic track ── */}
+    {/* ── Hidden background audio — emotion-driven music track ── */}
+    {/* key forces remount when URL changes so the new track loads immediately */}
     <audio
+      key={bgMusicUrl}
       ref={bgAudioRef}
-      src="https://pub-9937ef38e0a744128bd67f59e5476f23.r2.dev/Epic%20Orchestral%20Cinematic%20Documentary%201.mp3"
+      src={bgMusicUrl}
       loop preload="auto" style={{display:"none"}}
     />
 
@@ -1139,16 +1798,16 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
       .v1clip-overlay{opacity:0;transition:opacity .15s ease}
     `}</style>
     <div className="flex h-screen overflow-hidden ws-in"
-      style={{background:"#090909",color:"#e5e5e5",fontFamily:"var(--font-geist-sans,Inter,sans-serif)"}}>
+      style={{background:"#060606",color:"#F5F3F0",fontFamily:"'DM Sans',sans-serif"}}>
 
       {/* ══ COL 1: Roteiro (24%) ══════════════════════════════════════════ */}
       <div className="w-[24%] shrink-0 flex flex-col border-r overflow-hidden"
         style={{background:"#0a0a0a",borderColor:"rgba(255,255,255,0.05)"}}>
         <div className="flex items-center gap-3 px-4 py-3.5 border-b shrink-0" style={{borderColor:"rgba(255,255,255,0.05)"}}>
-          <button onClick={onBack} className="p-1.5 rounded-lg text-gray-600 hover:text-gray-200 hover:bg-white/6 transition-colors"><ArrowLeft className="w-4 h-4"/></button>
+          <button onClick={onBack} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-100 hover:bg-white/6 transition-colors"><ArrowLeft className="w-4 h-4"/></button>
           <div>
-            <p className="text-[11px] font-black text-white uppercase tracking-widest">Roteiro</p>
-            <p className="text-[10px] text-gray-700 mt-0.5">{localScenes.length} cenas · {Math.round(totalDur)}s</p>
+            <p className="text-[13px] font-black text-white uppercase tracking-widest" style={{fontFamily:"'Bebas Neue',sans-serif",letterSpacing:"2px"}}>Roteiro</p>
+            <p className="text-[10px] text-gray-500 mt-0.5">{localDrScenes.length||localScenes.length} cenas · {Math.round(totalDur)}s</p>
           </div>
         </div>
         <textarea value={editCopy} onChange={e=>setEditCopy(e.target.value)}
@@ -1156,10 +1815,10 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
           placeholder="Cole ou edite o roteiro aqui…" style={{fontFamily:"inherit"}}/>
         <div className="border-t" style={{borderColor:"rgba(255,255,255,0.05)"}}>
           <div className="flex items-center justify-between px-4 pt-3 pb-2">
-            <p className="text-[9px] uppercase tracking-[0.18em] text-gray-700 font-bold">Cenas</p>
+            <p className="text-[9px] uppercase tracking-[0.18em] text-gray-500 font-bold">Cenas</p>
             {localDrScenes.length>0&&(
               <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full"
-                style={{color:"#a78bfa",background:"rgba(139,92,246,0.1)",border:"1px solid rgba(139,92,246,0.2)"}}>
+                style={{color:"#FF7A5C",background:"rgba(232,89,60,0.1)",border:"1px solid rgba(232,89,60,0.2)"}}>
                 IA · {localDrScenes.length} blocos
               </span>
             )}
@@ -1170,8 +1829,8 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
                   const col=CLIP_COLS[i%CLIP_COLS.length];
                   return (
                   <button key={i} onClick={()=>seekToTime(sceneStarts[i]+0.01)}
-                    className={`w-full flex items-start gap-2 px-3 py-2.5 rounded-xl text-left transition-all ${activeScene===i?"bg-cyan-500/10 border border-cyan-500/25":"hover:bg-white/4 border border-transparent"}`}>
-                    <span className="text-[9px] font-black mt-0.5 shrink-0" style={{color:activeScene===i?"#22d3ee":col}}>{String(i+1).padStart(2,"0")}</span>
+                    className={`w-full flex items-start gap-2 px-3 py-2.5 rounded-xl text-left transition-all ${activeScene===i?"bg-orange-500/10 border border-orange-500/25":"hover:bg-white/4 border border-transparent"}`}>
+                    <span className="text-[9px] font-black mt-0.5 shrink-0" style={{color:activeScene===i?"#FF7A5C":col}}>{String(i+1).padStart(2,"0")}</span>
                     <div className="min-w-0 flex-1">
                       {/* Emotion tag — the key DRS field */}
                       <div className="flex items-center gap-1.5 mb-0.5">
@@ -1179,12 +1838,12 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
                           style={{background:`${col}22`,color:col,border:`1px solid ${col}44`}}>
                           {drs.emotion}
                         </span>
-                        <span className="text-[8px] text-gray-700">{drs.duration.toFixed(1)}s</span>
+                        <span className="text-[8px] text-gray-500">{drs.duration.toFixed(1)}s</span>
                       </div>
-                      <p className={`text-[11px] font-medium truncate ${activeScene===i?"text-cyan-300":"text-gray-400"}`}>
+                      <p className={`text-[11px] font-medium truncate ${activeScene===i?"text-orange-300":"text-gray-400"}`}>
                         {drs.textSnippet.slice(0,50)}{drs.textSnippet.length>50?"…":""}
                       </p>
-                      <p className="text-[8px] text-gray-700 mt-0.5 truncate">
+                      <p className="text-[8px] text-gray-500 mt-0.5 truncate">
                         🔍 {drs.searchQueries[0]}
                       </p>
                     </div>
@@ -1192,11 +1851,11 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
                 );})
               : localScenes.map((sc,i)=>(
                 <button key={i} onClick={()=>seekToTime(sceneStarts[i]+0.01)}
-                  className={`w-full flex items-start gap-2 px-3 py-2.5 rounded-xl text-left transition-all ${activeScene===i?"bg-cyan-500/10 border border-cyan-500/25":"hover:bg-white/4 border border-transparent"}`}>
-                  <span className="text-[9px] font-black mt-0.5 shrink-0" style={{color:activeScene===i?"#22d3ee":CLIP_COLS[i%CLIP_COLS.length]}}>{String(i+1).padStart(2,"0")}</span>
+                  className={`w-full flex items-start gap-2 px-3 py-2.5 rounded-xl text-left transition-all ${activeScene===i?"bg-orange-500/10 border border-orange-500/25":"hover:bg-white/4 border border-transparent"}`}>
+                  <span className="text-[9px] font-black mt-0.5 shrink-0" style={{color:activeScene===i?"#FF7A5C":CLIP_COLS[i%CLIP_COLS.length]}}>{String(i+1).padStart(2,"0")}</span>
                   <div className="min-w-0">
-                    <p className={`text-[11px] font-semibold truncate ${activeScene===i?"text-cyan-300":"text-gray-400"}`}>{sc.segment}</p>
-                    <p className="text-[9px] text-gray-700 mt-0.5 line-clamp-1">{sc.text_chunk?.slice(0,55)??""}…</p>
+                    <p className={`text-[11px] font-semibold truncate ${activeScene===i?"text-orange-300":"text-gray-400"}`}>{sc.segment}</p>
+                    <p className="text-[9px] text-gray-500 mt-0.5 line-clamp-1">{sc.text_chunk?.slice(0,55)??""}…</p>
                   </div>
                 </button>
               ))
@@ -1208,113 +1867,178 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
       {/* ══ COL 2: Player + Timeline (flex-1) ════════════════════════════ */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
 
-        {/* Top bar */}
-        <div className="flex items-center justify-between px-4 py-2.5 border-b shrink-0" style={{borderColor:"rgba(255,255,255,0.05)"}}>
-          <div className="flex items-center gap-2">
-            <div className={`w-1.5 h-1.5 rounded-full transition-colors ${playing?"bg-cyan-400 animate-pulse":"bg-gray-700"}`}/>
-            <span className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">Editor</span>
-            {currentClip&&<span className="text-[9px] text-gray-700 border border-white/8 px-1.5 py-0.5 rounded truncate max-w-[130px]">{currentClip.label}</span>}
+        {/* Top bar — Pro Status */}
+        <div className="flex items-center justify-between px-4 py-2 border-b shrink-0" style={{borderColor:"rgba(255,255,255,0.06)",background:"rgba(0,0,0,0.3)"}}>
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-1.5">
+              <div className={`w-2 h-2 rounded-full transition-all ${playing?"bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]":"bg-gray-600"}`}/>
+              <span className="text-[9px] font-bold uppercase tracking-[0.15em]" style={{color:playing?"#ef4444":"#6b7280"}}>{playing?"REC":"IDLE"}</span>
+            </div>
+            <div className="w-px h-3.5 bg-white/8"/>
+            <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Cena {activeScene+1}/{localDrScenes.length||localScenes.length}</span>
+            {currentClip&&<span className="text-[8px] text-gray-500 border border-white/8 px-1.5 py-0.5 rounded truncate max-w-[120px]">{currentClip.label}</span>}
           </div>
-          <span className="font-mono text-sm text-cyan-400 font-bold tabular-nums">{fmtTime(currentTime)} / {fmtTime(totalDur)}</span>
+          <div className="flex items-center gap-3">
+            <span className="font-mono text-xs text-orange-400 font-bold tabular-nums tracking-tight">{fmtTime(currentTime)}<span className="text-gray-600 mx-0.5">/</span>{fmtTime(totalDur)}</span>
+          </div>
         </div>
 
-        {/* ── Video Player ── */}
+        {/* ── Video Player (NLE Monitor) ── */}
         <div className="shrink-0 px-3 pt-3 pb-2">
-          <div className="relative w-full rounded-xl overflow-hidden cursor-pointer group"
-            style={{aspectRatio:"16/7.2",background:"#000",border:"1px solid rgba(255,255,255,0.07)",boxShadow:"0 0 40px rgba(0,200,255,0.05)"}}
+          <div className={`relative rounded-xl overflow-hidden cursor-pointer group mx-auto ${videoAspect==="portrait" ? "w-auto" : "w-full"}`}
+            style={{
+              aspectRatio: videoAspect==="portrait" ? "9/16" : "16/7.2",
+              maxWidth:    videoAspect==="portrait" ? "260px" : "100%",
+              background:"#000",
+              border:"1px solid rgba(255,255,255,0.07)",
+              boxShadow:"0 0 40px rgba(232,89,60,0.05)",
+            }}
             onClick={togglePlay}>
 
-            {videoUrl?(
-              <video ref={videoRef} key={currentClip?.id} src={videoUrl}
-                loop playsInline onLoadedMetadata={handleLoadedMetadata}
-                className="w-full h-full object-cover"/>
-            ):currentClip?.thumb?(
-              /* VSL Brain: show curated keyword image when no video yet */
-              <>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={currentClip.thumb} alt={currentClip.triggerWord??currentClip.label}
-                  className="w-full h-full object-cover transition-all duration-500"
-                  style={{filter:"brightness(0.72) saturate(1.15)"}}/>
-                {/* Subtle scanline overlay for cinematic feel */}
-                <div className="absolute inset-0 pointer-events-none"
-                  style={{background:"repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.08) 2px,rgba(0,0,0,0.08) 4px)"}}/>
-                {/* Keyword badge — shows what triggered this image */}
-                {currentClip.triggerWord&&(
-                  <div className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full"
-                    style={{background:"rgba(0,0,0,0.7)",border:"1px solid rgba(0,255,204,0.4)",backdropFilter:"blur(4px)"}}>
-                    <span className="text-[9px] font-black uppercase tracking-wider" style={{color:"#00FFCC"}}>
-                      ⚡ {currentClip.triggerWord}
-                    </span>
+            {/* ═══ LAYER 0: Black fallback when AV hidden ═══ */}
+            {!trackAVVisible && !uploadedVideoUrl && (
+              <div className="absolute inset-0 bg-black"/>
+            )}
+
+            {/* ═══ LAYER 1: Avatar / A-Roll — the base (continuous) ═══ */}
+            {uploadedVideoUrl ? (
+              /* Real UGC video — onTimeUpdate drives the global timeline clock */
+              <video
+                ref={avatarVideoRef}
+                src={uploadedVideoUrl}
+                playsInline
+                muted={trackAVMuted}
+                onLoadedMetadata={handleAvatarMetadata}
+                onTimeUpdate={handleAvatarTimeUpdate}
+                className="absolute inset-0 w-full h-full transition-opacity duration-200"
+                style={{
+                  opacity: trackAVVisible ? 1 : 0,
+                  objectFit: videoAspect==="portrait" ? "contain" : "cover",
+                  background: "#000",
+                }}
+              />
+            ) : (
+              /* No upload: show placeholder or thumb when no B-roll is active */
+              !currentClip && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3"
+                  style={{background:"linear-gradient(135deg,#0e0e0e,#060606)"}}>
+                  <div className="w-12 h-12 rounded-2xl flex items-center justify-center"
+                    style={{background:"rgba(100,116,139,0.1)",border:"1px solid rgba(100,116,139,0.2)"}}>
+                    <Film className="w-5 h-5 text-gray-500"/>
                   </div>
-                )}
-              </>
-            ):(
-              <div className="w-full h-full flex flex-col items-center justify-center gap-3"
-                style={{background:`linear-gradient(135deg,${currentClip?.color??"#111"}18,#040408)`}}>
-                <div className="w-12 h-12 rounded-2xl flex items-center justify-center"
-                  style={{background:`${currentClip?.color??"#333"}22`,border:`1px solid ${currentClip?.color??"#333"}44`}}>
-                  <Film className="w-5 h-5" style={{color:currentClip?.color??"#555"}}/>
+                  <p className="text-[10px] text-gray-500 font-medium">Avatar / Locutor</p>
                 </div>
-                <p className="text-[10px] text-gray-700 font-medium">Sem mídia — passe o mouse no bloco e clique em 🔄</p>
+              )
+            )}
+
+            {/* ═══ LAYER 2: B-Roll overlay — only when clip active + visible ═══ */}
+            {trackBrollVisible && (
+              videoUrl ? (
+                // key = clipId + url — remounts element cleanly on swap, no glitch
+                <video ref={videoRef} key={(currentClip?.id??"") + videoUrl} src={videoUrl}
+                  loop muted playsInline onLoadedMetadata={handleLoadedMetadata}
+                  className="absolute inset-0 w-full h-full transition-opacity duration-300"
+                  style={{
+                    opacity: currentClip ? 1 : 0,
+                    objectFit: videoAspect==="portrait" ? "contain" : "cover",
+                  }}/>
+              ) : currentClip?.thumb ? (
+                /* Thumb-only B-roll — static image overlay during active clip */
+                <div className={`absolute inset-0 transition-opacity duration-300 ${currentClip ? "opacity-100" : "opacity-0"}`}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={currentClip.thumb} alt={currentClip.triggerWord??currentClip.label}
+                    className="w-full h-full object-cover"
+                    style={{filter:"brightness(0.72) saturate(1.15)"}}/>
+                  <div className="absolute inset-0 pointer-events-none"
+                    style={{background:"repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.08) 2px,rgba(0,0,0,0.08) 4px)"}}/>
+                  {currentClip.triggerWord&&(
+                    <div className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full"
+                      style={{background:"rgba(0,0,0,0.7)",border:"1px solid rgba(232,89,60,0.4)",backdropFilter:"blur(4px)"}}>
+                      <span className="text-[9px] font-black uppercase tracking-wider" style={{color:"#FF7A5C"}}>
+                        ⚡ {currentClip.triggerWord}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ) : currentClip ? (
+                /* Clip exists but no thumb/video — colored gradient placeholder */
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 transition-opacity duration-300"
+                  style={{background:`linear-gradient(135deg,${currentClip.color}18,#060606)`,opacity: currentClip ? 1 : 0}}>
+                  <div className="w-12 h-12 rounded-2xl flex items-center justify-center"
+                    style={{background:`${currentClip.color}22`,border:`1px solid ${currentClip.color}44`}}>
+                    <Film className="w-5 h-5" style={{color:currentClip.color}}/>
+                  </div>
+                  <p className="text-[10px] text-gray-500 font-medium">Sem mídia — passe o mouse no bloco e clique em 🔄</p>
+                </div>
+              ) : null
+            )}
+
+            {/* ═══ LAYER 3: "B-Roll OFF" badge when V2 is hidden ═══ */}
+            {!trackBrollVisible && (
+              <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full pointer-events-none"
+                style={{background:"rgba(0,0,0,0.7)",border:"1px solid rgba(239,68,68,0.4)"}}>
+                <EyeOff className="w-3 h-3" style={{color:"#f87171"}}/>
+                <span className="text-[9px] font-black" style={{color:"#f87171"}}>B-Roll oculto</span>
               </div>
             )}
 
-            {/* ── Karaoke Subtitle — word-by-word glow ── */}
-            {subtitleWords.length>0&&(()=>{
-              // Show a ±7 word window centered on the active word
-              const win  = 7;
-              const lo   = Math.max(0, activeWordIdx < 0 ? 0 : activeWordIdx - 3);
-              const hi   = Math.min(subtitleWords.length, lo + win * 2);
-              const vis  = subtitleWords.slice(lo, hi);
-              const triggerW = currentClip?.triggerWord ?? "";
-              return (
-                <div className="absolute bottom-10 left-0 right-0 flex justify-center px-4 pointer-events-none">
-                  <div className="text-center px-5 py-2.5 rounded-2xl max-w-2xl"
-                    style={{background:"rgba(0,0,0,0.82)",backdropFilter:"blur(8px)",
-                      border:"1px solid rgba(255,255,255,0.06)"}}>
-                    <p className="text-base leading-loose flex flex-wrap justify-center gap-x-1.5 gap-y-0.5">
-                      {vis.map((sw,vi)=>{
-                        const gIdx   = lo + vi;
-                        const isPast = gIdx < activeWordIdx;
-                        const isAct  = gIdx === activeWordIdx;
-                        // Trigger word = the keyword that caused the current clip image
-                        const isTrig = isAct && triggerW && sw.cleanWord === triggerW;
-                        // Keyword (any BROLL/POWER word) gets yellow when active
-                        const isKwAct= isAct && sw.isKeyword && !isTrig;
+            {/* ── Subtitle Block — CapCut style: 4-word sliding window ── */}
+            {subtitleWords.length>0&&activeWordIdx>=0&&(()=>{
+              // ── Build a 4-word window centered on the active word ──
+              // This works with BOTH Whisper real timestamps AND estimated DRS timing
+              // because activeWordIdx is already found via binary search on currentTime.
+              const CHUNK = 4;
+              const allWords = subtitleWords.map((sw,i)=>({sw,gIdx:i}));
 
-                        return (
-                          <span key={gIdx}
-                            className="inline-block transition-all duration-100"
-                            style={{
-                              color: isTrig  ? "#00FFCC"
-                                   : isKwAct ? "#facc15"
-                                   : isAct   ? "#ffffff"
-                                   : isPast  ? "#4b5563"
-                                   : "#9ca3af",
-                              fontWeight: isAct ? 900 : 600,
-                              fontSize:   isAct ? "1rem" : "0.875rem",
-                              transform:  isAct ? "scale(1.15)" : "scale(1)",
-                              textShadow: isTrig
-                                ? "0 0 10px #00FFCC, 0 0 28px #00FFCCaa, 0 0 56px #00FFCC55"
-                                : isKwAct
-                                ? "0 0 8px #facc1599"
-                                : isAct
-                                ? "0 0 6px rgba(255,255,255,0.35)"
-                                : "none",
-                              opacity: isPast ? 0.4 : isAct ? 1 : 0.7,
-                            }}>
-                            {sw.word}
-                          </span>
-                        );
-                      })}
-                    </p>
-                    {/* Trigger match badge */}
-                    {triggerW&&activeWordIdx>=0&&(
-                      <p className="text-[9px] font-bold mt-1 tracking-wider"
-                        style={{color:"rgba(0,255,204,0.55)"}}>
-                        ⚡ match visual: <span style={{color:"#00FFCC"}}>{triggerW}</span>
-                      </p>
-                    )}
+              // Split ALL words into fixed 4-word chunks
+              const chunks: typeof allWords[] = [];
+              for(let i=0; i<allWords.length; i+=CHUNK) chunks.push(allWords.slice(i,i+CHUNK));
+
+              // Find chunk containing the active word
+              const activeChunkIdx = chunks.findIndex(ch => ch.some(({gIdx})=>gIdx===activeWordIdx));
+              const displayChunk = chunks[Math.max(0, activeChunkIdx)] ?? chunks[0];
+              if(!displayChunk?.length) return null;
+
+              const emotion = localDrScenes[activeScene]?.emotion ?? "";
+              const accentColor =
+                emotion==="CTA"||emotion==="Urgência"   ? "#FF3B3B"
+                : emotion==="Revelação"||emotion==="Mistério" ? "#00FFCC"
+                : emotion==="Oportunidade"||emotion==="Esperança" ? "#00FF88"
+                : emotion==="Choque"||emotion==="Dor"   ? "#FF8C00"
+                : "#FFFF00";
+
+              const stroke = "2px 2px 0 #000,-2px 2px 0 #000,2px -2px 0 #000,-2px -2px 0 #000,3px 0 0 #000,-3px 0 0 #000,0 3px 0 #000,0 -3px 0 #000";
+
+              return (
+                <div className="absolute bottom-10 left-0 right-0 flex justify-center px-6 pointer-events-none">
+                  <div className="flex flex-wrap justify-center items-end" style={{gap:"0 0.3em",maxWidth:"88%"}}>
+                    {displayChunk.map(({sw,gIdx})=>{
+                      const isAct = gIdx===activeWordIdx;
+                      const isKw  = sw.isKeyword && isAct;
+                      return(
+                        <span key={gIdx}
+                          style={{
+                            display:"inline-block",
+                            fontFamily:"'DM Sans','Arial Black',sans-serif",
+                            fontWeight:900,
+                            fontSize: isAct ? "clamp(1.6rem,4vw,2.2rem)" : "clamp(1.4rem,3.5vw,1.9rem)",
+                            lineHeight:1.1,
+                            color: isKw ? accentColor : "#FFFFFF",
+                            textShadow: isKw
+                              ? `${stroke},0 0 24px ${accentColor},0 0 48px ${accentColor}55`
+                              : stroke,
+                            transform: isAct ? "scale(1.12) translateY(-2px)" : "scale(1)",
+                            transition:"transform 0.06s ease,color 0.06s ease,text-shadow 0.06s ease",
+                            transformOrigin:"center bottom",
+                            letterSpacing:"-0.02em",
+                            background: isAct && !isKw ? "rgba(255,255,0,0.18)" : "transparent",
+                            borderRadius: isAct ? "4px" : "0",
+                            padding: isAct ? "0 3px" : "0",
+                          }}>
+                          {sw.word}
+                        </span>
+                      );
+                    })}
                   </div>
                 </div>
               );
@@ -1323,68 +2047,228 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
             {/* Play overlay */}
             <div className={`absolute inset-0 flex items-center justify-center transition-opacity ${playing?"opacity-0 group-hover:opacity-100":"opacity-100"}`}>
               <div className="w-14 h-14 rounded-full flex items-center justify-center transition-transform group-hover:scale-110"
-                style={{background:"rgba(0,210,255,0.12)",border:"1px solid rgba(0,210,255,0.35)",backdropFilter:"blur(4px)",boxShadow:"0 0 24px rgba(0,200,255,0.25)"}}>
-                {playing?<Pause className="w-5 h-5 text-cyan-300" fill="currentColor"/>:<Play className="w-5 h-5 text-cyan-300 ml-0.5" fill="currentColor"/>}
+                style={{background:"rgba(232,89,60,0.12)",border:"1px solid rgba(232,89,60,0.35)",backdropFilter:"blur(4px)",boxShadow:"0 0 24px rgba(232,89,60,0.25)"}}>
+                {playing?<Pause className="w-5 h-5 text-orange-300" fill="currentColor"/>:<Play className="w-5 h-5 text-orange-300 ml-0.5" fill="currentColor"/>}
               </div>
             </div>
 
             {/* Transport HUD */}
             <div className="absolute bottom-0 left-0 right-0 px-4 py-2 flex items-center gap-3"
               style={{background:"linear-gradient(to top,rgba(0,0,0,0.9),transparent)"}}>
-              <button onClick={e=>{e.stopPropagation();seekToTime(sceneStarts[Math.max(0,activeScene-1)]);}}><SkipBack className="w-4 h-4 text-white/50 hover:text-white"/></button>
-              <button onClick={e=>{e.stopPropagation();togglePlay();}}>
-                {playing?<Pause className="w-4 h-4 text-white" fill="currentColor"/>:<Play className="w-4 h-4 text-white" fill="currentColor"/>}
+              <button onClick={e=>{e.stopPropagation();seekToTime(sceneStarts[Math.max(0,activeScene-1)]);}} title="Cena anterior (J)"><SkipBack className="w-4 h-4 text-white/50 hover:text-white transition-colors"/></button>
+              <button onClick={e=>{e.stopPropagation();togglePlay();}} title="Play / Pause (Space)">
+                {playing?<Pause className="w-5 h-5 text-white drop-shadow-lg" fill="currentColor"/>:<Play className="w-5 h-5 text-white drop-shadow-lg" fill="currentColor"/>}
               </button>
-              <button onClick={e=>{e.stopPropagation();seekToTime(sceneStarts[Math.min(localScenes.length-1,activeScene+1)]);}}><SkipForward className="w-4 h-4 text-white/50 hover:text-white"/></button>
+              <button onClick={e=>{e.stopPropagation();seekToTime(sceneStarts[Math.min(localScenes.length-1,activeScene+1)]);}} title="Próxima cena (L)"><SkipForward className="w-4 h-4 text-white/50 hover:text-white transition-colors"/></button>
+              <span className="text-[7px] font-mono text-white/20 ml-1 hidden lg:inline" title="Atalhos: Space=Play ←→=Seek J/K/L=Nav M=Mute B=B-Roll">⌨</span>
               <div className="flex items-center gap-3 ml-auto" onClick={e=>e.stopPropagation()}>
-                {/* Video volume */}
-                <div className="flex items-center gap-1">
-                  <Volume2 className="w-3.5 h-3.5 text-white/40"/>
-                  <input type="range" min="0" max="1" step="0.05" defaultValue="0.8"
-                    onChange={e=>{if(videoRef.current)videoRef.current.volume=+e.target.value;}}
-                    className="w-14 h-0.5 cursor-pointer accent-cyan-500"/>
-                </div>
-                {/* Bg music volume */}
-                <div className="flex items-center gap-1" title="Volume da trilha">
-                  <span className="text-[8px] text-purple-400 font-bold">♪</span>
-                  <input type="range" min="0" max="1" step="0.05" value={bgVolume}
-                    onChange={e=>setBgVolume(+e.target.value)}
-                    className="w-14 h-0.5 cursor-pointer accent-purple-500"/>
-                </div>
+                {/* Voz de Apoio toggle */}
+                <button
+                  onClick={()=>{
+                    const next=!voiceEnabled;
+                    setVoiceEnabled(next);
+                    if(!next) cancelVoice();
+                    else if(playing){
+                      prevVoiceScene.current=activeScene;
+                      speakText(localDrScenes[activeScene]?.textSnippet??currentSubtitle);
+                    }
+                  }}
+                  title={voiceEnabled?"Voz de apoio: ON (clique para desligar)":"Voz de apoio: OFF (clique para ligar)"}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg transition-all"
+                  style={{
+                    background: voiceEnabled ? "rgba(232,89,60,0.12)" : "rgba(255,255,255,0.04)",
+                    border:     `1px solid ${voiceEnabled ? "rgba(232,89,60,0.4)" : "rgba(255,255,255,0.1)"}`,
+                    boxShadow:  voiceEnabled ? "0 0 10px rgba(232,89,60,0.2)" : "none",
+                  }}>
+                  <Mic className="w-3 h-3" style={{color: voiceEnabled ? "#FF7A5C" : "rgba(255,255,255,0.3)"}}/>
+                  <span className="text-[8px] font-bold" style={{color: voiceEnabled ? "#FF7A5C" : "rgba(255,255,255,0.3)"}}>
+                    {voiceEnabled ? "VOZ ON" : "VOZ"}
+                  </span>
+                </button>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* ── Premiere CTA Banner ── */}
+        <div className="mx-3 mt-2 mb-0 flex items-center gap-3 px-4 py-2.5 rounded-xl shrink-0"
+          style={{background:"linear-gradient(135deg,rgba(232,89,60,0.18),rgba(232,89,60,0.12))",border:"1px solid rgba(232,89,60,0.35)",boxShadow:"0 0 24px rgba(232,89,60,0.15)"}}>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-black text-white leading-tight" style={{fontFamily:"'Bebas Neue',sans-serif",letterSpacing:"1px"}}>🎬 Timeline pronta para exportar</p>
+            <p className="text-[10px] text-orange-300/70 mt-0.5">Exporte para Premiere Pro com 1 clique — sequência XML completa com cortes, B-rolls e legendas</p>
+          </div>
+          <button onClick={()=>setPaywallOpen(true)}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[11px] font-black shrink-0 transition-all hover:scale-105 active:scale-95"
+            style={{background:"linear-gradient(135deg,#E8593C,#E8593C)",color:"#fff",boxShadow:"0 4px 20px rgba(232,89,60,0.5)",border:"1px solid rgba(255,255,255,0.15)"}}>
+            <FileCode2 className="w-3.5 h-3.5"/>Exportar para Premiere (XML)
+          </button>
+        </div>
+
+        {/* ── Audio Mixer ── */}
+        <div className="mx-3 mb-0 mt-1 px-4 py-2.5 rounded-xl shrink-0 flex items-center gap-4"
+          style={{background:"rgba(0,0,0,0.55)",border:"1px solid rgba(255,255,255,0.06)"}}>
+          <span className="text-[9px] font-black uppercase tracking-[0.14em] text-gray-500 shrink-0">Mixer</span>
+          {/* 🎙️ Avatar fader */}
+          <div className="flex items-center gap-2 flex-1">
+            <span className="text-[10px] shrink-0">🎙️</span>
+            <span className="text-[9px] font-bold text-gray-500 shrink-0 w-10">Avatar</span>
+            <div className="relative flex-1 h-1.5 rounded-full cursor-pointer" style={{background:"rgba(255,255,255,0.08)"}}>
+              <div className="absolute left-0 top-0 h-full rounded-full pointer-events-none transition-all"
+                style={{width:`${avatarVolume*100}%`,background:"linear-gradient(90deg,#FF7A5C,#E8593C)"}}/>
+              <input type="range" min="0" max="1" step="0.01" value={avatarVolume}
+                onChange={e=>{
+                  const v=+e.target.value; setAvatarVolume(v);
+                  if(avatarVideoRef.current) avatarVideoRef.current.volume=v;
+                  if(v===0) setTrackAVMuted(true); else if(trackAVMuted) setTrackAVMuted(false);
+                }}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"/>
+            </div>
+            <span className="text-[9px] font-mono text-gray-500 w-6 text-right shrink-0">{Math.round(avatarVolume*100)}</span>
+          </div>
+          <div className="w-px h-4 shrink-0" style={{background:"rgba(255,255,255,0.07)"}}/>
+          {/* 🎵 Trilha fader */}
+          <div className="flex items-center gap-2 flex-1">
+            <span className="text-[10px] shrink-0">🎵</span>
+            <span className="text-[9px] font-bold text-gray-500 shrink-0 w-10">Trilha</span>
+            <div className="relative flex-1 h-1.5 rounded-full cursor-pointer" style={{background:"rgba(255,255,255,0.08)"}}>
+              <div className="absolute left-0 top-0 h-full rounded-full pointer-events-none transition-all"
+                style={{width:`${bgVolume*100}%`,background:"linear-gradient(90deg,#FF7A5C,#E8593C)"}}/>
+              <input type="range" min="0" max="1" step="0.01" value={bgVolume}
+                onChange={e=>{
+                  const v=+e.target.value; setBgVolume(v);
+                  if(bgAudioRef.current) bgAudioRef.current.volume=v;
+                }}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"/>
+            </div>
+            <span className="text-[9px] font-mono text-gray-500 w-6 text-right shrink-0">{Math.round(bgVolume*100)}</span>
           </div>
         </div>
 
         {/* ── Timeline ── */}
         <div className="flex-1 min-h-0 flex flex-col px-3 pb-3 gap-2">
           <div className="flex-1 min-h-0 rounded-xl overflow-hidden flex flex-col"
-            style={{background:"#07070f",border:"1px solid rgba(255,255,255,0.06)"}}>
+            style={{background:"#080808",border:"1px solid rgba(255,255,255,0.06)"}}>
 
+            {/* Scrollable outer wrapper */}
+            <div ref={timelineScrollRef}
+              className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden"
+              style={{scrollbarWidth:"thin",scrollbarColor:"rgba(255,255,255,0.1) transparent"}}>
+
+            {/* Fixed-width canvas — grows with video duration */}
             <div ref={timelineRef}
-              className="relative flex-1 overflow-hidden select-none"
-              style={{cursor:isDragging?"col-resize":"crosshair"}}
+              className="relative select-none h-full"
+              style={{
+                minWidth: `${Math.max(640, totalDur * 28)}px`,
+                cursor:isDragging?"col-resize":"crosshair",
+              }}
               onMouseDown={handleTimelineMouseDown}>
 
               {/* Ruler */}
-              <div className="flex h-5 border-b sticky top-0 z-10" style={{background:"#07070f",borderColor:"rgba(255,255,255,0.05)"}}>
-                <div className="w-10 shrink-0 border-r" style={{borderColor:"rgba(255,255,255,0.05)"}}/>
+              <div className="flex h-5 border-b sticky top-0 z-10" style={{background:"#080808",borderColor:"rgba(255,255,255,0.05)"}}>
+                <div className="w-14 shrink-0 border-r" style={{borderColor:"rgba(255,255,255,0.05)"}}/>
                 <div className="flex-1 relative">
                   {Array.from({length:Math.ceil(totalDur/5)+1}).map((_,i)=>(
                     <div key={i} className="absolute flex flex-col items-center" style={{left:`${(i*5/totalDur)*100}%`}}>
                       <div className="w-px h-2 mt-0.5" style={{background:"rgba(255,255,255,0.1)"}}/>
-                      <span className="text-[7px] font-mono text-gray-700">{fmtTime(i*5)}</span>
+                      <span className="text-[7px] font-mono text-gray-500">{fmtTime(i*5)}</span>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* ── V1: Video (absolutely positioned sub-clips) ── */}
+              {/* ══ TRILHA AV — Avatar / A-Roll base (linha separada, 100% contínuo) ══ */}
               <div className="flex border-b" style={{borderColor:"rgba(255,255,255,0.04)"}}>
-                <div className="w-10 h-20 shrink-0 flex items-center justify-center border-r" style={{borderColor:"rgba(255,255,255,0.04)"}}>
-                  <span className="text-[8px] font-black text-gray-700">V1</span>
+                {/* Track Header — AV */}
+                <div className="w-14 shrink-0 flex flex-col items-center justify-center border-r gap-0.5 px-1 py-1"
+                  style={{borderColor:"rgba(255,255,255,0.04)"}}>
+                  <span className="text-[7px] font-black" style={{color:trackAVVisible?"rgba(156,163,175,0.7)":"rgba(156,163,175,0.2)"}}>AV</span>
+                  <div className="flex items-center gap-1">
+                    {/* Eye toggle */}
+                    <button title={trackAVVisible?"Ocultar Avatar":"Mostrar Avatar"}
+                      onClick={()=>setTrackAVVisible(v=>!v)}
+                      className="p-0.5 rounded transition-colors hover:bg-white/5">
+                      {trackAVVisible
+                        ? <Eye className="w-2.5 h-2.5" style={{color:"rgba(148,163,184,0.6)"}}/>
+                        : <EyeOff className="w-2.5 h-2.5" style={{color:"rgba(239,68,68,0.7)"}}/>
+                      }
+                    </button>
+                    {/* Mute toggle */}
+                    <button title={trackAVMuted?"Desmutar":"Mutar"}
+                      onClick={()=>setTrackAVMuted(m=>!m)}
+                      className="p-0.5 rounded transition-colors hover:bg-white/5">
+                      {trackAVMuted
+                        ? <VolumeX className="w-2.5 h-2.5" style={{color:"rgba(239,68,68,0.7)"}}/>
+                        : <Volume2 className="w-2.5 h-2.5" style={{color:"rgba(148,163,184,0.5)"}}/>
+                      }
+                    </button>
+                  </div>
+                </div>
+                <div className="flex-1 relative h-11 flex items-center px-1">
+                  {/* Barra contínua — 100% do vídeo base */}
+                  <div className="absolute left-1 right-1 top-1.5 bottom-1.5 rounded-lg overflow-hidden transition-opacity duration-200"
+                    style={{
+                      background:"rgba(100,116,139,0.13)",
+                      border:"1px solid rgba(100,116,139,0.22)",
+                      opacity: trackAVVisible ? 1 : 0.25,
+                    }}>
+                    {/* Waveform simulado do locutor */}
+                    <div className="absolute inset-0 flex items-center gap-px px-1">
+                      {Array.from({length:90}).map((_,i)=>(
+                        <div key={i} className="flex-1 rounded-full"
+                          style={{background:"rgba(148,163,184,0.35)",height:`${18+Math.abs(Math.sin(i*1.3)*Math.cos(i*0.4))*64}%`}}/>
+                      ))}
+                    </div>
+                    {/* Label flutuante */}
+                    <div className="absolute inset-0 flex items-center px-3 pointer-events-none">
+                      <span className="text-[7px] font-black select-none" style={{color:"rgba(148,163,184,0.4)"}}>
+                        {uploadedVideoUrl ? "🎥 Avatar UGC carregado" : "Avatar / Locutor"} — A-Roll base · {Math.round(totalDur)}s
+                        {trackAVMuted && <span style={{color:"rgba(239,68,68,0.6)"}}> · 🔇 MUDO</span>}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* ══ TRILHA V2 — B-Roll (clips coloridos sobre o avatar, com gaps) ══ */}
+              <div className="flex border-b" style={{borderColor:"rgba(255,255,255,0.04)"}}>
+                {/* Track Header — V2 */}
+                <div className="w-14 h-20 shrink-0 flex flex-col items-center justify-center border-r gap-0.5 px-0.5"
+                  style={{borderColor:"rgba(255,255,255,0.04)"}}>
+                  <span className="text-[7px] font-black" style={{color:trackBrollVisible?"rgba(232,89,60,0.9)":"rgba(232,89,60,0.25)"}}>V2</span>
+                  <span className="text-[5px] font-bold text-gray-500 uppercase tracking-tight">B-Roll</span>
+                  {/* Eye toggle */}
+                  <button title={trackBrollVisible?"Ocultar B-Rolls":"Mostrar B-Rolls"}
+                    onClick={()=>setTrackBrollVisible(v=>!v)}
+                    className="p-0.5 rounded transition-colors hover:bg-white/5 mt-0.5">
+                    {trackBrollVisible
+                      ? <Eye className="w-2.5 h-2.5" style={{color:"rgba(232,89,60,0.7)"}}/>
+                      : <EyeOff className="w-2.5 h-2.5" style={{color:"rgba(239,68,68,0.7)"}}/>
+                    }
+                  </button>
                 </div>
                 <div className="flex-1 relative h-20">
+                  {/* ── Gap indicators — "Avatar respira aqui" ── */}
+                  {localDrScenes.length>0 && timelineClips.map((clip,ci)=>{
+                    const gapStart = clip.startSec + clip.durSec;
+                    const sceneEnd = gapStart + (localDrScenes[clip.sceneIdx]?.duration??0) - clip.durSec;
+                    const nextClipStart = ci+1<timelineClips.length ? timelineClips[ci+1].startSec : totalDur;
+                    const gapDur = Math.max(0, nextClipStart - gapStart);
+                    if(gapDur < 0.5) return null;
+                    const gapLeft=(gapStart/totalDur)*100;
+                    const gapW=(gapDur/totalDur)*100;
+                    return (
+                      <div key={`gap${ci}`}
+                        className="absolute top-3 bottom-3 rounded-lg flex items-center justify-center pointer-events-none"
+                        style={{
+                          left:`calc(${gapLeft}% + 1px)`,width:`calc(${gapW}% - 2px)`,
+                          background:"rgba(100,116,139,0.05)",
+                          border:"1px dashed rgba(100,116,139,0.18)",
+                        }}>
+                        <span className="text-[6px] font-black uppercase tracking-wider"
+                          style={{color:"rgba(100,116,139,0.35)"}}>AV</span>
+                      </div>
+                    );
+                  })}
                   {timelineClips.map(clip=>{
                     const left=(clip.startSec/totalDur)*100;
                     const width=(clip.durSec/totalDur)*100;
@@ -1394,8 +2278,8 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
                     return(
                       <div key={clip.id}
                         className={`v1clip absolute top-1 bottom-1 rounded cursor-pointer overflow-hidden transition-all
-                          ${isAct?"ring-2 ring-cyan-400/90 brightness-110":""}
-                          ${isDT?"ring-2 ring-purple-500 brightness-125":""}`}
+                          ${isAct?"ring-2 ring-orange-400/90 brightness-110":""}
+                          ${isDT?"ring-2 ring-orange-500 brightness-125":""}`}
                         style={{
                           left:`calc(${left}% + 1px)`,width:`calc(${width}% - 2px)`,
                           background: clip.thumb
@@ -1407,7 +2291,6 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
                         onDragOver={e=>{e.preventDefault();setDragOverClipId(clip.id);}}
                         onDragLeave={()=>setDragOverClipId(null)}
                         onDrop={e=>{e.preventDefault();if(dragSrcUrl)handleDropOnClip(clip.id,dragSrcUrl);}}>
-                        {/* Dark gradient overlay so label stays readable over thumbnail */}
                         {clip.thumb&&<div className="absolute inset-0" style={{background:"linear-gradient(to top,rgba(0,0,0,0.72) 0%,rgba(0,0,0,0.18) 60%,transparent 100%)"}}/>}
                         {isLoad?(
                           <div className="absolute inset-0 flex items-center justify-center" style={{background:"rgba(0,0,0,0.5)"}}>
@@ -1439,20 +2322,27 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
 
               {/* ── T1: Subtitle ── */}
               <div className="flex border-b" style={{borderColor:"rgba(255,255,255,0.04)"}}>
-                <div className="w-10 h-12 shrink-0 flex items-center justify-center border-r" style={{borderColor:"rgba(255,255,255,0.04)"}}>
-                  <span className="text-[8px] font-black text-gray-700">T1</span>
+                <div className="w-14 h-12 shrink-0 flex items-center justify-center border-r" style={{borderColor:"rgba(255,255,255,0.04)"}}>
+                  <span className="text-[8px] font-black text-gray-500">T1</span>
                 </div>
                 <div className="flex-1 relative h-12">
-                  {localScenes.map((sc,i)=>{
+                  {/* Use DRS when available (correct durations) — fall back to legacy scenes */}
+                  {(localDrScenes.length>0?localDrScenes:localScenes).map((_row,i)=>{
+                    const dur = localDrScenes.length
+                      ? (localDrScenes[i] as DirectResponseScene).duration
+                      : (localScenes[i] as Scene).estimated_duration_seconds??5;
+                    const text = localDrScenes.length
+                      ? (localDrScenes[i] as DirectResponseScene).textSnippet
+                      : ((localScenes[i] as Scene).text_chunk??(localScenes[i] as Scene).segment??"");
                     const left=(sceneStarts[i]/totalDur)*100;
-                    const width=((sc.estimated_duration_seconds??5)/totalDur)*100;
-                    const words=(sc.text_chunk??sc.segment??"").split(" ").slice(0,6);
+                    const width=(dur/totalDur)*100;
+                    const words=text.split(" ").slice(0,6);
                     return(
                       <div key={i} className="absolute top-0.5 bottom-0.5 rounded overflow-hidden flex items-center gap-0.5 px-1.5"
                         style={{left:`calc(${left}%+1px)`,width:`calc(${width}%-2px)`,background:"rgba(234,179,8,0.07)",border:"1px solid rgba(234,179,8,0.2)"}}>
                         {words.map((ww,wi)=>{
                           const isPW=POWER_WORDS.has(ww.toLowerCase().replace(/[^a-záéíóúãõç]/g,""));
-                          return <span key={wi} className={`text-[6px] font-bold shrink-0 ${isPW?"text-yellow-400":"text-gray-600"}`}>{ww}</span>;
+                          return <span key={wi} className={`text-[6px] font-bold shrink-0 ${isPW?"text-yellow-400":"text-gray-400"}`}>{ww}</span>;
                         })}
                       </div>
                     );
@@ -1462,8 +2352,8 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
 
               {/* ── SFX: Scoring / Pontuação Layer ── */}
               <div className="flex border-b" style={{borderColor:"rgba(255,255,255,0.04)"}}>
-                <div className="w-10 h-10 shrink-0 flex items-center justify-center border-r" style={{borderColor:"rgba(255,255,255,0.04)"}}>
-                  <span className="text-[7px] font-black uppercase tracking-tight" style={{color:"rgba(6,182,212,0.55)"}}>SFX</span>
+                <div className="w-14 h-10 shrink-0 flex items-center justify-center border-r" style={{borderColor:"rgba(255,255,255,0.04)"}}>
+                  <span className="text-[7px] font-black uppercase tracking-tight" style={{color:"rgba(232,89,60,0.55)"}}>SFX</span>
                 </div>
                 {/* overflow-visible so tooltip pokes above the track */}
                 <div className="flex-1 relative h-10 overflow-visible">
@@ -1478,7 +2368,7 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
                     return (
                       <div key={marker.id}
                         className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-10 group/sfxpin"
-                        style={{left:`calc(40px + (100% - 40px) * ${left/100})`}}>
+                        style={{left:`calc(56px + (100% - 56px) * ${left/100})`}}>
 
                         {/* Tooltip */}
                         <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 pointer-events-none
@@ -1499,13 +2389,13 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
                           className="w-5 h-5 rounded-full flex items-center justify-center transition-all duration-200 cursor-pointer hover:scale-110"
                           style={{
                             background:"#27272a",
-                            border:`1px solid ${isNear?marker.color:"rgba(6,182,212,0.5)"}`,
+                            border:`1px solid ${isNear?marker.color:"rgba(232,89,60,0.5)"}`,
                             boxShadow:isNear?`0 0 8px ${marker.color},0 0 18px ${marker.color}44`:"none",
                             transform:isNear?"scale(1.45)":"scale(1)",
                           }}>
                           {marker.kind==="zap"
-                            ?<Zap      className="w-2.5 h-2.5" style={{color:isNear?marker.color:"#22d3ee"}} fill={isNear?marker.color:"none"}/>
-                            :<Volume2  className="w-2.5 h-2.5" style={{color:isNear?marker.color:"#22d3ee"}}/>
+                            ?<Zap      className="w-2.5 h-2.5" style={{color:isNear?marker.color:"#FF7A5C"}} fill={isNear?marker.color:"none"}/>
+                            :<Volume2  className="w-2.5 h-2.5" style={{color:isNear?marker.color:"#FF7A5C"}}/>
                           }
                         </button>
                       </div>
@@ -1516,8 +2406,8 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
 
               {/* ── A1: Waveform ── */}
               <div className="flex border-b" style={{borderColor:"rgba(255,255,255,0.04)"}}>
-                <div className="w-10 h-14 shrink-0 flex items-center justify-center border-r" style={{borderColor:"rgba(255,255,255,0.04)"}}>
-                  <span className="text-[8px] font-black text-gray-700">A1</span>
+                <div className="w-14 h-14 shrink-0 flex items-center justify-center border-r" style={{borderColor:"rgba(255,255,255,0.04)"}}>
+                  <span className="text-[8px] font-black text-gray-500">A1</span>
                 </div>
                 <div className="flex-1 h-14 flex items-end overflow-hidden gap-px px-1" style={{background:"rgba(16,185,129,0.04)"}}>
                   {Array.from({length:110}).map((_,i)=>(
@@ -1528,8 +2418,8 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
 
               {/* ── A2: SFX ── */}
               <div className="flex" style={{borderColor:"rgba(255,255,255,0.04)"}}>
-                <div className="w-10 h-10 shrink-0 flex items-center justify-center border-r" style={{borderColor:"rgba(255,255,255,0.04)"}}>
-                  <span className="text-[8px] font-black text-gray-700">A2</span>
+                <div className="w-14 h-10 shrink-0 flex items-center justify-center border-r" style={{borderColor:"rgba(255,255,255,0.04)"}}>
+                  <span className="text-[8px] font-black text-gray-500">A2</span>
                 </div>
                 <div className="flex-1 relative h-10">
                   {localScenes.map((sc,i)=>sc.sfx_url&&(
@@ -1543,16 +2433,17 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
 
               {/* ── Red Playhead Needle ── */}
               <div className="absolute top-0 bottom-0 pointer-events-none z-20"
-                style={{left:`calc(40px + (100% - 40px) * ${playheadPct/100})`,transform:"translateX(-50%)"}}>
+                style={{left:`calc(56px + (100% - 56px) * ${playheadPct/100})`,transform:"translateX(-50%)"}}>
                 <div className="w-px h-full bg-red-500" style={{boxShadow:"0 0 8px rgba(239,68,68,0.7)"}}/>
                 <div className="w-3 h-3 bg-red-500 rounded-full absolute -top-1 left-1/2 -translate-x-1/2" style={{boxShadow:"0 0 10px rgba(239,68,68,0.9)"}}/>
               </div>
             </div>
+            </div>{/* end scroll wrapper */}
           </div>
 
           {/* Export bar */}
           <div className="flex items-center justify-between shrink-0 gap-2">
-            <span className="text-[10px] text-gray-700">{timelineClips.length} clipes · {localScenes.length} cenas · {result.music_style}</span>
+            <span className="text-[10px] text-gray-500">{timelineClips.length} clipes · {localDrScenes.length||localScenes.length} cenas · {result.music_style}</span>
             <div className="flex items-center gap-2">
               <div className="relative">
                 <button onClick={()=>setExportOpen(v=>!v)}
@@ -1596,9 +2487,10 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
         style={{background:"#0a0a0a",borderColor:"rgba(255,255,255,0.05)"}}>
 
         <div className="flex items-center justify-between px-4 py-3.5 border-b shrink-0" style={{borderColor:"rgba(255,255,255,0.05)"}}>
-          <p className="text-[11px] font-black text-white uppercase tracking-widest">Mídias Sugeridas</p>
-          <span className="text-[9px] text-purple-400 font-bold flex items-center gap-1">
-            <div className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse"/>Cena {activeScene+1}/{localScenes.length}
+          <p className="text-[13px] font-black text-white uppercase tracking-widest" style={{fontFamily:"'Bebas Neue',sans-serif",letterSpacing:"2px"}}>Mídias Sugeridas</p>
+          <span className="text-[9px] text-orange-400 font-bold flex items-center gap-1">
+            <div className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"/>
+            Cena {activeScene+1}/{localDrScenes.length||localScenes.length}
           </span>
         </div>
 
@@ -1606,11 +2498,11 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
 
           {/* Alternatives — draggable to V1 */}
           <div className="p-3 border-b" style={{borderColor:"rgba(255,255,255,0.05)"}}>
-            <p className="text-[9px] uppercase tracking-[0.18em] text-gray-700 font-bold mb-2">
+            <p className="text-[9px] uppercase tracking-[0.18em] text-gray-500 font-bold mb-2">
               Alternativas · arraste para a timeline
             </p>
             {alternatives.length===0?(
-              <p className="text-[10px] text-gray-700 py-3 text-center leading-relaxed">
+              <p className="text-[10px] text-gray-500 py-3 text-center leading-relaxed">
                 Passe o mouse em um bloco V1<br/>e clique em 🔄 para gerar alternativas
               </p>
             ):(
@@ -1632,9 +2524,9 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
                       <GripVertical className="w-4 h-4 text-white/80"/>
                       <span className="text-[8px] text-white font-bold">Arrastar</span>
                     </div>
-                    <button onClick={()=>{const cl=timelineClips.find(c=>c.sceneIdx===activeScene);if(cl)handleDropOnClip(cl.id,opt.url);}}
+                    <button onClick={()=>{const cl=timelineClips.find(c=>c.sceneIdx===activeScene);if(cl)handleDropOnClip(cl.id,opt.url,opt.thumb);}}
                       className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[8px] font-bold text-white opacity-0 group-hover/drag:opacity-100 transition-opacity"
-                      style={{background:"rgba(0,180,255,0.75)"}}>
+                      style={{background:"rgba(232,89,60,0.85)"}}>
                       Usar
                     </button>
                     <div className="absolute top-1 left-1 px-1 py-0.5 rounded text-[7px] font-black text-white/60" style={{background:"rgba(0,0,0,0.6)"}}>Alt {i+1}</div>
@@ -1646,7 +2538,7 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
 
           {/* B-Rolls / Visual Concepts per scene */}
           <div className="p-3 border-b" style={{borderColor:"rgba(255,255,255,0.05)"}}>
-            <p className="text-[9px] uppercase tracking-[0.18em] text-gray-700 font-bold mb-2">
+            <p className="text-[9px] uppercase tracking-[0.18em] text-gray-500 font-bold mb-2">
               {localDrScenes.length>0?"Conceitos Visuais · IA":"B-Rolls por Cena"}
             </p>
             <div className="space-y-2">
@@ -1658,7 +2550,7 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
                   const drs=localDrScenes[i];
                   const thumb=lookupConcept(drs.searchQueries[0]);
                   return(
-                  <div key={i} className={`rounded-xl overflow-hidden border transition-all ${isAct?"border-purple-500/40":"border-transparent"}`}
+                  <div key={i} className={`rounded-xl overflow-hidden border transition-all ${isAct?"border-orange-500/40":"border-transparent"}`}
                     style={{background:"rgba(255,255,255,0.025)"}}>
                     <div className="flex gap-2 p-2.5">
                       <div className="w-16 h-10 rounded-lg shrink-0 overflow-hidden relative"
@@ -1671,7 +2563,7 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
                         <div className="flex items-center gap-1 mb-0.5">
                           <span className="text-[7px] font-black uppercase px-1 py-0.5 rounded"
                             style={{background:`${col}22`,color:col}}>{drs.emotion}</span>
-                          <span className="text-[7px] text-gray-700">{drs.duration.toFixed(1)}s</span>
+                          <span className="text-[7px] text-gray-500">{drs.duration.toFixed(1)}s</span>
                         </div>
                         {drs.searchQueries.map((q,qi)=>(
                           <p key={qi} className="text-[8px] truncate" style={{color:qi===0?"#9ca3af":"#4b5563"}}>
@@ -1679,17 +2571,17 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
                           </p>
                         ))}
                         {drs.suggestedSfx&&(
-                          <p className="text-[7px] mt-0.5 text-cyan-700">⚡ sfx: {drs.suggestedSfx}</p>
+                          <p className="text-[7px] mt-0.5 text-gray-500">⚡ sfx: {drs.suggestedSfx}</p>
                         )}
                       </div>
                     </div>
                     <div className="flex border-t" style={{borderColor:"rgba(255,255,255,0.04)"}}>
                       <button onClick={()=>{const cl=timelineClips.find(c=>c.sceneIdx===i);if(cl)suggestAnother(cl.id);}}
-                        className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[9px] text-gray-600 hover:text-purple-400 transition-colors border-r" style={{borderColor:"rgba(255,255,255,0.04)"}}>
+                        className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[9px] text-gray-400 hover:text-orange-400 transition-colors border-r" style={{borderColor:"rgba(255,255,255,0.04)"}}>
                         <RefreshCw className="w-2.5 h-2.5"/>Sugerir Vídeo
                       </button>
                       <button onClick={()=>setPaywallOpen(true)}
-                        className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[9px] text-gray-600 hover:text-cyan-400 transition-colors">
+                        className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[9px] text-gray-400 hover:text-orange-400 transition-colors">
                         <Download className="w-2.5 h-2.5"/>Baixar
                       </button>
                     </div>
@@ -1700,7 +2592,7 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
                 const sc=localScenes[i];
                 const vid=sc.video_url??sc.video_options?.[0]?.url;
                 return(
-                  <div key={i} className={`rounded-xl overflow-hidden border transition-all ${isAct?"border-purple-500/40":"border-transparent"}`}
+                  <div key={i} className={`rounded-xl overflow-hidden border transition-all ${isAct?"border-orange-500/40":"border-transparent"}`}
                     style={{background:"rgba(255,255,255,0.025)"}}>
                     <div className="flex gap-2 p-2.5">
                       <div className="w-16 h-10 rounded-lg shrink-0 overflow-hidden relative"
@@ -1711,17 +2603,17 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[10px] font-bold text-gray-300 truncate">{sc.segment}</p>
-                        <p className="text-[9px] text-gray-700 mt-0.5 line-clamp-1">{sc.broll_search_keywords??sc.vault_category??"Pexels HD"}</p>
+                        <p className="text-[9px] text-gray-500 mt-0.5 line-clamp-1">{sc.broll_search_keywords??sc.vault_category??"Pexels HD"}</p>
                         <p className="text-[9px] mt-0.5" style={{color:col+"cc"}}>{sc.estimated_duration_seconds??5}s</p>
                       </div>
                     </div>
                     <div className="flex border-t" style={{borderColor:"rgba(255,255,255,0.04)"}}>
                       <button onClick={()=>{const cl=timelineClips.find(c=>c.sceneIdx===i);if(cl)suggestAnother(cl.id);}}
-                        className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[9px] text-gray-600 hover:text-purple-400 transition-colors border-r" style={{borderColor:"rgba(255,255,255,0.04)"}}>
+                        className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[9px] text-gray-400 hover:text-orange-400 transition-colors border-r" style={{borderColor:"rgba(255,255,255,0.04)"}}>
                         <RefreshCw className="w-2.5 h-2.5"/>Sugerir
                       </button>
                       <button onClick={()=>{if(vid)window.open(vid,"_blank");else setPaywallOpen(true);}}
-                        className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[9px] text-gray-600 hover:text-cyan-400 transition-colors">
+                        className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[9px] text-gray-400 hover:text-orange-400 transition-colors">
                         <Download className="w-2.5 h-2.5"/>Baixar
                       </button>
                     </div>
@@ -1734,34 +2626,34 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
           {/* ── SFX Sugeridos ── */}
           <div className="p-3 border-b" style={{borderColor:"rgba(255,255,255,0.05)"}}>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-[9px] uppercase tracking-[0.18em] text-gray-700 font-bold">SFX · Pontuação</p>
+              <p className="text-[9px] uppercase tracking-[0.18em] text-gray-500 font-bold">SFX · Pontuação</p>
               <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
-                style={{color:"#22d3ee",background:"rgba(6,182,212,0.1)",border:"1px solid rgba(6,182,212,0.25)"}}>
+                style={{color:"#FF7A5C",background:"rgba(232,89,60,0.1)",border:"1px solid rgba(232,89,60,0.25)"}}>
                 {sfxMarkers.length} eventos
               </span>
             </div>
 
             {sfxMarkers.length===0?(
-              <p className="text-[10px] text-gray-700 py-3 text-center">Nenhuma keyword detectada na copy</p>
+              <p className="text-[10px] text-gray-500 py-3 text-center">Nenhuma keyword detectada na copy</p>
             ):(
               <div className="space-y-1 max-h-[220px] overflow-y-auto pr-0.5">
                 {sfxMarkers.map(marker=>{
                   const isActive=Math.abs(currentTime-marker.timeSec)<0.5;
                   return (
                     <div key={marker.id}
-                      className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 transition-all ${isActive?"border-cyan-500/30":"border-transparent"}`}
+                      className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 transition-all ${isActive?"border-orange-500/30":"border-transparent"}`}
                       style={{
                         border:`1px solid`,
-                        borderColor:isActive?"rgba(6,182,212,0.3)":"transparent",
-                        background:isActive?"rgba(6,182,212,0.06)":"rgba(255,255,255,0.025)",
-                        boxShadow:isActive?`0 0 12px rgba(6,182,212,0.1)`:"none",
+                        borderColor:isActive?"rgba(232,89,60,0.3)":"transparent",
+                        background:isActive?"rgba(232,89,60,0.06)":"rgba(255,255,255,0.025)",
+                        boxShadow:isActive?`0 0 12px rgba(232,89,60,0.1)`:"none",
                       }}>
 
                       {/* Play preview via Web Audio */}
                       <button onClick={()=>playSFXPreview(marker)}
                         className="w-5 h-5 rounded-full shrink-0 flex items-center justify-center transition-all hover:scale-110"
-                        style={{background:"rgba(34,211,238,0.1)",border:"1px solid rgba(34,211,238,0.3)"}}>
-                        <Play className="w-2 h-2 text-cyan-400 ml-0.5" fill="currentColor"/>
+                        style={{background:"rgba(232,89,60,0.1)",border:"1px solid rgba(232,89,60,0.3)"}}>
+                        <Play className="w-2 h-2 text-orange-400 ml-0.5" fill="currentColor"/>
                       </button>
 
                       {/* Icon bubble */}
@@ -1775,16 +2667,16 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
 
                       {/* Info */}
                       <div className="flex-1 min-w-0">
-                        <p className="text-[9px] font-bold truncate" style={{color:isActive?"#22d3ee":"#d1d5db"}}>{marker.label}</p>
-                        <p className="text-[8px] text-gray-700 mt-0.5">
+                        <p className="text-[9px] font-bold truncate" style={{color:isActive?"#FF7A5C":"#d1d5db"}}>{marker.label}</p>
+                        <p className="text-[8px] text-gray-500 mt-0.5">
                           {fmtTime(marker.timeSec)}
-                          {marker.keyword?<span className="text-gray-600"> · "{marker.keyword}"</span>:<span className="text-gray-700"> · transição</span>}
+                          {marker.keyword?<span className="text-gray-400"> · "{marker.keyword}"</span>:<span className="text-gray-500"> · transição</span>}
                         </p>
                       </div>
 
                       {/* Seek to */}
                       <button onClick={()=>seekToTime(marker.timeSec)}
-                        className="text-[10px] font-black text-gray-700 hover:text-cyan-400 transition-colors shrink-0"
+                        className="text-[10px] font-black text-gray-500 hover:text-orange-400 transition-colors shrink-0"
                         title="Ir para este momento">→</button>
                     </div>
                   );
@@ -1795,29 +2687,29 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
 
           {/* Trilha Sonora */}
           <div className="p-3">
-            <p className="text-[9px] uppercase tracking-[0.18em] text-gray-700 font-bold mb-2">Trilha Sonora</p>
+            <p className="text-[9px] uppercase tracking-[0.18em] text-gray-500 font-bold mb-2">Trilha Sonora</p>
             <div className="space-y-2">
               {musicOptions.map((track,i)=>{
                 const isSel=selectedMusic===i;const isPlay=playingMusic===i;
                 return(
-                  <div key={i} className={`rounded-xl p-2.5 border transition-all cursor-pointer ${isSel?"border-purple-500/35":"border-transparent"}`}
-                    style={{background:isSel?"rgba(139,92,246,0.07)":"rgba(255,255,255,0.025)"}} onClick={()=>setSelectedMusic(i)}>
+                  <div key={i} className={`rounded-xl p-2.5 border transition-all cursor-pointer ${isSel?"border-orange-500/35":"border-transparent"}`}
+                    style={{background:isSel?"rgba(232,89,60,0.07)":"rgba(255,255,255,0.025)"}} onClick={()=>setSelectedMusic(i)}>
                     <div className="flex items-center gap-2">
                       <button onClick={e=>{e.stopPropagation();toggleMusic(i);}}
                         className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center"
-                        style={{background:isPlay?"rgba(139,92,246,0.3)":"rgba(255,255,255,0.06)",border:"1px solid rgba(139,92,246,0.3)"}}>
-                        {isPlay?<Pause className="w-3 h-3 text-purple-400" fill="currentColor"/>:<Play className="w-3 h-3 text-purple-400 ml-0.5" fill="currentColor"/>}
+                        style={{background:isPlay?"rgba(232,89,60,0.3)":"rgba(255,255,255,0.06)",border:"1px solid rgba(232,89,60,0.3)"}}>
+                        {isPlay?<Pause className="w-3 h-3 text-orange-400" fill="currentColor"/>:<Play className="w-3 h-3 text-orange-400 ml-0.5" fill="currentColor"/>}
                       </button>
                       <div className="flex-1 min-w-0">
-                        <p className={`text-[10px] font-semibold truncate ${isSel?"text-purple-300":"text-gray-400"}`}>{track.title}</p>
-                        <p className="text-[8px] text-gray-700">{track.is_premium_vault?"💎 Cofre Kraft":"🎵 Pixabay"}</p>
+                        <p className={`text-[10px] font-semibold truncate ${isSel?"text-orange-300":"text-gray-400"}`}>{track.title}</p>
+                        <p className="text-[8px] text-gray-500">{track.is_premium_vault?"💎 Cofre Kraft":"🎵 Pixabay"}</p>
                       </div>
-                      {isSel&&<Check className="w-3 h-3 text-purple-400 shrink-0"/>}
+                      {isSel&&<Check className="w-3 h-3 text-orange-400 shrink-0"/>}
                     </div>
                     <div className="mt-1.5 flex items-end gap-px h-3 overflow-hidden rounded">
                       {Array.from({length:40}).map((_,j)=>(
                         <div key={j} className="flex-1 rounded-full"
-                          style={{height:`${20+Math.abs(Math.sin((j+i*7)*0.9)*Math.cos((j+i*3)*0.7))*80}%`,background:isSel?"rgba(139,92,246,0.5)":"rgba(255,255,255,0.07)"}}/>
+                          style={{height:`${20+Math.abs(Math.sin((j+i*7)*0.9)*Math.cos((j+i*3)*0.7))*80}%`,background:isSel?"rgba(232,89,60,0.5)":"rgba(255,255,255,0.07)"}}/>
                       ))}
                     </div>
                     {track.url&&<audio ref={musicRefs[i]} src={track.url} loop preload="none"/>}
@@ -1832,8 +2724,8 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
                 <Download className="w-2.5 h-2.5"/>Download
               </button>
               <button onClick={()=>setPaywallOpen(true)}
-                className="flex items-center justify-center gap-1 py-1.5 rounded-lg text-[9px] font-bold border transition-all hover:border-purple-500/40"
-                style={{borderColor:"rgba(139,92,246,0.3)",color:"#a78bfa",background:"rgba(139,92,246,0.06)"}}>
+                className="flex items-center justify-center gap-1 py-1.5 rounded-lg text-[9px] font-bold border transition-all hover:border-orange-500/40"
+                style={{borderColor:"rgba(232,89,60,0.3)",color:"#FF7A5C",background:"rgba(232,89,60,0.06)"}}>
                 <RefreshCw className="w-2.5 h-2.5"/>Trocar
               </button>
             </div>
@@ -1842,9 +2734,223 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
       </div>
 
       {paywallOpen&&<PaywallModal onClose={()=>setPaywallOpen(false)}/>}
+
+      {/* ── Winning Ads Library Drawer ── */}
+      <WinningAdsDrawer open={showAdLib} onClose={()=>setShowAdLib(false)} onRaioX={handleRaioX}/>
+
+      {/* ── Toast Notification ── */}
+      <div className="fixed bottom-6 left-1/2 z-[60] pointer-events-none"
+        style={{
+          transition:"opacity 0.25s ease, transform 0.25s ease",
+          opacity:toast?1:0,
+          transform:toast?"translateX(-50%) translateY(0)":"translateX(-50%) translateY(16px)",
+        }}>
+        {toast&&(
+          <div className="flex items-center gap-2.5 px-5 py-3 rounded-2xl text-sm font-semibold text-white"
+            style={{
+              background:"linear-gradient(135deg,#1a0f0d,#1a0f0d)",
+              border:"1px solid rgba(232,89,60,0.5)",
+              boxShadow:"0 8px 40px rgba(232,89,60,0.35), 0 0 0 1px rgba(232,89,60,0.2)",
+              backdropFilter:"blur(12px)",
+            }}>
+            <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 animate-spin"
+              style={{border:"2px solid transparent",borderTopColor:"#FF7A5C",borderRightColor:"rgba(255,122,92,0.3)"}}>
+            </div>
+            {toast}
+          </div>
+        )}
+      </div>
     </div>
     </>
   );
+}
+
+// ─── generateMockDrsByDuration ────────────────────────────────────────────────
+// Fills the ENTIRE video duration with DRS scenes (4–6s each), cycling phrases
+// and Mixkit B-roll videos. No more 30s hard cap.
+const MOCK_BROLL_POOL = [
+  "https://assets.mixkit.co/videos/18296/18296-360.mp4",
+  "https://assets.mixkit.co/videos/24354/24354-360.mp4",
+  "https://assets.mixkit.co/videos/47583/47583-360.mp4",
+  "https://assets.mixkit.co/videos/33376/33376-360.mp4",
+  "https://assets.mixkit.co/videos/25575/25575-360.mp4",
+  "https://assets.mixkit.co/videos/5601/5601-360.mp4",
+];
+function generateMockDrsByDuration(totalSec: number, lang: "auto"|"pt"|"en"|"es"): DirectResponseScene[] {
+  const phrases_pt = [
+    "Eu estava cansado","de trabalhar 12 horas","não conseguia pagar","as contas atrasadas.",
+    "Minha esposa me olhava","com aquele olhar…","Um amigo me mostrou","esse método incrível.",
+    "Em apenas 30 dias","tudo mudou de vez.","Hoje acordo sem alarme","trabalho de casa.",
+    "Minha família está","orgulhosa de mim.","Se eu consegui,","você também consegue.",
+    "Não perca mais tempo.","A janela vai fechar.","Essa é sua chance","de mudar tudo.",
+    "Cada dia que passa","você está perdendo","dinheiro e oportunidade.","Aja agora.",
+  ];
+  const phrases_en = [
+    "I was exhausted","working 12 hours","couldn't pay","my bills.",
+    "My wife looked at me","with that look…","A friend showed me","this method.",
+    "In just 30 days","everything changed.","Now I wake up","without an alarm.",
+    "My family is","proud of me.","If I did it,","so can you.",
+    "Don't waste more time.","The window is closing.","This is your chance","to change everything.",
+    "Every passing day","you are losing","money and opportunity.","Act now.",
+  ];
+  const phrases_es = [
+    "Estaba cansado","de trabajar 12 horas","no podía pagar","las cuentas.",
+    "Mi esposa me miraba","con esa mirada…","Un amigo me mostró","este método.",
+    "En solo 30 días","todo cambió.","Ahora me despierto","sin alarma.",
+    "Mi familia está","orgullosa de mí.","Si yo pude,","tú también puedes.",
+    "No pierdas más tiempo.","La ventana se cierra.","Esta es tu oportunidad","de cambiar todo.",
+    "Cada día que pasa","estás perdiendo","dinero y oportunidad.","Actúa ahora.",
+  ];
+  const EMOTIONS = ["Dor","Revelação","Oportunidade","Urgência","Choque","CTA","Esperança","Mistério"];
+  const phrases = lang==="en" ? phrases_en : lang==="es" ? phrases_es : phrases_pt;
+  const scenes: DirectResponseScene[] = [];
+  let cursor = 0; let idx = 0;
+  while(cursor < totalSec - 0.5) {
+    const remaining = totalSec - cursor;
+    const dur = Math.min(remaining, 4 + (idx % 3) * 0.7); // 4s / 4.7s / 5.4s alternating
+    if(dur < 1) break;
+    const text  = phrases[idx % phrases.length];
+    const vUrl  = MOCK_BROLL_POOL[idx % MOCK_BROLL_POOL.length];
+    const vUrl2 = MOCK_BROLL_POOL[(idx+1) % MOCK_BROLL_POOL.length];
+    scenes.push({
+      id:           `mock-${idx}`,
+      textSnippet:  text,
+      duration:     dur,
+      emotion:      EMOTIONS[idx % EMOTIONS.length],
+      searchQueries:[text, text, text],
+      suggestedSfx: null,
+      videoUrl:     vUrl,
+      thumbUrl:     null,
+      videoOptions: [
+        { url: vUrl,  thumb: "", query: text },
+        { url: vUrl2, thumb: "", query: text },
+      ],
+    });
+    cursor += dur; idx++;
+  }
+  return scenes;
+}
+
+// ─── buildDrsFromWhisper ──────────────────────────────────────────────────────
+// Converte palavras reais do Whisper (com timestamps) em cenas DRS.
+// Agrupa palavras em frases de ~5s cada, atribui emoções e B-rolls cíclicos.
+function buildDrsFromWhisper(
+  words: { word: string; start: number; end: number }[],
+  totalDur: number,
+): DirectResponseScene[] {
+  if (!words.length) return [];
+  const EMOTIONS = ["Dor","Revelação","Oportunidade","Urgência","Choque","CTA","Esperança","Mistério"];
+  const TARGET_DUR = 5; // ~5 seconds per scene
+  const scenes: DirectResponseScene[] = [];
+  let sceneWords: typeof words = [];
+  let sceneStart = words[0].start;
+
+  for (let i = 0; i < words.length; i++) {
+    sceneWords.push(words[i]);
+    const elapsed = words[i].end - sceneStart;
+    const isLast  = i === words.length - 1;
+    // Cut scene every ~5s or at the last word
+    if (elapsed >= TARGET_DUR || isLast) {
+      const text = sceneWords.map(w => w.word).join(" ");
+      const dur  = words[i].end - sceneStart;
+      const idx  = scenes.length;
+      scenes.push({
+        id:           `whisper-${idx}`,
+        textSnippet:  text,
+        duration:     Math.max(dur, 1),
+        emotion:      EMOTIONS[idx % EMOTIONS.length],
+        searchQueries:[text.slice(0, 40), text.slice(0, 30), text.slice(0, 20)],
+        suggestedSfx: null,
+        videoUrl:     MOCK_BROLL_POOL[idx % MOCK_BROLL_POOL.length],
+        thumbUrl:     null,
+        videoOptions: [
+          { url: MOCK_BROLL_POOL[idx % MOCK_BROLL_POOL.length],       thumb: "", query: text.slice(0,30) },
+          { url: MOCK_BROLL_POOL[(idx+1) % MOCK_BROLL_POOL.length],   thumb: "", query: text.slice(0,30) },
+        ],
+      });
+      sceneWords = [];
+      if (!isLast) sceneStart = words[i + 1].start;
+    }
+  }
+
+  // Se a última cena termina antes do fim do vídeo, estica a duração
+  if (scenes.length > 0) {
+    const lastScene = scenes[scenes.length - 1];
+    const scenesEnd = scenes.reduce((sum, s) => sum + s.duration, 0);
+    if (scenesEnd < totalDur - 1) {
+      lastScene.duration += (totalDur - scenesEnd);
+    }
+  }
+
+  return scenes;
+}
+
+// ─── WAV encoder helper ───────────────────────────────────────────────────────
+function writeWavString(view: DataView, offset: number, str: string) {
+  for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+}
+
+function audioBufferToWav(audioBuffer: AudioBuffer, targetRate = 16000): Blob {
+  const origRate = audioBuffer.sampleRate;
+  // Mix to mono
+  let samples: Float32Array;
+  if (audioBuffer.numberOfChannels === 1) {
+    samples = audioBuffer.getChannelData(0);
+  } else {
+    const left = audioBuffer.getChannelData(0);
+    const right = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : left;
+    samples = new Float32Array(left.length);
+    for (let i = 0; i < left.length; i++) samples[i] = (left[i] + right[i]) * 0.5;
+  }
+  // Downsample
+  if (origRate !== targetRate) {
+    const ratio = origRate / targetRate;
+    const newLen = Math.ceil(samples.length / ratio);
+    const ds = new Float32Array(newLen);
+    for (let i = 0; i < newLen; i++) ds[i] = samples[Math.floor(i * ratio)];
+    samples = ds;
+  }
+  // Encode as 16-bit PCM WAV
+  const pcmLen = samples.length * 2;
+  const wavLen = 44 + pcmLen;
+  const buf = new ArrayBuffer(wavLen);
+  const v = new DataView(buf);
+  writeWavString(v, 0, "RIFF");
+  v.setUint32(4, wavLen - 8, true);
+  writeWavString(v, 8, "WAVE");
+  writeWavString(v, 12, "fmt ");
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); // PCM
+  v.setUint16(22, 1, true); // mono
+  v.setUint32(24, targetRate, true);
+  v.setUint32(28, targetRate * 2, true); // byte rate
+  v.setUint16(32, 2, true); // block align
+  v.setUint16(34, 16, true); // bits per sample
+  writeWavString(v, 36, "data");
+  v.setUint32(40, pcmLen, true);
+  let off = 44;
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    v.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    off += 2;
+  }
+  return new Blob([buf], { type: "audio/wav" });
+}
+
+// ─── extractAudioAsWav ────────────────────────────────────────────────────────
+// Uses Web Audio API to decode video → extract audio → encode as WAV.
+// This is INSTANT (no playback needed). Output: ~2MB per minute at 16kHz mono.
+// Works with any video size — browser decodes the audio track directly.
+async function extractAudioAsWav(file: File): Promise<Blob> {
+  const arrayBuffer = await file.arrayBuffer();
+  const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+  const ctx = new AudioCtx();
+  try {
+    const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+    return audioBufferToWav(audioBuffer, 16000); // 16kHz mono WAV
+  } finally {
+    ctx.close();
+  }
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
@@ -1858,11 +2964,28 @@ export default function SuarikHome() {
   const [error,            setError]         = useState<string|null>(null);
   const [result,           setResult]        = useState<GenerateResponse|null>(null);
   const [drScenes,         setDrScenes]      = useState<DirectResponseScene[]>([]);
+  const [bgMusicUrl,       setBgMusicUrl]    = useState<string|undefined>(undefined);
   const [isUploadModalOpen,setUploadOpen]    = useState(false);
   const [isGenerating,     setIsGenerating]  = useState(false);
   const [isGenerated,      setIsGenerated]   = useState(false);
   const [paywallOpen,      setPaywallOpen]   = useState(false);
   const [activeTag,        setActiveTag]     = useState("All");
+  const [homeToast,        setHomeToast]     = useState<string|null>(null);
+  const [inputTab,         setInputTab]      = useState<"roteiro"|"video">("roteiro");
+  const [videoFile,        setVideoFile]     = useState<File|null>(null);
+  const [isDragOver,       setIsDragOver]    = useState(false);
+  const [isEnriching,      setIsEnriching]   = useState(false);
+  const [enrichStep,       setEnrichStep]    = useState(0); // 0-3
+  const [videoLang,        setVideoLang]     = useState<"auto"|"pt"|"en"|"es">("auto");
+
+  const fireHomeToast = useCallback((msg: string) => {
+    setHomeToast(msg);
+    setTimeout(() => setHomeToast(null), 3500);
+  }, []);
+
+  const handleHomeRaioX = useCallback((ad: WinningAd) => {
+    fireHomeToast(`🧬 A IA está analisando "${ad.title}"…`);
+  }, [fireHomeToast]);
 
   const aspectFormats = ["landscape","portrait","landscape"] as const;
   const themeMap: Record<number,string> = { 0:"vsl_long", 1:"social_organic", 2:"cinematic" };
@@ -1886,20 +3009,23 @@ export default function SuarikHome() {
             if(!res.ok) throw new Error((d as {error?:string}).error??"Erro ao gerar.");
             return d;
           }),
-          // 2. OpenAI DRS analysis — timeline source of truth
+          // 2. OpenAI DRS analysis + Pexels + Freesound + music (generate-timeline)
           fetch("/api/generate-timeline", {
             method:"POST", headers:{"Content-Type":"application/json"},
             body:JSON.stringify({copy}),
           }).then(async res=>{
-            if(!res.ok) {
-              // Graceful fallback to client-side analysis if API fails
+            if(!res.ok){
               console.warn("[generate-timeline] API falhou, usando análise local.");
-              return analyzeCopyForDirectResponse(copy);
+              return { scenes: analyzeCopyForDirectResponse(copy), backgroundMusicUrl: undefined };
             }
             const d = await res.json();
-            // Validate response is a non-empty DirectResponseScene array
-            if(Array.isArray(d) && d.length > 0) return d as DirectResponseScene[];
-            return analyzeCopyForDirectResponse(copy);
+            // New format: { scenes: [...], backgroundMusicUrl: "..." }
+            if(d?.scenes && Array.isArray(d.scenes) && d.scenes.length>0)
+              return { scenes: d.scenes as DirectResponseScene[], backgroundMusicUrl: d.backgroundMusicUrl as string|undefined };
+            // Legacy format: bare array (fallback)
+            if(Array.isArray(d) && d.length>0)
+              return { scenes: d as DirectResponseScene[], backgroundMusicUrl: undefined };
+            return { scenes: analyzeCopyForDirectResponse(copy), backgroundMusicUrl: undefined };
           }),
         ]),
         new Promise<void>(r=>setTimeout(r,3000)), // minimum 3s loading screen
@@ -1908,7 +3034,8 @@ export default function SuarikHome() {
       sessionStorage.setItem("vb_project_result", JSON.stringify(data));
       sessionStorage.setItem("vb_project_copy", copy);
       setResult(data);
-      setDrScenes(drs);
+      setDrScenes(drs.scenes);
+      if(drs.backgroundMusicUrl) setBgMusicUrl(drs.backgroundMusicUrl);
       setIsGenerated(true);
     } catch(e:unknown){
       setError(e instanceof Error?e.message:"Erro ao gerar.");
@@ -1917,127 +3044,517 @@ export default function SuarikHome() {
     }
   };
 
-  const handleBack = () => { setIsGenerated(false); setResult(null); };
+  const handleBack = () => { setIsGenerated(false); setResult(null); setIsEnriching(false); setEnrichStep(0); };
 
-  const area3 = isGenerating?"generating":isGenerated?"generated":"gallery";
+  // ── Enrichment flow — upload REAL + Whisper REAL + mock B-rolls ───────────
+  const ENRICH_STEPS = [
+    "🔗 Solicitando passe de segurança...",
+    "☁️ Enviando vídeo para a nuvem...",
+    "🎧 Extraindo áudio + transcrevendo com Whisper IA...",
+    "🎬 GPT-4o analisando cenas + buscando B-rolls HD...",
+  ];
+  const [r2PublicUrl, setR2PublicUrl] = useState<string|null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0); // 0-100
+  const [whisperWords, setWhisperWords] = useState<WhisperWord[]>([]);
+
+  const handleEnrich = async () => {
+    if (!videoFile || isEnriching) return;
+    setIsEnriching(true);
+    setEnrichStep(0); // "🔗 Solicitando passe de segurança..."
+    setError("");
+
+    try {
+      // ── 1. Probe video duration ──────────────────────────────────────────
+      const videoDuration = await new Promise<number>((resolve) => {
+        const probe = document.createElement("video");
+        const probeUrl = URL.createObjectURL(videoFile);
+        probe.preload = "metadata";
+        probe.src = probeUrl;
+        probe.onloadedmetadata = () => {
+          const dur = isFinite(probe.duration) && probe.duration > 0
+            ? probe.duration : 60;
+          URL.revokeObjectURL(probeUrl);
+          resolve(dur);
+        };
+        probe.onerror = () => {
+          URL.revokeObjectURL(probeUrl);
+          resolve(60); // fallback
+        };
+      });
+
+      // ── 2 & 3. Upload DIRETO ao R2 (presigned URL, sem proxy) ────────────
+      setEnrichStep(1); // "☁️ Enviando vídeo para a nuvem..."
+      setUploadProgress(0);
+
+      // Get presigned URL from our backend
+      const presignRes = await fetch("/api/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: videoFile.name,
+          contentType: videoFile.type || "video/mp4",
+        }),
+      });
+      if (!presignRes.ok) {
+        const errBody = await presignRes.json().catch(() => ({}));
+        throw new Error(errBody.error || `Falha ao solicitar URL de upload (${presignRes.status})`);
+      }
+      const { uploadUrl, publicUrl } = await presignRes.json();
+
+      // Upload directly from browser → R2 (CORS enabled on bucket)
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", uploadUrl); // Direct to R2 presigned URL
+        xhr.setRequestHeader("Content-Type", videoFile.type || "video/mp4");
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) setUploadProgress(Math.round((e.loaded / e.total) * 100));
+        };
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) { setUploadProgress(100); resolve(); }
+          else reject(new Error(`Upload falhou (HTTP ${xhr.status}). Verifique se o CORS está configurado no R2.`));
+        };
+        xhr.onerror = () => reject(new Error("Erro de rede no upload direto ao R2. Verifique CORS."));
+        xhr.send(videoFile);
+      });
+
+      // ── Upload concluído! Salva a URL pública do R2 ──────────────────────
+      setR2PublicUrl(publicUrl);
+
+      // ── 4. Extract audio + Whisper Transcription ──────────────────────
+      setEnrichStep(2); // "🎧 Transcrevendo áudio com Whisper IA..."
+      setUploadProgress(0);
+
+      let whisperText = "";
+      let whisperWords: { word: string; start: number; end: number }[] = [];
+
+      try {
+        // Strategy: extract audio as WAV in browser (instant via Web Audio API)
+        // then upload the small WAV to R2, and send R2 URL to Whisper.
+        // WAV at 16kHz mono = ~2MB/min — tiny compared to 70MB+ video files.
+        console.log(`[Whisper] Extraindo áudio do vídeo (${(videoFile.size/1024/1024).toFixed(1)}MB)...`);
+
+        const wavBlob = await extractAudioAsWav(videoFile);
+        console.log(`[Whisper] WAV extraído: ${(wavBlob.size/1024).toFixed(0)}KB`);
+
+        // Upload WAV to R2 (small file, fast)
+        const wavPresignRes = await fetch("/api/upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            filename: videoFile.name.replace(/\.[^.]+$/, ".wav"),
+            contentType: "audio/wav",
+          }),
+        });
+
+        let audioPublicUrl: string | null = null;
+
+        if (wavPresignRes.ok) {
+          const { uploadUrl: wavUploadUrl, publicUrl: wavPublicUrl } = await wavPresignRes.json();
+          // Direct upload to R2 (CORS enabled)
+          const wavUpRes = await fetch(wavUploadUrl, {
+            method: "PUT",
+            headers: { "Content-Type": "audio/wav" },
+            body: wavBlob,
+          });
+          if (wavUpRes.ok || wavUpRes.status === 200) {
+            audioPublicUrl = wavPublicUrl;
+            console.log(`[Whisper] WAV uploaded to R2: ${wavPublicUrl}`);
+          } else {
+            console.warn("[Whisper] WAV upload failed:", wavUpRes.status);
+          }
+        }
+
+        // Send to Whisper via R2 URL (server downloads small WAV)
+        if (audioPublicUrl) {
+          const txRes = await fetch("/api/transcribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ publicUrl: audioPublicUrl }),
+          });
+          if (txRes.ok) {
+            const txData = await txRes.json();
+            whisperText  = txData.text  || "";
+            whisperWords = txData.words || [];
+            setWhisperWords(whisperWords);
+            console.log(`[Whisper] OK — ${whisperWords.length} words, ${whisperText.length} chars`);
+          } else {
+            const errData = await txRes.json().catch(() => ({}));
+            console.warn("[Whisper] Transcription failed:", txRes.status, errData);
+          }
+        }
+      } catch (audioErr) {
+        console.warn("[Whisper] Audio extraction failed, trying R2 video URL as fallback:", audioErr);
+        // Fallback: try sending original video R2 URL (works for small videos)
+        try {
+          const txRes = await fetch("/api/transcribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ publicUrl }),
+          });
+          if (txRes.ok) {
+            const txData = await txRes.json();
+            whisperText  = txData.text  || "";
+            whisperWords = txData.words || [];
+            setWhisperWords(whisperWords);
+            console.log(`[Whisper] Fallback OK — ${whisperWords.length} words`);
+          }
+        } catch { /* silent */ }
+      }
+
+      // ── 5. GPT-4o + Pexels + Freesound — B-rolls REAIS ──────────────────
+      setEnrichStep(3); // "🎬 GPT-4o analisando cenas + buscando B-rolls HD..."
+
+      let finalDrs: DirectResponseScene[];
+      let backgroundMusicUrl: string | undefined;
+
+      if (whisperText) {
+        // ── Transcrição disponível → GPT-4o analisa + Pexels busca B-rolls ──
+        try {
+          const enrichRes = await fetch("/api/enrich-scenes", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              text: whisperText,
+              words: whisperWords,
+              videoDuration,
+            }),
+          });
+          if (enrichRes.ok) {
+            const enrichData = await enrichRes.json();
+            finalDrs = enrichData.scenes || [];
+            backgroundMusicUrl = enrichData.backgroundMusicUrl;
+          } else {
+            console.warn("[enrich-scenes] Falhou, usando fallback local. Status:", enrichRes.status);
+            finalDrs = whisperWords.length > 0
+              ? buildDrsFromWhisper(whisperWords, videoDuration)
+              : analyzeCopyForDirectResponse(whisperText);
+          }
+        } catch (enrichErr) {
+          console.warn("[enrich-scenes] Erro de rede, usando fallback:", enrichErr);
+          finalDrs = whisperWords.length > 0
+            ? buildDrsFromWhisper(whisperWords, videoDuration)
+            : analyzeCopyForDirectResponse(whisperText);
+        }
+      } else {
+        // ── Sem transcrição — use whisper-based fallback or show warning ──
+        console.error("[handleEnrich] Whisper não retornou transcrição. Usando fallback.");
+        finalDrs = buildDrsFromWhisper([], videoDuration); // empty = no real subtitles
+        // Show the user a warning that transcription failed
+        setError("⚠️ Não foi possível transcrever o áudio do vídeo. As legendas podem não corresponder ao conteúdo real. Tente novamente ou use um vídeo menor.");
+      }
+
+      const finalResult: GenerateResponse = {
+        project_vibe: "ugc_alto_impacto",
+        music_style:  "Suspense Emocional",
+        scenes: [],
+        background_tracks: [],
+      };
+      setResult(finalResult);
+      setDrScenes(finalDrs);
+      if (backgroundMusicUrl) setBgMusicUrl(backgroundMusicUrl);
+      setIsEnriching(false);
+      setEnrichStep(0);
+      setIsGenerated(true);
+
+    } catch (err: unknown) {
+      setIsEnriching(false);
+      setEnrichStep(0);
+      const msg = err instanceof Error ? err.message : "Erro inesperado no upload.";
+      setError(msg);
+    }
+  };
 
   // Full-screen workstation mode
   if (isGenerated && result) {
-    return <WorkstationView result={result} copy={copy} drScenes={drScenes} onBack={handleBack}/>;
+    return <WorkstationView result={result} copy={copy} drScenes={drScenes} initialBgMusicUrl={bgMusicUrl} videoFile={videoFile} whisperWords={whisperWords} onBack={handleBack}/>;
   }
+
+  // Has content ready to process?
+  const hasContent = !!(videoFile || copy.trim());
 
   return (
     <>
-    <style>{`@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}`}</style>
+    <style>{`
+      @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+      @keyframes grainShift{0%{transform:translate(0,0)}10%{transform:translate(-2%,-2%)}20%{transform:translate(1%,1%)}30%{transform:translate(-1%,2%)}40%{transform:translate(2%,-1%)}50%{transform:translate(-2%,1%)}60%{transform:translate(1%,-2%)}70%{transform:translate(-1%,-1%)}80%{transform:translate(2%,2%)}90%{transform:translate(-2%,0%)}100%{transform:translate(0,0)}}
+      @keyframes glowPulse{0%,100%{box-shadow:0 0 20px rgba(240,86,58,0.25),0 4px 15px rgba(240,86,58,0.3)}50%{box-shadow:0 0 35px rgba(240,86,58,0.45),0 4px 25px rgba(240,86,58,0.4),0 0 80px rgba(240,86,58,0.12)}}
+      @keyframes heroIn{from{opacity:0;transform:translateY(20px) scale(0.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+      .hook-card{transition:all 0.25s cubic-bezier(0.4,0,0.2,1)}
+      .hook-card:hover{border-color:rgba(240,86,58,0.4)!important;transform:translateY(-2px)}
+    `}</style>
 
-    <div className="flex h-screen overflow-hidden" style={{background:"#050505",color:"#e5e5e5",fontFamily:"var(--font-geist-sans,Inter,sans-serif)"}}>
+    <div className="min-h-screen relative overflow-y-auto" style={{background:"#09090b",color:"#F5F3F0",fontFamily:"'DM Sans',sans-serif"}}>
+      {/* Grain overlay */}
+      <div className="fixed inset-0 pointer-events-none z-[9990] opacity-30" style={{backgroundImage:`url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E")`,animation:"grainShift 0.5s steps(4) infinite"}}/>
 
-      {/* ── SIDEBAR ──────────────────────────────────────────────────────── */}
-      <aside className="w-[210px] shrink-0 flex flex-col border-r" style={{background:"#000",borderColor:"rgba(255,255,255,0.05)"}}>
-        <div className="px-5 pt-6 pb-6 flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center font-black text-white italic text-sm" style={{boxShadow:"0 0 16px rgba(37,99,235,0.5)"}}>S</div>
-          <span className="text-xl font-black text-white" style={{letterSpacing:"-0.04em"}}>Suarik</span>
+      {/* ═══ TOP NAV BAR ═══ */}
+      <header className="sticky top-0 z-50 flex items-center justify-between px-8 py-4" style={{background:"rgba(9,9,11,0.85)",backdropFilter:"blur(16px)",borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-md flex items-center justify-center font-bold text-white text-sm" style={{background:"#F0563A",boxShadow:"0 0 18px rgba(240,86,58,0.35)"}}>S</div>
+          <span className="text-xl text-white" style={{fontFamily:"'Bebas Neue',sans-serif",letterSpacing:"2px"}}>SUARIK</span>
         </div>
-        <nav className="px-3 space-y-0.5 flex-1">
-          {[
-            {icon:<Plus className="w-4 h-4"/>,     label:"Criar",        action:()=>setCopyOpen(v=>!v)},
-            {icon:<Home className="w-4 h-4"/>,     label:"Início",       action:()=>{}, active:true},
-            {icon:<BookOpen className="w-4 h-4"/>, label:"Biblioteca",   action:()=>router.push("/editor")},
-            {icon:<Search className="w-4 h-4"/>,   label:"Pesquisar ⌘K", action:()=>{}},
-          ].map(item=>(
-            <button key={item.label} onClick={item.action}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors ${(item as {active?:boolean}).active?"bg-white/8 text-white font-semibold":"text-gray-600 hover:text-gray-300 hover:bg-white/4"}`}>
-              {item.icon}{item.label}
-            </button>
-          ))}
-        </nav>
-        <div className="px-3 pb-5 space-y-1 border-t pt-4" style={{borderColor:"rgba(255,255,255,0.05)"}}>
-          <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-gray-600 hover:text-gray-300 hover:bg-white/4 transition-colors">
-            <HelpCircle className="w-4 h-4"/>Ajuda e Suporte
-          </button>
-          <button onClick={()=>router.push("/pricing")} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-gray-600 hover:text-gray-300 hover:bg-white/4 transition-colors">
-            <Coins className="w-4 h-4 text-amber-500"/>
+        <nav className="flex items-center gap-5">
+          <button onClick={()=>router.push("/editor")} className="text-[13px] text-zinc-500 hover:text-zinc-300 transition-colors">Biblioteca</button>
+          <button onClick={()=>router.push("/pricing")} className="text-[13px] text-zinc-500 hover:text-zinc-300 transition-colors flex items-center gap-1.5">
+            <Coins className="w-3.5 h-3.5 text-amber-500"/>
             <span>Créditos <span className="text-amber-500 font-bold">500</span></span>
           </button>
-          <button onClick={()=>router.push("/login")} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-gray-300 hover:text-white hover:bg-white/6 border transition-colors" style={{borderColor:"rgba(255,255,255,0.07)"}}>
-            <LogIn className="w-4 h-4"/>Entrar / Perfil
+          <button onClick={()=>router.push("/login")} className="text-[13px] font-semibold text-zinc-300 hover:text-white px-4 py-2 rounded-xl border transition-all hover:bg-white/5" style={{borderColor:"rgba(255,255,255,0.1)"}}>
+            <span className="flex items-center gap-1.5"><LogIn className="w-3.5 h-3.5"/>Entrar</span>
           </button>
+        </nav>
+      </header>
+
+      {/* ═══ MAIN CONTENT ═══ */}
+      {isEnriching ? (
+        /* ── Enriching Full-Screen ── */
+        <div className="flex flex-col items-center justify-center gap-8 px-8 min-h-[80vh]" style={{animation:"heroIn 0.5s ease both"}}>
+          <div className="relative w-24 h-24">
+            <div className="absolute inset-0 rounded-full animate-spin" style={{border:"3px solid transparent",borderTopColor:"#F0563A",borderRightColor:"rgba(240,86,58,0.3)"}}/>
+            <div className="absolute inset-2 rounded-full animate-spin" style={{border:"2px solid transparent",borderTopColor:"#FF7A5C",animationDirection:"reverse",animationDuration:"1.4s"}}/>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Film className="w-8 h-8" style={{color:"#F0563A"}}/>
+            </div>
+          </div>
+          <div className="w-full max-w-sm space-y-2.5">
+            {ENRICH_STEPS.map((msg, i) => {
+              const done = i < enrichStep, active = i === enrichStep, pending = i > enrichStep;
+              return (
+                <div key={i} className="flex flex-col gap-0 px-4 py-3 rounded-xl transition-all duration-500"
+                  style={{
+                    background: active?"rgba(240,86,58,0.08)":done?"rgba(52,211,153,0.05)":"rgba(255,255,255,0.02)",
+                    border:`1px solid ${active?"rgba(240,86,58,0.35)":done?"rgba(52,211,153,0.2)":"rgba(255,255,255,0.04)"}`,
+                    opacity: pending?0.3:1,
+                  }}>
+                  <div className="flex items-center gap-3">
+                    <div className="shrink-0 w-5 h-5 flex items-center justify-center">
+                      {done ? <Check className="w-4 h-4 text-emerald-400"/>
+                        : active ? <div className="w-4 h-4 rounded-full border-2 border-orange-400/20 border-t-orange-400 animate-spin"/>
+                        : <div className="w-2 h-2 rounded-full bg-white/8"/>}
+                    </div>
+                    <span className={`text-[13px] font-medium ${active?"text-orange-300":done?"text-emerald-400":"text-zinc-600"}`}>{msg}</span>
+                  </div>
+                  {i===1 && active && uploadProgress>0 && (
+                    <>
+                      <div className="w-full mt-2.5 h-1.5 rounded-full overflow-hidden" style={{background:"rgba(255,255,255,0.06)"}}>
+                        <div className="h-full rounded-full transition-all duration-300" style={{width:`${uploadProgress}%`,background:uploadProgress>=100?"linear-gradient(90deg,#22c55e,#10b981)":"linear-gradient(90deg,#FF7A5C,#F0563A)"}}/>
+                      </div>
+                      <span className="text-[10px] font-mono mt-1" style={{color:uploadProgress>=100?"#22c55e":"#FF7A5C"}}>{uploadProgress>=100?"✓ Upload concluído":`${uploadProgress}%`}</span>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {videoFile && (
+            <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl" style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.06)"}}>
+              <Film className="w-3.5 h-3.5 text-zinc-500 shrink-0"/>
+              <span className="text-[11px] text-zinc-400 truncate max-w-[240px]">{videoFile.name}</span>
+              <span className="text-[10px] text-zinc-500 shrink-0">{(videoFile.size/1024/1024).toFixed(1)} MB</span>
+            </div>
+          )}
+          <p className="text-[12px] text-zinc-600">A IA está enriquecendo seu vídeo com B-rolls, legendas e SFX sincronizados…</p>
         </div>
-      </aside>
+      ) : isGenerating ? (
+        <div className="min-h-[80vh] flex items-center justify-center"><GeneratingView/></div>
+      ) : (
+        <>
+          {/* ═══ HERO SECTION ═══ */}
+          <main className="max-w-3xl mx-auto text-center px-6 pt-20 pb-14" style={{animation:"heroIn 0.6s ease both"}}>
+            <h1 className="text-white leading-[0.95] tracking-tight" style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"clamp(3rem,6.5vw,4.5rem)",letterSpacing:"1px"}}>
+              O CÉREBRO VISUAL<br/>DO SEU EDITOR.
+            </h1>
+            <p className="text-[17px] text-zinc-500 mt-5 max-w-lg mx-auto leading-relaxed">
+              Tudo que um editor DR precisa. Zero marcação manual — cole e clique.
+            </p>
 
-      {/* ── CONTROL PANEL ────────────────────────────────────────────────── */}
-      <div className="w-[390px] shrink-0 flex flex-col border-r overflow-y-auto" style={{borderColor:"rgba(255,255,255,0.05)"}}>
-        <div className="flex-1 flex flex-col justify-center px-6 py-8">
-          <p className="text-xs text-gray-600 leading-relaxed mb-6">Transforme roteiros em vídeos de alta retenção. Escolha o formato e a copy para mapear ganchos e B-rolls.</p>
+            {/* ── HERO DROPZONE ── */}
+            <div
+              onDragOver={e=>{e.preventDefault();setIsDragOver(true);}}
+              onDragLeave={()=>setIsDragOver(false)}
+              onDrop={e=>{e.preventDefault();setIsDragOver(false);const f=e.dataTransfer.files[0];if(f&&f.type.startsWith("video/"))setVideoFile(f);}}
+              onClick={()=>{const i=document.createElement("input");i.type="file";i.accept="video/mp4,video/quicktime";i.onchange=(ev)=>{const f=(ev.target as HTMLInputElement).files?.[0];if(f)setVideoFile(f);};i.click();}}
+              className="mt-10 relative flex flex-col items-center justify-center gap-4 rounded-2xl cursor-pointer transition-all mx-auto max-w-2xl"
+              style={{
+                padding: videoFile ? "2rem 2rem" : "3.5rem 2rem",
+                border:`2px dashed ${isDragOver?"#F0563A":videoFile?"rgba(52,211,153,0.5)":"rgba(63,63,70,0.4)"}`,
+                background:isDragOver?"rgba(240,86,58,0.04)":videoFile?"rgba(52,211,153,0.03)":"rgba(255,255,255,0.015)",
+                boxShadow:isDragOver?"0 0 60px rgba(240,86,58,0.12),inset 0 0 60px rgba(240,86,58,0.03)":"0 0 0 transparent",
+                transition:"all 0.3s ease",
+              }}>
+              {videoFile ? (
+                <>
+                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{background:"rgba(52,211,153,0.1)",border:"1px solid rgba(52,211,153,0.25)"}}>
+                    <Check className="w-7 h-7 text-emerald-400"/>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-base font-black text-emerald-400 truncate max-w-[300px]">{videoFile.name}</p>
+                    <p className="text-[11px] text-zinc-500 mt-1">{(videoFile.size/1024/1024).toFixed(1)} MB · pronto para enriquecer</p>
+                  </div>
+                  <button onClick={e=>{e.stopPropagation();setVideoFile(null);}} className="text-[11px] text-zinc-600 hover:text-red-400 transition-colors flex items-center gap-1 mt-1">
+                    <X className="w-3.5 h-3.5"/>Remover arquivo
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center transition-all" style={{background:isDragOver?"rgba(240,86,58,0.15)":"rgba(255,255,255,0.03)",border:isDragOver?"1px solid rgba(240,86,58,0.4)":"1px solid rgba(255,255,255,0.06)"}}>
+                    <CloudUpload className={`w-8 h-8 transition-colors ${isDragOver?"text-orange-400":"text-zinc-600"}`}/>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-base font-bold text-zinc-300">Sobe um MP4 do seu A-roll</p>
+                    <p className="text-[12px] text-zinc-600 mt-1.5">.mp4 · .mov · até 500MB</p>
+                  </div>
+                </>
+              )}
+            </div>
 
-          <div className="rounded-2xl overflow-hidden" style={{background:"#111",border:"1px solid rgba(255,255,255,0.07)"}}>
-            <button onClick={()=>setCopyOpen(v=>!v)} className="w-full flex items-center gap-3 px-4 py-3.5 border-b hover:bg-white/3 transition-colors group" style={{borderColor:"rgba(255,255,255,0.05)"}}>
-              <FileText className="w-4 h-4 text-gray-500 group-hover:text-gray-300 transition-colors"/>
-              <span className="flex-1 text-sm text-left text-gray-500 group-hover:text-gray-300 transition-colors">Adicionar Copy / Roteiro</span>
-              <Plus className="w-4 h-4 text-gray-700"/>
-            </button>
-            <button onClick={()=>setUploadOpen(true)} className="w-full flex items-center gap-3 px-4 py-3.5 border-b hover:bg-white/3 transition-colors group" style={{borderColor:"rgba(255,255,255,0.05)"}}>
-              <Mic className="w-4 h-4 text-gray-500 group-hover:text-gray-300 transition-colors"/>
-              <span className="flex-1 text-sm text-left text-gray-500 group-hover:text-gray-300 transition-colors">Adicionar Locução <span className="text-gray-700 text-xs">(Opcional)</span></span>
-              <Plus className="w-4 h-4 text-gray-700"/>
-            </button>
-
-            <div className={`overflow-hidden transition-all duration-300 ${isCopyOpen?"max-h-[340px]":"max-h-16"}`}>
-              <textarea value={copy} onChange={e=>setCopy(e.target.value)} disabled={isGenerating} rows={isCopyOpen?7:2}
-                placeholder={isCopyOpen?"Cole sua VSL, roteiro ou copy aqui…":"Descreva sua edição ou cole a VSL. Pressione Tab para expandir…"}
-                onFocus={()=>setCopyOpen(true)} onKeyDown={e=>e.key==="Tab"&&(e.preventDefault(),setCopyOpen(true))}
-                className="w-full bg-transparent text-sm text-gray-300 placeholder-gray-700 px-4 py-3 resize-none focus:outline-none disabled:opacity-40" style={{fontFamily:"inherit"}}/>
+            {/* ── "ou cole um roteiro" toggle ── */}
+            <div className="mt-7">
+              <button onClick={()=>setCopyOpen(v=>!v)}
+                className="text-[13px] text-zinc-600 hover:text-zinc-400 transition-colors flex items-center gap-1.5 mx-auto group">
+                <FileText className="w-4 h-4 group-hover:text-zinc-400"/>
+                {isCopyOpen ? "Fechar roteiro" : "ou cole um roteiro de texto"}
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isCopyOpen?"rotate-180":""}`}/>
+              </button>
               {isCopyOpen && (
-                <div className="px-4 pb-3 flex flex-wrap gap-1.5">
-                  {TEMPLATES.map(t=>(
-                    <button key={t.label} onClick={()=>setCopy(t.copy)} className="flex items-center gap-1 text-[10px] font-semibold px-2.5 py-1 rounded-full border transition-all hover:bg-white/6" style={{borderColor:"rgba(255,255,255,0.1)",color:"#9ca3af"}}>{t.icon} {t.label}</button>
-                  ))}
+                <div className="mt-4 max-w-2xl mx-auto text-left" style={{animation:"fadeIn 0.3s ease both"}}>
+                  <textarea
+                    value={copy} onChange={e=>setCopy(e.target.value)} disabled={isGenerating} rows={6}
+                    placeholder="Cole sua VSL, roteiro ou copy aqui…"
+                    className="w-full rounded-xl text-sm text-zinc-300 placeholder-zinc-700 px-4 py-3.5 resize-none focus:outline-none focus:ring-1 transition-all disabled:opacity-40"
+                    style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",fontFamily:"inherit"}}/>
+                  <div className="flex items-center justify-between mt-2.5">
+                    <div className="flex flex-wrap gap-1.5">
+                      {TEMPLATES.map(t=>(
+                        <button key={t.label} onClick={()=>setCopy(t.copy)}
+                          className="flex items-center gap-1 text-[10px] font-semibold px-2.5 py-1 rounded-full border transition-all hover:bg-white/5 hover:border-zinc-700"
+                          style={{borderColor:"rgba(255,255,255,0.07)",color:"#71717a"}}>
+                          {t.icon} {t.label}
+                        </button>
+                      ))}
+                    </div>
+                    {copy.length>0 && (
+                      <span className="text-[10px] font-medium text-zinc-600 shrink-0 ml-2">
+                        {copy.length} chars · ~{Math.max(1,Math.round(copy.length/900))} min
+                      </span>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
 
-            <div className="flex items-center gap-2 px-3 py-2.5 border-t" style={{borderColor:"rgba(255,255,255,0.05)"}}>
-              <div className="flex items-center gap-1 text-[10px] text-gray-600 font-semibold shrink-0">
-                <Brain className="w-3 h-3"/>Neural
-              </div>
-              <div className="w-px h-3.5 bg-white/8 mx-0.5"/>
-              <div className="relative shrink-0">
-                <select value={aspect} onChange={e=>setAspect(+e.target.value)} disabled={isGenerating}
-                  className="text-[10px] text-gray-500 pr-4 py-0.5 appearance-none cursor-pointer focus:outline-none bg-transparent disabled:opacity-40">
-                  {ASPECTS.map((a,i)=><option key={i} value={i}>{a}</option>)}
-                </select>
-                <ChevronDown className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-700 pointer-events-none"/>
-              </div>
-              <div className="w-px h-3.5 bg-white/8 mx-0.5"/>
-              <div className="relative flex-1">
-                <select value={niche} onChange={e=>setNiche(e.target.value)} disabled={isGenerating}
-                  className="w-full text-[10px] text-gray-500 pr-4 py-0.5 appearance-none cursor-pointer focus:outline-none bg-transparent disabled:opacity-40 truncate">
-                  {NICHES.map(g=>(<optgroup key={g.group} label={`── ${g.group}`}>{g.options.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</optgroup>))}
-                </select>
-                <ChevronDown className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-700 pointer-events-none"/>
-              </div>
-              <Wand2 className="w-3.5 h-3.5 text-gray-700 hover:text-violet-400 cursor-pointer transition-colors shrink-0"/>
-              <button onClick={handleGenerate} disabled={!copy.trim()||isGenerating}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0"
-                style={copy.trim()&&!isGenerating?{background:"linear-gradient(135deg,#2563eb,#4f46e5)",color:"#fff",boxShadow:"0 2px 12px rgba(79,70,229,0.4)"}:{background:"rgba(255,255,255,0.05)",color:"rgba(255,255,255,0.2)",cursor:"not-allowed"}}>
-                {isGenerating?<><div className="w-3 h-3 border-2 border-blue-300/20 border-t-blue-300 rounded-full animate-spin"/>…</>:<><Sparkles className="w-3 h-3"/>Gerar</>}
-              </button>
-            </div>
-          </div>
+            {/* ── Progressive Disclosure: Options + Glow Button ── */}
+            {hasContent && (
+              <div className="mt-8 flex flex-col items-center gap-5" style={{animation:"fadeIn 0.4s ease both"}}>
+                {/* Options row — only appears after content */}
+                <div className="flex items-center gap-3 flex-wrap justify-center px-4 py-2.5 rounded-xl" style={{background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.05)"}}>
+                  <div className="flex items-center gap-1 text-[10px] text-zinc-600 font-semibold shrink-0">
+                    <Brain className="w-3 h-3"/>Neural
+                  </div>
+                  <div className="w-px h-3.5" style={{background:"rgba(255,255,255,0.06)"}}/>
+                  <select value={aspect} onChange={e=>setAspect(+e.target.value)} disabled={isGenerating}
+                    className="text-[10px] text-zinc-500 pr-4 py-0.5 appearance-none cursor-pointer focus:outline-none bg-transparent disabled:opacity-40">
+                    {ASPECTS.map((a,i)=><option key={i} value={i}>{a}</option>)}
+                  </select>
+                  <div className="w-px h-3.5" style={{background:"rgba(255,255,255,0.06)"}}/>
+                  <select value={niche} onChange={e=>setNiche(e.target.value)} disabled={isGenerating}
+                    className="text-[10px] text-zinc-500 pr-4 py-0.5 appearance-none cursor-pointer focus:outline-none bg-transparent disabled:opacity-40">
+                    {NICHES.map(g=>(<optgroup key={g.group} label={`── ${g.group}`}>{g.options.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</optgroup>))}
+                  </select>
+                  {videoFile && (
+                    <>
+                      <div className="w-px h-3.5" style={{background:"rgba(255,255,255,0.06)"}}/>
+                      <select value={videoLang} onChange={e=>setVideoLang(e.target.value as "auto"|"pt"|"en"|"es")}
+                        className="text-[10px] text-zinc-500 pr-4 py-0.5 appearance-none cursor-pointer focus:outline-none bg-transparent">
+                        <option value="auto">🤖 Auto</option>
+                        <option value="pt">🇧🇷 PT</option>
+                        <option value="en">🇺🇸 EN</option>
+                        <option value="es">🇪🇸 ES</option>
+                      </select>
+                    </>
+                  )}
+                </div>
 
-          {error && (
-            <div className="mt-3 flex items-center gap-2 text-xs text-red-400 rounded-xl px-3 py-2.5" style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.2)"}}>
-              <X className="w-3 h-3 shrink-0"/>{error}
-            </div>
-          )}
-        </div>
-      </div>
+                {/* ── GLOW BUTTON ── */}
+                <button
+                  onClick={videoFile ? handleEnrich : handleGenerate}
+                  disabled={videoFile ? isEnriching : (!copy.trim() || isGenerating)}
+                  className="px-10 py-3.5 rounded-xl text-[15px] font-black text-white transition-all hover:scale-[1.03] active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
+                  style={{
+                    background: hasContent ? "#F0563A" : "rgba(255,255,255,0.06)",
+                    color: hasContent ? "#fff" : "rgba(255,255,255,0.2)",
+                    animation: hasContent ? "glowPulse 3s ease-in-out infinite" : "none",
+                    letterSpacing: "-0.01em",
+                  }}>
+                  {videoFile
+                    ? (isEnriching
+                        ? <span className="flex items-center gap-2"><div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"/>Processando…</span>
+                        : <span className="flex items-center gap-2"><Zap className="w-4 h-4"/>Enriquecer com IA</span>
+                      )
+                    : (isGenerating
+                        ? <span className="flex items-center gap-2"><div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"/>Gerando…</span>
+                        : <span className="flex items-center gap-2"><Sparkles className="w-4 h-4"/>Gerar Mapa de Edição</span>
+                      )
+                  }
+                </button>
+              </div>
+            )}
 
-      {/* ── AREA 3 ───────────────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {area3==="gallery"    && <GalleryView activeTag={activeTag} setActiveTag={setActiveTag}/>}
-        {area3==="generating" && <GeneratingView/>}
-      </div>
+            {error && (
+              <div className="mt-6 flex items-center gap-2 text-[13px] text-red-400 rounded-xl px-4 py-3 max-w-2xl mx-auto" style={{background:"rgba(239,68,68,0.06)",border:"1px solid rgba(239,68,68,0.15)"}}>
+                <X className="w-4 h-4 shrink-0"/>{error}
+              </div>
+            )}
+          </main>
+
+          {/* ═══ DIVIDER ═══ */}
+          <div className="max-w-5xl mx-auto" style={{borderTop:"1px solid rgba(63,63,70,0.25)"}}/>
+
+          {/* ═══ HOOKS VIRAIS — "ATALHOS" ═══ */}
+          <section className="max-w-6xl mx-auto px-6 pt-10 pb-16">
+            <p className="text-[14px] text-zinc-600 text-center mb-8 font-medium">
+              Ou comece com um Hook validado
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              {GALLERY_CARDS.map(card=>(
+                <div key={card.id}
+                  className="hook-card group relative rounded-2xl overflow-hidden cursor-pointer"
+                  style={{border:"1px solid rgba(255,255,255,0.05)",background:"#111"}}>
+                  <video
+                    src={card.videoUrl}
+                    autoPlay loop muted playsInline
+                    className="w-full object-cover"
+                    style={{aspectRatio:card.tall?"9/14":"9/11",display:"block",filter:"brightness(0.78) saturate(1.1)"}}
+                    onError={e=>{
+                      const v=e.currentTarget;
+                      const img=document.createElement("img");
+                      img.src=card.src; img.className=v.className; img.style.cssText=v.style.cssText;
+                      v.parentNode?.replaceChild(img,v);
+                    }}
+                  />
+                  {/* Gradient overlay */}
+                  <div className="absolute inset-0 rounded-2xl pointer-events-none"
+                    style={{background:"linear-gradient(to bottom,transparent 30%,rgba(0,0,0,0.85) 100%)"}}/>
+                  {/* Tag */}
+                  <div className="absolute top-2 left-2">
+                    <span className="text-[7px] font-black uppercase px-2 py-0.5 rounded-full"
+                      style={{background:"rgba(240,86,58,0.2)",color:"#FF7A5C",border:"1px solid rgba(240,86,58,0.35)",backdropFilter:"blur(6px)"}}>
+                      {card.tag}
+                    </span>
+                  </div>
+                  {/* Title */}
+                  <div className="absolute bottom-0 left-0 right-0 px-3 pb-3 pt-6">
+                    <p className="text-[10px] font-bold text-white/80 leading-snug"
+                      style={{textShadow:"0 1px 4px rgba(0,0,0,0.8)"}}>
+                      {card.title}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        </>
+      )}
     </div>
 
     {isUploadModalOpen && <UploadModal onClose={()=>setUploadOpen(false)}/>}
