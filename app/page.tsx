@@ -3279,6 +3279,7 @@ export default function SuarikHome() {
       @keyframes grainShift{0%{transform:translate(0,0)}10%{transform:translate(-2%,-2%)}20%{transform:translate(1%,1%)}30%{transform:translate(-1%,2%)}40%{transform:translate(2%,-1%)}50%{transform:translate(-2%,1%)}60%{transform:translate(1%,-2%)}70%{transform:translate(-1%,-1%)}80%{transform:translate(2%,2%)}90%{transform:translate(-2%,0%)}100%{transform:translate(0,0)}}
       @keyframes glowPulse{0%,100%{box-shadow:0 0 20px rgba(240,86,58,0.25),0 4px 15px rgba(240,86,58,0.3)}50%{box-shadow:0 0 35px rgba(240,86,58,0.45),0 4px 25px rgba(240,86,58,0.4),0 0 80px rgba(240,86,58,0.12)}}
       @keyframes heroIn{from{opacity:0;transform:translateY(20px) scale(0.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+      @keyframes videoScroll{0%{transform:translateY(0)}100%{transform:translateY(-33.333%)}}
       .hook-card{transition:all 0.25s cubic-bezier(0.4,0,0.2,1)}
       .hook-card:hover{border-color:rgba(240,86,58,0.4)!important;transform:translateY(-2px)}
     `}</style>
@@ -3399,17 +3400,64 @@ export default function SuarikHome() {
       ) : isGenerating ? (
         <div className="min-h-[80vh] flex items-center justify-center"><GeneratingView/></div>
       ) : (
-        <>
-          {/* ═══ HERO SECTION ═══ */}
-          <main className="max-w-3xl mx-auto text-center px-6 pt-20 pb-14" style={{animation:"heroIn 0.6s ease both"}}>
+        /* ═══ VIDEO WALL + HERO OVERLAY ═══ */
+        <div className="relative min-h-screen overflow-hidden">
+
+          {/* ── VIDEO WALL BACKGROUND (4 scrolling columns) ── */}
+          <div className="absolute inset-0 flex gap-2 px-2 pt-2 overflow-hidden opacity-40" aria-hidden="true">
+            {[0,1,2,3].map(col => {
+              const colCards = GALLERY_CARDS.filter((_,i)=>i%4===col);
+              // Double for seamless loop
+              const doubled = [...colCards,...colCards,...colCards];
+              const speed = [38,44,36,42][col];
+              const delay = [0,-4,-8,-2][col];
+              return (
+                <div key={col} className="flex-1 flex flex-col gap-2 relative" style={{minHeight:"200%"}}>
+                  <div className="flex flex-col gap-2 animate-videoScroll" style={{
+                    animation:`videoScroll ${speed}s linear infinite`,
+                    animationDelay:`${delay}s`,
+                  }}>
+                    {doubled.map((card,i)=>(
+                      <div key={`${col}-${i}`} className="rounded-xl overflow-hidden shrink-0" style={{aspectRatio:"9/14"}}>
+                        <video
+                          src={card.videoUrl}
+                          autoPlay loop muted playsInline
+                          className="w-full h-full object-cover"
+                          style={{filter:"brightness(0.7) saturate(1.15)"}}
+                          onError={e=>{
+                            const v=e.currentTarget;
+                            const img=document.createElement("img");
+                            img.src=card.src; img.className=v.className; img.style.cssText=v.style.cssText;
+                            v.parentNode?.replaceChild(img,v);
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* ── Dark overlay + vignette over video wall ── */}
+          <div className="absolute inset-0 z-10 pointer-events-none" style={{background:"radial-gradient(ellipse at center,rgba(9,9,11,0.55) 0%,rgba(9,9,11,0.92) 70%,rgba(9,9,11,1) 100%)"}}/>
+          <div className="absolute inset-0 z-10 pointer-events-none" style={{background:"linear-gradient(to bottom,rgba(9,9,11,0.95) 0%,transparent 15%,transparent 70%,rgba(9,9,11,1) 95%)"}}/>
+
+          {/* ── HERO CONTENT (floating above video wall) ── */}
+          <main className="relative z-20 max-w-3xl mx-auto text-center px-6 pt-24 pb-14" style={{animation:"heroIn 0.6s ease both"}}>
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-7" style={{background:"rgba(240,86,58,0.08)",border:"1px solid rgba(240,86,58,0.2)"}}>
+              <Flame className="w-3.5 h-3.5" style={{color:"#F0563A"}}/>
+              <span className="text-[11px] font-semibold" style={{color:"#FF7A5C"}}>Hooks que convertem. Edição que escala.</span>
+            </div>
+
             <h1 className="text-white leading-[0.95] tracking-tight" style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"clamp(3rem,6.5vw,4.5rem)",letterSpacing:"1px"}}>
               O CÉREBRO VISUAL<br/>DO SEU EDITOR.
             </h1>
-            <p className="text-[17px] text-zinc-500 mt-5 max-w-lg mx-auto leading-relaxed">
+            <p className="text-[17px] text-zinc-400 mt-5 max-w-lg mx-auto leading-relaxed">
               Tudo que um editor DR precisa. Zero marcação manual — cole e clique.
             </p>
 
-            {/* ── HERO DROPZONE ── */}
+            {/* ── HERO DROPZONE (glassmorphism) ── */}
             <div
               onDragOver={e=>{e.preventDefault();setIsDragOver(true);}}
               onDragLeave={()=>setIsDragOver(false)}
@@ -3418,9 +3466,10 @@ export default function SuarikHome() {
               className="mt-10 relative flex flex-col items-center justify-center gap-4 rounded-2xl cursor-pointer transition-all mx-auto max-w-2xl"
               style={{
                 padding: videoFile ? "2rem 2rem" : "3.5rem 2rem",
-                border:`2px dashed ${isDragOver?"#F0563A":videoFile?"rgba(52,211,153,0.5)":"rgba(63,63,70,0.4)"}`,
-                background:isDragOver?"rgba(240,86,58,0.04)":videoFile?"rgba(52,211,153,0.03)":"rgba(255,255,255,0.015)",
-                boxShadow:isDragOver?"0 0 60px rgba(240,86,58,0.12),inset 0 0 60px rgba(240,86,58,0.03)":"0 0 0 transparent",
+                border:`2px dashed ${isDragOver?"#F0563A":videoFile?"rgba(52,211,153,0.5)":"rgba(255,255,255,0.12)"}`,
+                background:isDragOver?"rgba(240,86,58,0.08)":videoFile?"rgba(52,211,153,0.05)":"rgba(9,9,11,0.6)",
+                backdropFilter:"blur(20px) saturate(1.2)",
+                boxShadow:isDragOver?"0 0 80px rgba(240,86,58,0.15),inset 0 0 60px rgba(240,86,58,0.04)":"0 8px 32px rgba(0,0,0,0.3)",
                 transition:"all 0.3s ease",
               }}>
               {videoFile ? (
@@ -3430,19 +3479,19 @@ export default function SuarikHome() {
                   </div>
                   <div className="text-center">
                     <p className="text-base font-black text-emerald-400 truncate max-w-[300px]">{videoFile.name}</p>
-                    <p className="text-[11px] text-zinc-500 mt-1">{(videoFile.size/1024/1024).toFixed(1)} MB · pronto para enriquecer</p>
+                    <p className="text-[11px] text-zinc-400 mt-1">{(videoFile.size/1024/1024).toFixed(1)} MB · pronto para enriquecer</p>
                   </div>
-                  <button onClick={e=>{e.stopPropagation();setVideoFile(null);}} className="text-[11px] text-zinc-600 hover:text-red-400 transition-colors flex items-center gap-1 mt-1">
+                  <button onClick={e=>{e.stopPropagation();setVideoFile(null);}} className="text-[11px] text-zinc-500 hover:text-red-400 transition-colors flex items-center gap-1 mt-1">
                     <X className="w-3.5 h-3.5"/>Remover arquivo
                   </button>
                 </>
               ) : (
                 <>
-                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center transition-all" style={{background:isDragOver?"rgba(240,86,58,0.15)":"rgba(255,255,255,0.03)",border:isDragOver?"1px solid rgba(240,86,58,0.4)":"1px solid rgba(255,255,255,0.06)"}}>
-                    <CloudUpload className={`w-8 h-8 transition-colors ${isDragOver?"text-orange-400":"text-zinc-600"}`}/>
+                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center transition-all" style={{background:isDragOver?"rgba(240,86,58,0.15)":"rgba(255,255,255,0.04)",border:isDragOver?"1px solid rgba(240,86,58,0.4)":"1px solid rgba(255,255,255,0.08)"}}>
+                    <CloudUpload className={`w-8 h-8 transition-colors ${isDragOver?"text-orange-400":"text-zinc-500"}`}/>
                   </div>
                   <div className="text-center">
-                    <p className="text-base font-bold text-zinc-300">Sobe um MP4 do seu A-roll</p>
+                    <p className="text-base font-bold text-zinc-200">Sobe um MP4 do seu A-roll</p>
                     <p className="text-[12px] text-zinc-600 mt-1.5">.mp4 · .mov · até 500MB</p>
                   </div>
                 </>
@@ -3452,8 +3501,8 @@ export default function SuarikHome() {
             {/* ── "ou cole um roteiro" toggle ── */}
             <div className="mt-7">
               <button onClick={()=>setCopyOpen(v=>!v)}
-                className="text-[13px] text-zinc-600 hover:text-zinc-400 transition-colors flex items-center gap-1.5 mx-auto group">
-                <FileText className="w-4 h-4 group-hover:text-zinc-400"/>
+                className="text-[13px] text-zinc-500 hover:text-zinc-300 transition-colors flex items-center gap-1.5 mx-auto group">
+                <FileText className="w-4 h-4 group-hover:text-zinc-300"/>
                 {isCopyOpen ? "Fechar roteiro" : "ou cole um roteiro de texto"}
                 <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isCopyOpen?"rotate-180":""}`}/>
               </button>
@@ -3463,19 +3512,19 @@ export default function SuarikHome() {
                     value={copy} onChange={e=>setCopy(e.target.value)} disabled={isGenerating} rows={6}
                     placeholder="Cole sua VSL, roteiro ou copy aqui…"
                     className="w-full rounded-xl text-sm text-zinc-300 placeholder-zinc-700 px-4 py-3.5 resize-none focus:outline-none focus:ring-1 transition-all disabled:opacity-40"
-                    style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",fontFamily:"inherit"}}/>
+                    style={{background:"rgba(9,9,11,0.7)",border:"1px solid rgba(255,255,255,0.1)",backdropFilter:"blur(12px)",fontFamily:"inherit"}}/>
                   <div className="flex items-center justify-between mt-2.5">
                     <div className="flex flex-wrap gap-1.5">
                       {TEMPLATES.map(t=>(
                         <button key={t.label} onClick={()=>setCopy(t.copy)}
-                          className="flex items-center gap-1 text-[10px] font-semibold px-2.5 py-1 rounded-full border transition-all hover:bg-white/5 hover:border-zinc-700"
-                          style={{borderColor:"rgba(255,255,255,0.07)",color:"#71717a"}}>
+                          className="flex items-center gap-1 text-[10px] font-semibold px-2.5 py-1 rounded-full border transition-all hover:bg-white/5 hover:border-zinc-600"
+                          style={{borderColor:"rgba(255,255,255,0.1)",color:"#71717a"}}>
                           {t.icon} {t.label}
                         </button>
                       ))}
                     </div>
                     {copy.length>0 && (
-                      <span className="text-[10px] font-medium text-zinc-600 shrink-0 ml-2">
+                      <span className="text-[10px] font-medium text-zinc-500 shrink-0 ml-2">
                         {copy.length} chars · ~{Math.max(1,Math.round(copy.length/900))} min
                       </span>
                     )}
@@ -3487,26 +3536,25 @@ export default function SuarikHome() {
             {/* ── Progressive Disclosure: Options + Glow Button ── */}
             {hasContent && (
               <div className="mt-8 flex flex-col items-center gap-5" style={{animation:"fadeIn 0.4s ease both"}}>
-                {/* Options row — only appears after content */}
-                <div className="flex items-center gap-3 flex-wrap justify-center px-4 py-2.5 rounded-xl" style={{background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.05)"}}>
-                  <div className="flex items-center gap-1 text-[10px] text-zinc-600 font-semibold shrink-0">
+                <div className="flex items-center gap-3 flex-wrap justify-center px-4 py-2.5 rounded-xl" style={{background:"rgba(9,9,11,0.6)",backdropFilter:"blur(12px)",border:"1px solid rgba(255,255,255,0.08)"}}>
+                  <div className="flex items-center gap-1 text-[10px] text-zinc-500 font-semibold shrink-0">
                     <Brain className="w-3 h-3"/>Neural
                   </div>
-                  <div className="w-px h-3.5" style={{background:"rgba(255,255,255,0.06)"}}/>
+                  <div className="w-px h-3.5" style={{background:"rgba(255,255,255,0.08)"}}/>
                   <select value={aspect} onChange={e=>setAspect(+e.target.value)} disabled={isGenerating}
-                    className="text-[10px] text-zinc-500 pr-4 py-0.5 appearance-none cursor-pointer focus:outline-none bg-transparent disabled:opacity-40">
+                    className="text-[10px] text-zinc-400 pr-4 py-0.5 appearance-none cursor-pointer focus:outline-none bg-transparent disabled:opacity-40">
                     {ASPECTS.map((a,i)=><option key={i} value={i}>{a}</option>)}
                   </select>
-                  <div className="w-px h-3.5" style={{background:"rgba(255,255,255,0.06)"}}/>
+                  <div className="w-px h-3.5" style={{background:"rgba(255,255,255,0.08)"}}/>
                   <select value={niche} onChange={e=>setNiche(e.target.value)} disabled={isGenerating}
-                    className="text-[10px] text-zinc-500 pr-4 py-0.5 appearance-none cursor-pointer focus:outline-none bg-transparent disabled:opacity-40">
+                    className="text-[10px] text-zinc-400 pr-4 py-0.5 appearance-none cursor-pointer focus:outline-none bg-transparent disabled:opacity-40">
                     {NICHES.map(g=>(<optgroup key={g.group} label={`── ${g.group}`}>{g.options.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</optgroup>))}
                   </select>
                   {videoFile && (
                     <>
-                      <div className="w-px h-3.5" style={{background:"rgba(255,255,255,0.06)"}}/>
+                      <div className="w-px h-3.5" style={{background:"rgba(255,255,255,0.08)"}}/>
                       <select value={videoLang} onChange={e=>setVideoLang(e.target.value as "auto"|"pt"|"en"|"es")}
-                        className="text-[10px] text-zinc-500 pr-4 py-0.5 appearance-none cursor-pointer focus:outline-none bg-transparent">
+                        className="text-[10px] text-zinc-400 pr-4 py-0.5 appearance-none cursor-pointer focus:outline-none bg-transparent">
                         <option value="auto">🤖 Auto</option>
                         <option value="pt">🇧🇷 PT</option>
                         <option value="en">🇺🇸 EN</option>
@@ -3542,59 +3590,12 @@ export default function SuarikHome() {
             )}
 
             {error && (
-              <div className="mt-6 flex items-center gap-2 text-[13px] text-red-400 rounded-xl px-4 py-3 max-w-2xl mx-auto" style={{background:"rgba(239,68,68,0.06)",border:"1px solid rgba(239,68,68,0.15)"}}>
+              <div className="mt-6 flex items-center gap-2 text-[13px] text-red-400 rounded-xl px-4 py-3 max-w-2xl mx-auto" style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.2)",backdropFilter:"blur(8px)"}}>
                 <X className="w-4 h-4 shrink-0"/>{error}
               </div>
             )}
           </main>
-
-          {/* ═══ DIVIDER ═══ */}
-          <div className="max-w-5xl mx-auto" style={{borderTop:"1px solid rgba(63,63,70,0.25)"}}/>
-
-          {/* ═══ HOOKS VIRAIS — "ATALHOS" ═══ */}
-          <section className="max-w-6xl mx-auto px-6 pt-10 pb-16">
-            <p className="text-[14px] text-zinc-600 text-center mb-8 font-medium">
-              Ou comece com um Hook validado
-            </p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-              {GALLERY_CARDS.map(card=>(
-                <div key={card.id}
-                  className="hook-card group relative rounded-2xl overflow-hidden cursor-pointer"
-                  style={{border:"1px solid rgba(255,255,255,0.05)",background:"#111"}}>
-                  <video
-                    src={card.videoUrl}
-                    autoPlay loop muted playsInline
-                    className="w-full object-cover"
-                    style={{aspectRatio:card.tall?"9/14":"9/11",display:"block",filter:"brightness(0.78) saturate(1.1)"}}
-                    onError={e=>{
-                      const v=e.currentTarget;
-                      const img=document.createElement("img");
-                      img.src=card.src; img.className=v.className; img.style.cssText=v.style.cssText;
-                      v.parentNode?.replaceChild(img,v);
-                    }}
-                  />
-                  {/* Gradient overlay */}
-                  <div className="absolute inset-0 rounded-2xl pointer-events-none"
-                    style={{background:"linear-gradient(to bottom,transparent 30%,rgba(0,0,0,0.85) 100%)"}}/>
-                  {/* Tag */}
-                  <div className="absolute top-2 left-2">
-                    <span className="text-[7px] font-black uppercase px-2 py-0.5 rounded-full"
-                      style={{background:"rgba(240,86,58,0.2)",color:"#FF7A5C",border:"1px solid rgba(240,86,58,0.35)",backdropFilter:"blur(6px)"}}>
-                      {card.tag}
-                    </span>
-                  </div>
-                  {/* Title */}
-                  <div className="absolute bottom-0 left-0 right-0 px-3 pb-3 pt-6">
-                    <p className="text-[10px] font-bold text-white/80 leading-snug"
-                      style={{textShadow:"0 1px 4px rgba(0,0,0,0.8)"}}>
-                      {card.title}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        </>
+        </div>
       )}
     </div>
 
