@@ -10,7 +10,7 @@ import {
   Home, BookOpen, Wand2, CloudUpload, Upload,
   SkipBack, SkipForward, Volume2, VolumeX, RefreshCw,
   ArrowLeft, ChevronUp, GripVertical, Flame,
-  Eye, EyeOff, TrendingUp,
+  Eye, EyeOff, TrendingUp, Settings,
 } from "lucide-react";
 import { saveAs } from "file-saver";
 
@@ -3283,27 +3283,68 @@ export default function SuarikHome() {
       .hook-card:hover{border-color:rgba(240,86,58,0.4)!important;transform:translateY(-2px)}
     `}</style>
 
-    <div className="min-h-screen relative overflow-y-auto" style={{background:"#09090b",color:"#F5F3F0",fontFamily:"'DM Sans',sans-serif"}}>
+    {/* ═══ SIDEBAR FIXA ═══ */}
+    <aside className="fixed top-0 left-0 h-screen w-64 flex flex-col z-50" style={{background:"#09090b",borderRight:"1px solid rgba(255,255,255,0.06)"}}>
+      {/* ── Logo ── */}
+      <div className="flex items-center gap-2.5 px-5 pt-6 pb-4">
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-white text-sm" style={{background:"#F0563A",boxShadow:"0 0 20px rgba(240,86,58,0.35)"}}>S</div>
+        <span className="text-xl text-white" style={{fontFamily:"'Bebas Neue',sans-serif",letterSpacing:"2.5px"}}>SUARIK</span>
+      </div>
+
+      {/* ── Workspace Selector ── */}
+      <button className="mx-4 mb-5 flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl text-left transition-all hover:bg-white/[0.04]"
+        style={{background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.06)"}}>
+        <div className="min-w-0">
+          <p className="text-[10px] uppercase tracking-wider text-zinc-600 font-semibold">Workstation</p>
+          <p className="text-[13px] text-zinc-300 font-medium truncate">Meu Estúdio</p>
+        </div>
+        <ChevronDown className="w-3.5 h-3.5 text-zinc-600 shrink-0"/>
+      </button>
+
+      {/* ── Navigation ── */}
+      <nav className="flex flex-col gap-1 px-3">
+        <button className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-all"
+          style={{background:"rgba(240,86,58,0.1)",border:"1px solid rgba(240,86,58,0.15)"}}>
+          <Plus className="w-4 h-4" style={{color:"#F0563A"}}/>
+          Novo Criativo
+        </button>
+        <button onClick={()=>router.push("/editor")}
+          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.03] transition-all">
+          <BookOpen className="w-4 h-4"/>
+          Biblioteca de Hooks
+        </button>
+        <button onClick={()=>router.push("/settings")}
+          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.03] transition-all">
+          <Settings className="w-4 h-4"/>
+          Configurações
+        </button>
+      </nav>
+
+      {/* ── Spacer ── */}
+      <div className="flex-1"/>
+
+      {/* ── User & Credits Footer ── */}
+      <div className="mx-3 mb-4 px-3 py-3 rounded-xl" style={{background:"rgba(255,255,255,0.025)",border:"1px solid rgba(255,255,255,0.05)"}}>
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0" style={{background:"linear-gradient(135deg,#F0563A,#FF7A5C)"}}>
+            G
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[12px] font-semibold text-zinc-300 truncate">Gabriel</p>
+            <p className="text-[10px] text-zinc-600 font-medium">Plano Pro</p>
+          </div>
+        </div>
+        <div className="mt-2.5 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg" style={{background:"rgba(255,255,255,0.03)"}}>
+          <span className="text-[10px]">🟢</span>
+          <span className="text-[11px] font-semibold text-zinc-400">500 Créditos</span>
+        </div>
+      </div>
+    </aside>
+
+    {/* ═══ MAIN CANVAS (offset by sidebar) ═══ */}
+    <div className="min-h-screen relative overflow-y-auto ml-64" style={{background:"#09090b",color:"#F5F3F0",fontFamily:"'DM Sans',sans-serif"}}>
       {/* Grain overlay */}
       <div className="fixed inset-0 pointer-events-none z-[9990] opacity-30" style={{backgroundImage:`url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E")`,animation:"grainShift 0.5s steps(4) infinite"}}/>
-
-      {/* ═══ TOP NAV BAR ═══ */}
-      <header className="sticky top-0 z-50 flex items-center justify-between px-8 py-4" style={{background:"rgba(9,9,11,0.85)",backdropFilter:"blur(16px)",borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-md flex items-center justify-center font-bold text-white text-sm" style={{background:"#F0563A",boxShadow:"0 0 18px rgba(240,86,58,0.35)"}}>S</div>
-          <span className="text-xl text-white" style={{fontFamily:"'Bebas Neue',sans-serif",letterSpacing:"2px"}}>SUARIK</span>
-        </div>
-        <nav className="flex items-center gap-5">
-          <button onClick={()=>router.push("/editor")} className="text-[13px] text-zinc-500 hover:text-zinc-300 transition-colors">Biblioteca</button>
-          <button onClick={()=>router.push("/pricing")} className="text-[13px] text-zinc-500 hover:text-zinc-300 transition-colors flex items-center gap-1.5">
-            <Coins className="w-3.5 h-3.5 text-amber-500"/>
-            <span>Créditos <span className="text-amber-500 font-bold">500</span></span>
-          </button>
-          <button onClick={()=>router.push("/login")} className="text-[13px] font-semibold text-zinc-300 hover:text-white px-4 py-2 rounded-xl border transition-all hover:bg-white/5" style={{borderColor:"rgba(255,255,255,0.1)"}}>
-            <span className="flex items-center gap-1.5"><LogIn className="w-3.5 h-3.5"/>Entrar</span>
-          </button>
-        </nav>
-      </header>
 
       {/* ═══ MAIN CONTENT ═══ */}
       {isEnriching ? (
