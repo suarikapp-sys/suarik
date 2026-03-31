@@ -11,6 +11,8 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1019.0",
     "@aws-sdk/s3-request-presigner": "^3.1019.0",
+    "@supabase/ssr": "^0.10.0",
+    "@supabase/supabase-js": "^2.101.0",
     "autoprefixer": "^10.4.27",
     "file-saver": "^2.0.5",
     "framer-motion": "^12.38.0",

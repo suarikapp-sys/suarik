@@ -1,0 +1,50 @@
+// ─── /api/upload/proxy — Proxy de upload para o R2 ──────────────────────────
+// Evita problemas de CORS: o browser envia o vídeo para cá,
+// e nós repassamos para a pre-signed URL do R2 server-side.
+// Edge Runtime = streaming sem buffering, suporta arquivos grandes.
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { NextRequest, NextResponse } from "next/server";
+
+export const runtime = "edge";
+
+export async function PUT(req: NextRequest) {
+  const target = req.nextUrl.searchParams.get("target");
+
+  if (!target) {
+    return NextResponse.json(
+      { error: "Query param 'target' (pre-signed URL) é obrigatório." },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const contentType = req.headers.get("content-type") || "video/mp4";
+
+    // Repassa o body diretamente para o R2 (streaming, sem buffering)
+    const r2Res = await fetch(target, {
+      method: "PUT",
+      body: req.body,
+      headers: { "Content-Type": contentType },
+      // @ts-expect-error — duplex required for streaming body in edge
+      duplex: "half",
+    });
+
+    if (!r2Res.ok) {
+      const errText = await r2Res.text().catch(() => "");
+      console.error("[/api/upload/proxy] R2 respondeu:", r2Res.status, errText);
+      return NextResponse.json(
+        { error: `R2 rejeitou o upload (HTTP ${r2Res.status})` },
+        { status: r2Res.status },
+      );
+    }
+
+    return NextResponse.json({ ok: true, status: r2Res.status });
+  } catch (err: unknown) {
+    console.error("[/api/upload/proxy] Erro:", err);
+    return NextResponse.json(
+      { error: "Falha no proxy de upload." },
+      { status: 500 },
+    );
+  }
+}
