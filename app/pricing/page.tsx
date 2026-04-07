@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Zap, Building2, Rocket, ChevronDown, ArrowLeft, Star } from "lucide-react";
+import { Check, Zap, Building2, Rocket, ChevronDown, ArrowLeft, Star, Loader2 } from "lucide-react";
 
 // ─── Data ──────────────────────────────────────────────────────────────────────
 
@@ -109,13 +109,35 @@ const FAQ = [
 export default function PricingPage() {
   const router = useRouter();
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+
+  async function handleCheckout(planId: string) {
+    setLoadingPlan(planId);
+    try {
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: planId }),
+      });
+      const data = await res.json();
+      if (res.status === 401) {
+        router.push("/login?next=/pricing");
+        return;
+      }
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } finally {
+      setLoadingPlan(null);
+    }
+  }
 
   return (
     <div className="min-h-screen font-sans" style={{ background: "#050505", color: "#e5e5e5" }}>
 
       {/* ── NAV ─────────────────────────────────────────────────────────────── */}
       <nav className="flex items-center justify-between px-10 py-5 border-b" style={{ borderColor: "rgba(255,255,255,0.05)" }}>
-        <button onClick={() => router.push("/")}
+        <button onClick={() => router.push("/dashboard")}
           className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-200 transition-colors">
           <ArrowLeft className="w-4 h-4" />
           Voltar
@@ -206,13 +228,16 @@ export default function PricingPage() {
                 </ul>
 
                 {/* CTA */}
-                <button className="w-full py-3 rounded-xl text-sm font-black transition-all"
+                <button className="w-full py-3 rounded-xl text-sm font-black transition-all flex items-center justify-center gap-2 disabled:opacity-60"
                   style={plan.ctaStyle}
                   onMouseEnter={e => { if (isPro) e.currentTarget.style.boxShadow = "0 12px 40px rgba(79,70,229,0.6)"; }}
                   onMouseLeave={e => { if (isPro) e.currentTarget.style.boxShadow = "0 8px 32px rgba(79,70,229,0.4)"; }}
-                  onClick={() => router.push("/login")}
+                  disabled={loadingPlan !== null}
+                  onClick={() => handleCheckout(plan.id)}
                 >
-                  {plan.ctaLabel}
+                  {loadingPlan === plan.id
+                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Aguarde...</>
+                    : plan.ctaLabel}
                 </button>
               </div>
             );

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { AUDIO_VAULT } from "@/app/lib/audioVault";
 import { VIDEO_VAULT } from "@/app/lib/videoVault";
+import { createClient } from "@/lib/supabase/server";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -178,6 +179,10 @@ REGRAS GERAIS:
 
 // ─── POST Handler ─────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+
   try {
     const {
       copy,
@@ -224,9 +229,12 @@ export async function POST(req: NextRequest) {
 
     // ── Cofre Privado → Pixabay ───────────────────────────────────────────────
     const vaultKey    = String(parsed.music_style ?? "").trim().toLowerCase();
-    const vaultTracks = AUDIO_VAULT[vaultKey];
+    // Filter out placeholder/local paths — only use real hosted URLs
+    const vaultTracks = (AUDIO_VAULT[vaultKey] ?? []).filter(
+      t => t.url.startsWith("http") && !t.url.includes("placeholder")
+    );
 
-    if (vaultTracks?.length) {
+    if (vaultTracks.length) {
       const pick = vaultTracks[Math.floor(Math.random() * vaultTracks.length)];
       parsed.background_tracks  = [{ title: pick.title, url: pick.url, is_premium_vault: true }];
       parsed.pixabay_search_url = null;
@@ -239,7 +247,7 @@ export async function POST(req: NextRequest) {
       try {
         const searchPixabay = async (query: string, perPage = 2) => {
           const res = await fetch(
-            `https://pixabay.com/api/music/?key=${process.env.PIXABAY_KEY}&q=${encodeURIComponent(query)}&per_page=${perPage}`
+            `https://pixabay.com/api/music/?key=${process.env.PIXABAY_API_KEY}&q=${encodeURIComponent(query)}&per_page=${perPage}`
           );
           if (!res.ok) return [];
           const data = await res.json();
@@ -327,8 +335,11 @@ export async function POST(req: NextRequest) {
 
           // ── Acervo Premium de Vídeo: injecta ANTES dos resultados Pexels ──
           const vaultKey    = String(scene.vault_category ?? "").trim().toLowerCase();
-          const vaultVideos = VIDEO_VAULT[vaultKey];
-          if (vaultVideos?.length) {
+          // Filter out placeholder URLs — only inject real hosted videos
+          const vaultVideos = (VIDEO_VAULT[vaultKey] ?? []).filter(
+            v => v.url.startsWith("http") && !v.url.includes("placeholder")
+          );
+          if (vaultVideos.length) {
             const vaultOpts = vaultVideos.map((v) => ({ url: v.url, source: "Premium Vault" }));
             const existing  = Array.isArray(scene.video_options) ? scene.video_options : [];
             scene.video_options = [...vaultOpts, ...existing];

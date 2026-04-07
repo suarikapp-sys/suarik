@@ -8,6 +8,12 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "edge";
 
+// Allowed R2 hostnames — only requests to these go through the proxy
+const ALLOWED_R2_HOSTS = [
+  `${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  new URL(process.env.R2_PUBLIC_URL_UPLOADS ?? "https://invalid").hostname,
+];
+
 export async function PUT(req: NextRequest) {
   const target = req.nextUrl.searchParams.get("target");
 
@@ -16,6 +22,17 @@ export async function PUT(req: NextRequest) {
       { error: "Query param 'target' (pre-signed URL) é obrigatório." },
       { status: 400 },
     );
+  }
+
+  // Block SSRF — only forward to known R2 buckets
+  try {
+    const { hostname, protocol } = new URL(target);
+    const allowed = protocol === "https:" && ALLOWED_R2_HOSTS.some(h => hostname === h);
+    if (!allowed) {
+      return NextResponse.json({ error: "URL de destino não permitida." }, { status: 403 });
+    }
+  } catch {
+    return NextResponse.json({ error: "URL de destino inválida." }, { status: 400 });
   }
 
   try {

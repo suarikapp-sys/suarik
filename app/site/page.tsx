@@ -227,7 +227,7 @@ export default function SitePage() {
           <motion.button
             whileHover={{ scale: 1.04, boxShadow: "0 0 30px rgba(240,86,58,0.45)" }}
             whileTap={{ scale: 0.96 }}
-            onClick={() => router.push("/")}
+            onClick={() => router.push("/dashboard")}
             className="text-sm font-black text-white px-5 py-2.5 rounded-xl"
             style={{ background: "linear-gradient(135deg,#F0563A,#c44527)", boxShadow: "0 4px 20px rgba(240,86,58,0.3)" }}
           >
@@ -278,7 +278,7 @@ export default function SitePage() {
               <motion.button
                 whileHover={{ scale: 1.05, boxShadow: "0 0 30px rgba(240,86,58,0.4), 0 8px 30px rgba(240,86,58,0.25)" }}
                 whileTap={{ scale: 0.96 }}
-                onClick={() => router.push("/")}
+                onClick={() => router.push("/dashboard")}
                 className="text-sm font-black text-white px-8 py-3.5 rounded-xl inline-flex items-center gap-2"
                 style={{ background: "linear-gradient(135deg,#F0563A,#c44527)", boxShadow: "0 8px 32px rgba(240,86,58,0.3)" }}
               >
@@ -549,7 +549,7 @@ export default function SitePage() {
             <motion.button
               whileHover={{ scale: 1.05, boxShadow: "0 0 40px rgba(240,86,58,0.5), 0 10px 40px rgba(240,86,58,0.3)" }}
               whileTap={{ scale: 0.96 }}
-              onClick={() => router.push("/")}
+              onClick={() => router.push("/dashboard")}
               className="text-sm font-black text-white px-10 py-4 rounded-xl inline-flex items-center gap-2"
               style={{ background: "linear-gradient(135deg,#F0563A,#c44527)", boxShadow: "0 8px 32px rgba(240,86,58,0.35)" }}
             >

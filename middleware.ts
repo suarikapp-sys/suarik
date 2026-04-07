@@ -25,7 +25,10 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
 
   // Rotas protegidas: só acessa se logado
-  const protectedPaths = ["/dashboard"];
+  const protectedPaths = [
+    "/dashboard", "/storyboard", "/audio", "/dreamface", "/voiceclone",
+    "/dreamact", "/projects", "/timeline", "/enricher",
+  ];
   const isProtected = protectedPaths.some(p => request.nextUrl.pathname.startsWith(p));
 
   if (isProtected && !user) {

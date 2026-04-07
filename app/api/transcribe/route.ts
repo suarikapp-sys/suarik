@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 
 // Vercel Hobby = max 60s. Whisper processing needs time for long audio.
 export const maxDuration = 60;
@@ -15,6 +16,10 @@ const SAFE_LIMIT   = 24 * 1024 * 1024; // 24 MB — safe margin
 // Returns: { text, words: [{ word, start, end }] }
 // ─────────────────────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+
   try {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {

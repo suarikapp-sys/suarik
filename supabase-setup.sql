@@ -10,7 +10,7 @@ create table if not exists public.profiles (
   full_name     text,
   avatar_url    text,
   plan          text default 'free',        -- 'free' | 'starter' | 'pro' | 'agency'
-  credits       integer default 10,         -- créditos de geração
+  credits       integer default 100,        -- créditos de geração (100 no plano free)
   stripe_customer_id      text unique,
   stripe_subscription_id  text unique,
   subscription_status     text default 'inactive', -- 'active' | 'inactive' | 'canceled'
@@ -68,3 +68,47 @@ create policy "Usuário vê próprias gerações"
 create policy "Usuário insere próprias gerações"
   on public.generations for insert
   with check (auth.uid() = user_id);
+
+-- 5. Tabela de projetos (resultados gerados)
+create table if not exists public.projects (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references auth.users(id) on delete cascade,
+  tool        text not null,        -- 'storyboard' | 'audio' | 'lipsync' | 'voiceclone' | 'dreamact' | ...
+  title       text not null,
+  result_url  text,                 -- URL pública do arquivo gerado (R2)
+  thumb_url   text,                 -- Thumbnail (opcional)
+  meta        jsonb default '{}',   -- Metadados extras (duração, cenas, etc.)
+  created_at  timestamptz default now()
+);
+
+alter table public.projects enable row level security;
+
+create policy "users see own projects"
+  on public.projects for select
+  using (auth.uid() = user_id);
+
+create policy "users insert own projects"
+  on public.projects for insert
+  with check (auth.uid() = user_id);
+
+create policy "users delete own projects"
+  on public.projects for delete
+  using (auth.uid() = user_id);
+
+-- 6. Atualizar trigger para dar 100 créditos ao cadastrar
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer set search_path = ''
+as $$
+begin
+  insert into public.profiles (id, email, full_name, avatar_url, credits)
+  values (
+    new.id,
+    new.email,
+    new.raw_user_meta_data->>'full_name',
+    new.raw_user_meta_data->>'avatar_url',
+    100
+  )
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;

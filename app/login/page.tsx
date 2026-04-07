@@ -2,13 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 type Mode = "login" | "signup" | "reset";
 
 export default function LoginPage() {
-  const router  = useRouter();
+  const router   = useRouter();
   const supabase = createClient();
 
   const [mode, setMode]         = useState<Mode>("login");
@@ -28,9 +27,8 @@ export default function LoginPage() {
     if (mode === "login") {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) { setError(error.message); setLoading(false); return; }
-      router.push("/");
+      router.push("/dashboard");
       router.refresh();
-
     } else if (mode === "signup") {
       const { error } = await supabase.auth.signUp({
         email, password,
@@ -38,7 +36,6 @@ export default function LoginPage() {
       });
       if (error) { setError(error.message); setLoading(false); return; }
       setSuccess("Verifique seu e-mail para confirmar o cadastro.");
-
     } else {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${location.origin}/auth/callback?next=/reset-password`,
@@ -46,7 +43,6 @@ export default function LoginPage() {
       if (error) { setError(error.message); setLoading(false); return; }
       setSuccess("Link de recuperação enviado para seu e-mail.");
     }
-
     setLoading(false);
   };
 
@@ -60,165 +56,251 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex h-screen font-sans overflow-hidden">
+    <>
+      {/* ── Keyframes ────────────────────────────────────────────────────────── */}
+      <style>{`
+        @keyframes charging {
+          0% { left: -100%; }
+          20% { left: 100%; }
+          100% { left: 100%; }
+        }
+        @keyframes pulse-dot {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.5; transform: scale(0.8); }
+        }
+        @keyframes bar-flicker {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.6; }
+        }
+        .btn-charging::before {
+          content: "";
+          position: absolute;
+          top: 0;
+          left: -100%;
+          width: 100%;
+          height: 100%;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+          animation: charging 3s infinite;
+        }
+        .pulse-dot { animation: pulse-dot 2s infinite ease-in-out; }
+        .bar-flicker { animation: bar-flicker 2.4s infinite ease-in-out; }
+      `}</style>
 
-      {/* ── FORMULÁRIO ─────────────────────────────────────────────────────── */}
-      <div className="w-full lg:w-1/2 bg-[#0A0A0A] flex flex-col items-center justify-center px-8 py-12 relative">
+      <div className="min-h-screen overflow-hidden bg-black text-white font-sans select-none">
 
-        {/* Logo */}
-        <div className="absolute top-8 left-8 flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center font-bold text-white text-sm"
-            style={{ background: "#F0563A", boxShadow: "0 0 18px rgba(240,86,58,0.35)" }}>S</div>
-          <span className="text-lg font-black text-white" style={{ letterSpacing: "-0.04em" }}>Suarik</span>
+        {/* ── Atmospheric background ───────────────────────────────────────── */}
+        <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
+          <div style={{ background: "radial-gradient(circle at 50% 50%, #0d0d0d 0%, #000000 100%)", position: "absolute", inset: 0 }} />
+          <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse 60% 55% at 15% 25%, rgba(240,86,58,0.14), transparent)" }} />
+          <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse 50% 50% at 85% 75%, rgba(99,5,239,0.08), transparent)" }} />
+          <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse 30% 40% at 50% 50%, rgba(240,86,58,0.04), transparent)" }} />
+          {/* Noise grain */}
+          <div className="absolute inset-0 opacity-[0.025] mix-blend-overlay"
+            style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")", backgroundSize: "200px 200px" }} />
         </div>
 
-        <div className="w-full max-w-sm">
-          <div className="mb-8">
-            <h1 className="text-2xl font-bold text-white mb-1.5">
-              {mode === "login" ? "Bem-vindo de volta" : mode === "signup" ? "Criar sua conta" : "Recuperar senha"}
-            </h1>
-            <p className="text-sm text-gray-500">
-              {mode === "login" ? "Entre para continuar escalando." : mode === "signup" ? "Comece grátis. Sem cartão." : "Enviaremos um link para seu e-mail."}
-            </p>
+        {/* ── Terminal logs (top right, desktop) ───────────────────────────── */}
+        <div className="fixed top-8 right-8 z-20 hidden lg:block">
+          <div style={{ background: "rgba(10,10,10,0.7)", backdropFilter: "blur(25px)", border: "1px solid rgba(255,255,255,0.06)", borderLeft: "1px solid rgba(240,86,58,0.25)", boxShadow: "0 25px 50px rgba(0,0,0,0.5)" }}
+            className="p-4 rounded-xl">
+            <div className="flex items-center gap-2 mb-3 pb-2 border-b border-white/5">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#F0563A] pulse-dot" />
+              <span className="text-[9px] tracking-[0.2em] text-white/40 uppercase font-mono">System Logs</span>
+            </div>
+            <div className="space-y-1 font-mono text-[10px] text-[rgba(240,86,58,0.6)]">
+              <p>&gt; Neural Core: <span className="text-[#F0563A]">Active</span></p>
+              <p>&gt; Syncing Assets: <span className="text-[#F0563A]">100%</span></p>
+              <p>&gt; Workspace: <span className="text-[#F0563A]">Initialized</span></p>
+              <p>&gt; Kernel: <span className="text-[#F0563A]">Kinetic_4.2</span></p>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Main ─────────────────────────────────────────────────────────── */}
+        <main className="relative z-10 min-h-screen flex items-center justify-center p-6">
+
+          {/* Branding top-left */}
+          <div className="absolute top-10 left-10">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center font-black text-white text-sm"
+                style={{ background: "#F0563A", boxShadow: "0 0 20px rgba(240,86,58,0.4)" }}>S</div>
+              <h1 className="text-2xl font-black text-white" style={{ letterSpacing: "-0.04em" }}>SUARIK</h1>
+            </div>
+            <p className="text-[10px] tracking-[0.25em] text-white/25 uppercase mt-1 ml-10">AI Cinematic Engine</p>
           </div>
 
-          {/* Google */}
-          {mode !== "reset" && (
-            <>
-              <button onClick={handleGoogle} disabled={loading}
-                className="w-full flex items-center justify-center gap-3 py-2.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-gray-300 text-sm font-medium transition-all mb-6 disabled:opacity-50">
-                {loading
-                  ? <><div className="w-4 h-4 border-2 border-gray-500/30 border-t-gray-400 rounded-full animate-spin" />Conectando...</>
-                  : <><GoogleIcon />Continuar com Google</>}
-              </button>
-              <div className="flex items-center gap-3 mb-6">
-                <div className="flex-1 h-px bg-white/5" />
-                <span className="text-[10px] text-gray-600 uppercase tracking-widest">ou</span>
-                <div className="flex-1 h-px bg-white/5" />
-              </div>
-            </>
-          )}
+          {/* ── Glass card ───────────────────────────────────────────────── */}
+          <div className="w-full max-w-[440px]"
+            style={{ background: "rgba(10,10,10,0.65)", backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", border: "1px solid rgba(255,255,255,0.05)", borderLeft: "1px solid rgba(240,86,58,0.3)", borderRadius: "1rem", boxShadow: "0 25px 60px rgba(0,0,0,0.6)", padding: "2.5rem 3rem" }}>
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-[10px] text-gray-500 uppercase tracking-widest font-medium mb-1.5">E-mail</label>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)}
-                placeholder="voce@exemplo.com" required
-                className="w-full bg-[#141414] border border-white/5 text-gray-200 placeholder-gray-700 text-sm px-4 py-2.5 rounded-xl focus:outline-none focus:ring-1 focus:border-orange-500/50 transition-colors"
-                style={{ "--tw-ring-color": "rgba(240,86,58,0.4)" } as React.CSSProperties}
-              />
-            </div>
+            <div className="space-y-8">
 
-            {mode !== "reset" && (
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-[10px] text-gray-500 uppercase tracking-widest font-medium">Senha</label>
-                  {mode === "login" && (
-                    <button type="button" onClick={() => setMode("reset")}
-                      className="text-[10px] text-orange-500 hover:text-orange-400 transition-colors">
-                      Esqueci a senha
+              {/* Tabs */}
+              {mode !== "reset" && (
+                <div className="flex items-center gap-6 border-b border-white/5">
+                  {(["login", "signup"] as Mode[]).map(m => (
+                    <button key={m} onClick={() => { setMode(m); setError(""); setSuccess(""); }}
+                      className="pb-4 text-[11px] font-bold tracking-[0.2em] uppercase transition-all duration-200"
+                      style={{
+                        color: mode === m ? "#F0563A" : "rgba(255,255,255,0.2)",
+                        borderBottom: mode === m ? "2px solid #F0563A" : "2px solid transparent",
+                      }}>
+                      {m === "login" ? "Login" : "Criar Conta"}
                     </button>
-                  )}
+                  ))}
                 </div>
-                <div className="relative">
-                  <input type={showPass ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)}
-                    placeholder="••••••••" required
-                    className="w-full bg-[#141414] border border-white/5 text-gray-200 placeholder-gray-700 text-sm px-4 py-2.5 pr-10 rounded-xl focus:outline-none focus:ring-1 transition-colors"
+              )}
+
+              {/* Heading */}
+              <div>
+                {mode === "reset" ? (
+                  <>
+                    <h2 className="text-3xl font-black text-white" style={{ letterSpacing: "-0.04em" }}>Recuperar senha.</h2>
+                    <p className="text-white/35 text-sm mt-1">Enviaremos um link para seu e-mail.</p>
+                  </>
+                ) : mode === "login" ? (
+                  <>
+                    <h2 className="text-3xl font-black text-white" style={{ letterSpacing: "-0.04em" }}>Bem-vindo de volta.</h2>
+                    <p className="text-white/35 text-sm mt-1">Autorize acesso ao estúdio neural.</p>
+                  </>
+                ) : (
+                  <>
+                    <h2 className="text-3xl font-black text-white" style={{ letterSpacing: "-0.04em" }}>Criar sua conta.</h2>
+                    <p className="text-white/35 text-sm mt-1">Comece grátis. Sem cartão de crédito.</p>
+                  </>
+                )}
+              </div>
+
+              {/* Form */}
+              <form onSubmit={handleSubmit} className="space-y-5">
+
+                {/* Email */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] uppercase tracking-[0.2em] text-white/30 font-mono">
+                    {mode === "login" ? "Identity Tag" : "E-mail"}
+                  </label>
+                  <input
+                    type="email" value={email} onChange={e => setEmail(e.target.value)}
+                    placeholder={mode === "login" ? "voce@suarik.com" : "voce@exemplo.com"}
+                    required
+                    className="w-full py-3.5 px-4 rounded-xl text-sm text-white placeholder-white/15 outline-none transition-all"
+                    style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}
+                    onFocus={e => { e.currentTarget.style.border = "1px solid rgba(240,86,58,0.4)"; e.currentTarget.style.background = "rgba(255,255,255,0.07)"; }}
+                    onBlur={e => { e.currentTarget.style.border = "1px solid rgba(255,255,255,0.06)"; e.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}
                   />
-                  <button type="button" onClick={() => setShowPass(!showPass)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-400 transition-colors">
-                    {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
                 </div>
-              </div>
-            )}
 
-            {error && (
-              <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-lg">{error}</p>
-            )}
-            {success && (
-              <p className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-lg">{success}</p>
-            )}
+                {/* Password */}
+                {mode !== "reset" && (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] uppercase tracking-[0.2em] text-white/30 font-mono">Access Key</label>
+                      {mode === "login" && (
+                        <button type="button" onClick={() => { setMode("reset"); setError(""); setSuccess(""); }}
+                          className="text-[9px] uppercase tracking-[0.15em] text-[#F0563A]/60 hover:text-[#F0563A] transition-colors font-mono">
+                          Recovery
+                        </button>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <input
+                        type={showPass ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)}
+                        placeholder="••••••••" required
+                        className="w-full py-3.5 px-4 pr-10 rounded-xl text-sm text-white placeholder-white/15 outline-none transition-all"
+                        style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}
+                        onFocus={e => { e.currentTarget.style.border = "1px solid rgba(240,86,58,0.4)"; e.currentTarget.style.background = "rgba(255,255,255,0.07)"; }}
+                        onBlur={e => { e.currentTarget.style.border = "1px solid rgba(255,255,255,0.06)"; e.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}
+                      />
+                      <button type="button" onClick={() => setShowPass(p => !p)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-white/25 hover:text-white/60 transition-colors text-xs font-mono">
+                        {showPass ? "HIDE" : "SHOW"}
+                      </button>
+                    </div>
+                  </div>
+                )}
 
-            <button type="submit" disabled={loading}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all mt-2 text-white disabled:opacity-50"
-              style={{ background: "linear-gradient(135deg,#F0563A,#c44527)", boxShadow: "0 4px 20px rgba(240,86,58,0.3)" }}>
-              {loading
-                ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Aguarde…</>
-                : <>{mode === "login" ? "Entrar" : mode === "signup" ? "Criar conta" : "Enviar link"} <ArrowRight className="w-4 h-4" /></>}
-            </button>
-          </form>
+                {/* Feedback */}
+                {error && (
+                  <p className="text-xs text-red-400 bg-red-500/8 border border-red-500/20 px-3 py-2 rounded-lg font-mono">{error}</p>
+                )}
+                {success && (
+                  <p className="text-xs text-emerald-400 bg-emerald-500/8 border border-emerald-500/20 px-3 py-2 rounded-lg font-mono">{success}</p>
+                )}
 
-          <p className="text-center text-xs text-gray-600 mt-6">
-            {mode === "login" ? (
-              <>Não tem conta?{" "}
-                <button onClick={() => { setMode("signup"); setError(""); setSuccess(""); }}
-                  className="text-orange-500 hover:text-orange-400 transition-colors font-medium">Criar conta grátis</button></>
-            ) : (
-              <button onClick={() => { setMode("login"); setError(""); setSuccess(""); }}
-                className="text-orange-500 hover:text-orange-400 transition-colors font-medium">← Voltar ao login</button>
-            )}
-          </p>
-        </div>
+                {/* Submit */}
+                <button type="submit" disabled={loading}
+                  className="btn-charging relative w-full overflow-hidden py-4 rounded-xl text-sm font-black uppercase tracking-tighter text-white transition-all hover:scale-[1.01] active:scale-95 disabled:opacity-50 mt-2"
+                  style={{ background: "linear-gradient(135deg, #F0563A 0%, #c44527 100%)", boxShadow: "0 0 24px rgba(240,86,58,0.25)" }}>
+                  {loading
+                    ? <span className="flex items-center justify-center gap-2">
+                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        Aguardando...
+                      </span>
+                    : mode === "login" ? "Entrar no Estúdio"
+                    : mode === "signup" ? "Criar Conta"
+                    : "Enviar Link"}
+                </button>
+              </form>
 
-        <p className="absolute bottom-6 text-[10px] text-gray-700">© 2025 Kraft Mídia · Todos os direitos reservados</p>
-      </div>
+              {/* OAuth */}
+              {mode !== "reset" && (
+                <>
+                  <div className="relative flex items-center">
+                    <div className="flex-grow border-t border-white/5" />
+                    <span className="mx-4 text-[9px] text-white/20 tracking-[0.2em] uppercase font-mono">CONTINUE WITH</span>
+                    <div className="flex-grow border-t border-white/5" />
+                  </div>
 
-      {/* ── LADO VISUAL ────────────────────────────────────────────────────── */}
-      <div className="hidden lg:flex w-1/2 relative overflow-hidden items-center justify-center" style={{ background: "#050505" }}>
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-[-20%] left-[-10%] w-[70%] h-[70%] rounded-full opacity-20"
-            style={{ background: "radial-gradient(ellipse at center,#F0563A,transparent)", filter: "blur(120px)" }} />
-          <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] rounded-full opacity-15"
-            style={{ background: "radial-gradient(ellipse at center,#7c3aed,transparent)", filter: "blur(100px)" }} />
-        </div>
+                  <button onClick={handleGoogle} disabled={loading}
+                    className="w-full flex items-center justify-center gap-3 py-3.5 rounded-xl transition-all group"
+                    style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}
+                    onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.08)")}
+                    onMouseLeave={e => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}>
+                    <GoogleIcon />
+                    <span className="text-[11px] font-bold tracking-[0.15em] text-white/40 group-hover:text-white transition-colors uppercase font-mono">Google</span>
+                  </button>
+                </>
+              )}
 
-        <div className="relative z-10 max-w-md px-10 text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-8 border"
-            style={{ background: "rgba(240,86,58,0.08)", borderColor: "rgba(240,86,58,0.2)" }}>
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-[10px] text-orange-300 uppercase tracking-widest font-semibold">IA de Edição Ativa</span>
-          </div>
-
-          <h2 className="text-3xl font-black text-white leading-tight mb-4" style={{ letterSpacing: "-0.04em" }}>
-            A IA que transforma sua{" "}
-            <span style={{ background: "linear-gradient(90deg,#F0563A,#ff8c6b)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-              copy em retenção.
-            </span>
-          </h2>
-
-          <p className="text-gray-500 text-sm leading-relaxed mb-10">
-            Pare de caçar B-roll e comece a escalar. Cole o roteiro — a IA mapeia cada gatilho, escolhe os clips e monta a Direção de Arte em segundos.
-          </p>
-
-          <div className="flex items-center justify-center gap-8">
-            {[{ value: "10x", label: "Mais rápido" }, { value: "94%", label: "Retenção" }, { value: "∞", label: "Nichos" }].map(s => (
-              <div key={s.label} className="text-center">
-                <div className="text-2xl font-black text-white" style={{ letterSpacing: "-0.03em" }}>{s.value}</div>
-                <div className="text-[10px] text-gray-600 uppercase tracking-widest mt-0.5">{s.label}</div>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-12 p-5 text-left rounded-2xl"
-            style={{ background: "rgba(255,255,255,0.02)", backdropFilter: "blur(12px)", border: "1px solid rgba(255,255,255,0.06)" }}>
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-2 h-2 rounded-full bg-red-500" />
-              <div className="w-2 h-2 rounded-full bg-yellow-500" />
-              <div className="w-2 h-2 rounded-full bg-green-500" />
-              <span className="text-[10px] text-gray-600 ml-2 font-mono">mapa-edicao.json</span>
-            </div>
-            <div className="space-y-1.5 font-mono text-[11px]">
-              <p><span className="text-orange-400">"scene_1"</span><span className="text-gray-600">: </span><span className="text-emerald-400">"HOOK · Curiosidade"</span></p>
-              <p><span className="text-orange-400">"vault_category"</span><span className="text-gray-600">: </span><span className="text-amber-300">"hook_dr_choque"</span></p>
-              <p><span className="text-orange-400">"broll_match"</span><span className="text-gray-600">: </span><span className="text-blue-400">"98%"</span></p>
-              <p><span className="text-orange-400">"auto_sync"</span><span className="text-gray-600">: </span><span className="text-emerald-400">true</span></p>
+              {/* Back link */}
+              {mode === "reset" && (
+                <button onClick={() => { setMode("login"); setError(""); setSuccess(""); }}
+                  className="text-xs text-[#F0563A]/60 hover:text-[#F0563A] transition-colors font-mono">
+                  ← Voltar ao login
+                </button>
+              )}
             </div>
           </div>
+        </main>
+
+        {/* ── System status bar (bottom) ───────────────────────────────────── */}
+        <div className="fixed bottom-0 left-0 w-full px-8 py-3 flex flex-col md:flex-row justify-between items-center z-20 border-t border-white/5"
+          style={{ background: "rgba(10,10,10,0.8)", backdropFilter: "blur(20px)" }}>
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" style={{ boxShadow: "0 0 8px rgba(52,211,153,0.6)" }} />
+              <span className="text-[10px] tracking-[0.2em] text-white/50 font-mono uppercase">Engine: Online</span>
+            </div>
+            <div className="hidden md:block w-px h-4 bg-white/10" />
+            <span className="hidden md:block text-[10px] tracking-[0.15em] text-white/25 font-mono uppercase">v2.4.0 · KINETIC</span>
+          </div>
+          <div className="flex items-center gap-6 mt-2 md:mt-0">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] tracking-[0.2em] text-white/25 font-mono uppercase">Latency</span>
+              <div className="flex items-end gap-0.5 h-3">
+                {[40, 60, 30, 80, 55].map((h, i) => (
+                  <div key={i} className="w-1 rounded-sm bar-flicker"
+                    style={{ height: `${h}%`, background: i === 3 ? "#F0563A" : "rgba(240,86,58,0.3)", animationDelay: `${i * 0.2}s` }} />
+                ))}
+              </div>
+              <span className="text-[10px] text-[#F0563A]/80 font-mono">24MS</span>
+            </div>
+            <div className="hidden md:block w-px h-4 bg-white/10" />
+            <p className="hidden md:block text-[10px] text-white/20 font-mono uppercase tracking-widest">© 2025 Kraft Mídia</p>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 
