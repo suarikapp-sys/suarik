@@ -3,8 +3,16 @@
 // Returns: audio blob (mp3) direto
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createAdmin } from "@supabase/supabase-js";
+import { computeCost } from "@/app/lib/creditCost";
+import { rateLimit } from "@/app/lib/rateLimit";
 
 export const maxDuration = 120;
+
+const supabaseAdmin = createAdmin(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 const MINIMAX_API_KEY = process.env.MINIMAX_API_KEY!;
 const MINIMAX_MUSIC_ENDPOINT = "https://api.minimax.io/v1/music_generation";
@@ -13,6 +21,11 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+
+  // ── Rate limit: 10 music/sfx calls per user per minute ───────────────────
+  if (!rateLimit(`music:${user.id}`, 10, 60_000)) {
+    return NextResponse.json({ error: "Muitas requisições. Aguarde 1 minuto." }, { status: 429 });
+  }
 
   const {
     prompt,
@@ -29,6 +42,21 @@ export async function POST(req: NextRequest) {
   if (!prompt?.trim()) {
     return NextResponse.json({ error: "prompt é obrigatório" }, { status: 400 });
   }
+
+  // ── Server-side credit check + deduction ─────────────────────────────────
+  const action = type === "sfx" ? "sfx" : "music";
+  const cost = computeCost(action, { duration });
+  const { data: profile } = await supabaseAdmin
+    .from("profiles").select("credits").eq("id", user.id).single();
+  const currentCredits = (profile as { credits: number } | null)?.credits ?? 0;
+  if (currentCredits < cost) {
+    return NextResponse.json(
+      { error: "Créditos insuficientes", code: "INSUFFICIENT_CREDITS", required: cost, credits: currentCredits },
+      { status: 402 }
+    );
+  }
+  await supabaseAdmin.from("profiles")
+    .update({ credits: currentCredits - cost }).eq("id", user.id);
 
   // Enrich prompt with mood and type
   const enrichedPrompt = [
@@ -104,6 +132,9 @@ export async function POST(req: NextRequest) {
         { status: 504 },
       );
     }
+    // Refund credits on unexpected error
+    await supabaseAdmin.from("profiles")
+      .update({ credits: currentCredits }).eq("id", user.id);
     console.error("[/api/music] Unexpected error:", err);
     throw err;
   }

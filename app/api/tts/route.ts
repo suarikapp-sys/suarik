@@ -5,11 +5,19 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createAdmin } from "@supabase/supabase-js";
+import { computeCost } from "@/app/lib/creditCost";
+import { rateLimit } from "@/app/lib/rateLimit";
 
 export const maxDuration = 60;
 
 const MINIMAX_API_KEY = process.env.MINIMAX_API_KEY!;
 const MINIMAX_ENDPOINT = "https://api.minimax.io/v1/t2a_v2";
+
+const supabaseAdmin = createAdmin(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 import { TTS_VOICES } from "../../lib/ttsVoices";
 export type { TTSVoiceId } from "../../lib/ttsVoices";
@@ -19,6 +27,11 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+
+  // ── Rate limit: 15 TTS calls per user per minute ──────────────────────────
+  if (!rateLimit(`tts:${user.id}`, 15, 60_000)) {
+    return NextResponse.json({ error: "Muitas requisições. Aguarde 1 minuto." }, { status: 429 });
+  }
 
   if (!MINIMAX_API_KEY) {
     return NextResponse.json({ error: "MINIMAX_API_KEY não configurada" }, { status: 500 });
@@ -43,6 +56,20 @@ export async function POST(req: NextRequest) {
   if (text.length > 10000) {
     return NextResponse.json({ error: "Texto muito longo (máx 10.000 caracteres)" }, { status: 400 });
   }
+
+  // ── Server-side credit check + deduction ─────────────────────────────────
+  const cost = computeCost("tts", { chars: text.length });
+  const { data: profile } = await supabaseAdmin
+    .from("profiles").select("credits").eq("id", user.id).single();
+  const currentCredits = (profile as { credits: number } | null)?.credits ?? 0;
+  if (currentCredits < cost) {
+    return NextResponse.json(
+      { error: "Créditos insuficientes", code: "INSUFFICIENT_CREDITS", required: cost, credits: currentCredits },
+      { status: 402 }
+    );
+  }
+  await supabaseAdmin.from("profiles")
+    .update({ credits: currentCredits - cost }).eq("id", user.id);
 
   try {
     // Validate voice_id exists
@@ -128,6 +155,9 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (err) {
+    // Refund credits on unexpected error
+    await supabaseAdmin.from("profiles")
+      .update({ credits: currentCredits }).eq("id", user.id);
     console.error("[/api/tts] Unexpected error:", err);
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }

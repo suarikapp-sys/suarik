@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { S3Client, PutObjectCommand }  from "@aws-sdk/client-s3";
 import { getSignedUrl }                from "@aws-sdk/s3-request-presigner";
+import { createClient }                from "@/lib/supabase/server";
 
 // ── S3-compatible client apontando para o Cloudflare R2 ─────────────────────
 const r2 = new S3Client({
@@ -38,6 +39,10 @@ function uniqueKey(filename: string): string {
 
 // ── POST handler ────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+
   try {
     const { filename, contentType } = (await req.json()) as {
       filename?: string;

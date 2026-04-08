@@ -356,7 +356,7 @@ export default function AudioPage() {
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // ── Credits ──
-  const { credits, plan, spend, cost, refresh } = useCredits();
+  const { credits, plan, cost, refresh } = useCredits();
   const { toasts, remove: removeToast, toast } = useToast();
   const [showCreditModal,  setShowCreditModal]  = useState(false);
   const [creditModalAction, setCreditModalAction] = useState<string>("tts");
@@ -473,9 +473,6 @@ export default function AudioPage() {
   const generate = useCallback(async () => {
     if (!text.trim() || generating) return;
 
-    const result = await spend("tts", { chars: text.length });
-    if (!result.ok) { setCreditModalAction("tts"); setShowCreditModal(true); return; }
-
     setGenerating(true);
     setGenError(null);
 
@@ -486,6 +483,10 @@ export default function AudioPage() {
         body: JSON.stringify({ text: text.trim(), voiceId, speed, vol, pitch, emotion }),
       });
 
+      if (res.status === 402) {
+        setCreditModalAction("tts"); setShowCreditModal(true);
+        setGenerating(false); return;
+      }
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         throw new Error((j as { error?: string }).error ?? `Erro ${res.status}`);
@@ -538,26 +539,15 @@ export default function AudioPage() {
       const msg = err instanceof Error ? err.message : "Erro ao gerar áudio";
       setGenError(msg);
       toast.error(msg);
-      // Refund the 10 credits on API failure so user isn't charged for nothing
-      try {
-        await fetch("/api/credits/refund", {
-          method:  "POST",
-          headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify({ action: "tts" }),
-        });
-        refresh();
-      } catch { /* non-fatal */ }
     } finally {
       setGenerating(false);
+      refresh();
     }
   }, [text, voiceId, emotion, speed, vol, pitch, generating, voiceObj.label, toast, refresh]);
 
   // ── Music Generate ──
   const generateMusic = useCallback(async () => {
     if (!musicPrompt.trim() || generatingMusic) return;
-
-    const result = await spend("music", { duration: musicDuration });
-    if (!result.ok) { setCreditModalAction("music"); setShowCreditModal(true); return; }
 
     setGeneratingMusic(true);
     setMusicError(null);
@@ -569,6 +559,10 @@ export default function AudioPage() {
         body: JSON.stringify({ prompt: musicPrompt.trim(), type: "music", duration: musicDuration, mood: musicMood }),
       });
 
+      if (res.status === 402) {
+        setCreditModalAction("music"); setShowCreditModal(true);
+        setGeneratingMusic(false); return;
+      }
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         throw new Error((j as { error?: string }).error ?? `Erro ${res.status}`);
@@ -624,15 +618,13 @@ export default function AudioPage() {
       toast.error(msg);
     } finally {
       setGeneratingMusic(false);
+      refresh();
     }
-  }, [musicPrompt, musicDuration, musicMood, generatingMusic, toast]);
+  }, [musicPrompt, musicDuration, musicMood, generatingMusic, toast, refresh]);
 
   // ── SFX Generate ──
   const generateSfx = useCallback(async () => {
     if (!sfxPrompt.trim() || generatingSfx) return;
-
-    const result = await spend("sfx");
-    if (!result.ok) { setCreditModalAction("sfx"); setShowCreditModal(true); return; }
 
     setGeneratingSfx(true);
     setSfxError(null);
@@ -644,6 +636,10 @@ export default function AudioPage() {
         body: JSON.stringify({ prompt: sfxPrompt.trim(), type: "sfx", duration: sfxDuration }),
       });
 
+      if (res.status === 402) {
+        setCreditModalAction("sfx"); setShowCreditModal(true);
+        setGeneratingSfx(false); return;
+      }
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         throw new Error((j as { error?: string }).error ?? `Erro ${res.status}`);
@@ -698,8 +694,9 @@ export default function AudioPage() {
       toast.error(msg);
     } finally {
       setGeneratingSfx(false);
+      refresh();
     }
-  }, [sfxPrompt, sfxDuration, generatingSfx, toast]);
+  }, [sfxPrompt, sfxDuration, generatingSfx, toast, refresh]);
 
   // ── Send to timeline ──
   function handleSendToTimeline(entry: AudioEntry) {
