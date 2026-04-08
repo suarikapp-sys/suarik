@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { useCredits } from "@/hooks/useCredits";
+import { useCredits, computeCost } from "@/hooks/useCredits";
 import { CreditsBar, InsufficientCreditsModal } from "@/components/CreditsBar";
 import { useToast, ToastContainer } from "@/components/Toast";
 import { AUDIO_VAULT } from "../lib/audioVault";
@@ -81,11 +81,11 @@ const SFX_PRESETS = [
 ];
 
 const NAV_ITEMS = [
-  { id: "tts",     icon: "🎙️", label: "TTS Studio",   cost: 10  },
-  { id: "music",   icon: "🎵", label: "Music AI",      cost: 15  },
-  { id: "sfx",     icon: "⚡", label: "SFX / Efeitos", cost: 10  },
-  { id: "library", icon: "📚", label: "Biblioteca"              },
-  { id: "history", icon: "🕘", label: "Histórico"               },
+  { id: "tts",     icon: "🎙️", label: "TTS Studio"   },
+  { id: "music",   icon: "🎵", label: "Music AI"      },
+  { id: "sfx",     icon: "⚡", label: "SFX / Efeitos" },
+  { id: "library", icon: "📚", label: "Biblioteca"    },
+  { id: "history", icon: "🕘", label: "Histórico"     },
 ] as const;
 
 type ActiveTab = "tts" | "music" | "sfx" | "library" | "history";
@@ -473,7 +473,7 @@ export default function AudioPage() {
   const generate = useCallback(async () => {
     if (!text.trim() || generating) return;
 
-    const result = await spend("tts");
+    const result = await spend("tts", { chars: text.length });
     if (!result.ok) { setCreditModalAction("tts"); setShowCreditModal(true); return; }
 
     setGenerating(true);
@@ -556,7 +556,7 @@ export default function AudioPage() {
   const generateMusic = useCallback(async () => {
     if (!musicPrompt.trim() || generatingMusic) return;
 
-    const result = await spend("music");
+    const result = await spend("music", { duration: musicDuration });
     if (!result.ok) { setCreditModalAction("music"); setShowCreditModal(true); return; }
 
     setGeneratingMusic(true);
@@ -795,7 +795,7 @@ export default function AudioPage() {
               >
                 <span style={{ fontSize: 15 }}>{item.icon}</span>
                 <span style={{ flex: 1 }}>{item.label}</span>
-                {"cost" in item && (
+                {["tts", "music", "sfx"].includes(item.id) && (
                   <span style={{
                     fontSize: 10, fontWeight: 600,
                     color: activeTab === item.id ? "#F0563A" : "#555",
@@ -803,7 +803,11 @@ export default function AudioPage() {
                     border: `1px solid ${activeTab === item.id ? "#F0563A44" : "#2a2a2a"}`,
                     borderRadius: 10, padding: "1px 6px",
                   }}>
-                    {item.cost}cr
+                    {item.id === "tts"
+                      ? `${computeCost("tts", { chars: text.length })}cr`
+                      : item.id === "music"
+                        ? `${computeCost("music", { duration: musicDuration })}cr`
+                        : `${computeCost("sfx")}cr`}
                   </span>
                 )}
               </button>
@@ -1079,7 +1083,7 @@ export default function AudioPage() {
                     Gerando áudio...
                   </>
                 ) : (
-                  <>✦ Gerar Áudio <span style={{ fontSize: 11, opacity: 0.7 }}>({cost("tts")} créditos)</span></>
+                  <>✦ Gerar Áudio <span style={{ fontSize: 11, opacity: 0.7 }}>({computeCost("tts", { chars: text.length })} créditos)</span></>
                 )}
               </button>
 
@@ -1196,7 +1200,7 @@ export default function AudioPage() {
                     Gerando música...
                   </>
                 ) : (
-                  <>🎵 Gerar Música <span style={{ fontSize: 11, opacity: 0.7 }}>(15 créditos)</span></>
+                  <>🎵 Gerar Música <span style={{ fontSize: 11, opacity: 0.7 }}>({computeCost("music", { duration: musicDuration })} créditos)</span></>
                 )}
               </button>
 
@@ -1323,7 +1327,7 @@ export default function AudioPage() {
                     Gerando SFX...
                   </>
                 ) : (
-                  <>⚡ Gerar SFX <span style={{ fontSize: 11, opacity: 0.7 }}>(10 créditos)</span></>
+                  <>⚡ Gerar SFX <span style={{ fontSize: 11, opacity: 0.7 }}>({computeCost("sfx")} créditos)</span></>
                 )}
               </button>
 

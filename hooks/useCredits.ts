@@ -2,18 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { computeCost, CostMeta } from "@/app/lib/creditCost";
 
-export const CREDIT_COST: Record<string, number> = {
-  tts:           10,
-  music:         15,
-  sfx:           10,
-  lipsync:       50,
-  talkingphoto:  40,
-  videotranslate:60,
-  voiceclone:    30,
-  dreamact:      45,
-  storyboard:    20,
-};
+export { computeCost };
 
 type CreditsState = {
   credits:  number;
@@ -42,19 +33,17 @@ export function useCredits() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  // Verifica se tem créditos suficientes SEM debitar (para mostrar custo na UI)
-  const canAfford = useCallback((action: string): boolean => {
-    const cost = CREDIT_COST[action] ?? 0;
-    return state.credits >= cost;
+  const canAfford = useCallback((action: string, meta?: CostMeta): boolean => {
+    return state.credits >= computeCost(action, meta);
   }, [state.credits]);
 
   // Debita créditos — retorna ok ou erro
-  const spend = useCallback(async (action: string): Promise<SpendResult> => {
+  const spend = useCallback(async (action: string, meta?: CostMeta): Promise<SpendResult> => {
     try {
       const res = await fetch("/api/credits", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ action }),
+        body:    JSON.stringify({ action, ...meta }),
       });
       const j = await res.json() as {
         ok?: boolean; credits?: number; spent?: number;
@@ -87,6 +76,6 @@ export function useCredits() {
     canAfford,
     spend,
     refresh,
-    cost:     (action: string) => CREDIT_COST[action] ?? 0,
+    cost: (action: string, meta?: CostMeta) => computeCost(action, meta),
   };
 }
