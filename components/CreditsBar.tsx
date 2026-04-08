@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 type Props = {
@@ -125,79 +126,107 @@ const ACTION_LABEL: Record<string, string> = {
   storyboard: "gerar storyboard",
 };
 
+const PACKAGES = [
+  { key: "small",  label: "100 cr",  price: "R$ 9",  highlight: false },
+  { key: "medium", label: "300 cr",  price: "R$ 19", highlight: true  },
+  { key: "large",  label: "1000 cr", price: "R$ 49", highlight: false },
+] as const;
+
 export function InsufficientCreditsModal({ action, cost, credits, onClose }: InsufficientProps) {
-  const router = useRouter();
+  const router  = useRouter();
+  const [loading, setLoading] = useState<string | null>(null);
+
+  const buyPack = async (pack: string) => {
+    setLoading(pack);
+    try {
+      const res = await fetch("/api/stripe/topup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pack }),
+      });
+      const { url, error } = await res.json() as { url?: string; error?: string };
+      if (url) { window.location.href = url; return; }
+      console.error("topup error:", error);
+    } finally {
+      setLoading(null);
+    }
+  };
 
   return (
     <div style={{
       position: "fixed", inset: 0, zIndex: 9999,
-      background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)",
+      background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)",
       display: "flex", alignItems: "center", justifyContent: "center",
     }} onClick={onClose}>
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          background: "#1a1a1a", borderRadius: 16, padding: 32,
-          border: "1px solid #ef444444", maxWidth: 380, width: "90%",
+          background: "#1a1a1a", borderRadius: 16, padding: 28,
+          border: "1px solid #ef444444", maxWidth: 400, width: "90%",
           textAlign: "center",
         }}
       >
-        {/* Icon */}
         <div style={{
-          width: 56, height: 56, borderRadius: "50%", margin: "0 auto 20px",
+          width: 52, height: 52, borderRadius: "50%", margin: "0 auto 16px",
           background: "#ef444418", border: "1px solid #ef444444",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 28,
+          display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26,
         }}>⚡</div>
 
-        <h2 style={{ fontSize: 20, fontWeight: 700, margin: "0 0 8px" }}>
-          Créditos insuficientes
-        </h2>
-        <p style={{ color: "#666", fontSize: 14, margin: "0 0 20px", lineHeight: 1.6 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 6px" }}>Créditos insuficientes</h2>
+        <p style={{ color: "#666", fontSize: 13, margin: "0 0 16px", lineHeight: 1.6 }}>
           Para {ACTION_LABEL[action] ?? action} você precisa de{" "}
-          <strong style={{ color: "#F0563A" }}>{cost} créditos</strong>.{" "}
-          Você tem apenas{" "}
-          <strong style={{ color: "#ef4444" }}>{credits}</strong>.
+          <strong style={{ color: "#F0563A" }}>{cost} cr</strong>.{" "}
+          Você tem <strong style={{ color: "#ef4444" }}>{credits}</strong>.
         </p>
 
-        {/* Credits visual */}
-        <div style={{
-          background: "#111", borderRadius: 10, padding: "14px 18px",
-          marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center",
-        }}>
-          <div style={{ textAlign: "left" }}>
-            <p style={{ margin: 0, fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 0.8 }}>Disponível</p>
-            <p style={{ margin: "4px 0 0", fontSize: 22, fontWeight: 700, color: "#ef4444", fontFamily: "monospace" }}>
-              {credits}
-            </p>
-          </div>
-          <div style={{ fontSize: 20, color: "#333" }}>→</div>
-          <div style={{ textAlign: "right" }}>
-            <p style={{ margin: 0, fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 0.8 }}>Necessário</p>
-            <p style={{ margin: "4px 0 0", fontSize: 22, fontWeight: 700, color: "#F0563A", fontFamily: "monospace" }}>
-              {cost}
-            </p>
-          </div>
+        {/* Quick top-up packages */}
+        <p style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>
+          Recarregar créditos
+        </p>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 16 }}>
+          {PACKAGES.map(pkg => (
+            <button
+              key={pkg.key}
+              onClick={() => buyPack(pkg.key)}
+              disabled={loading !== null}
+              style={{
+                padding: "12px 8px", borderRadius: 10, cursor: "pointer",
+                border: pkg.highlight ? "1px solid #F0563A66" : "1px solid #2a2a2a",
+                background: pkg.highlight ? "#F0563A14" : "#111",
+                opacity: loading && loading !== pkg.key ? 0.5 : 1,
+                transition: "all 0.2s",
+              }}
+            >
+              {loading === pkg.key ? (
+                <span style={{ fontSize: 18 }}>⏳</span>
+              ) : (
+                <>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: pkg.highlight ? "#F0563A" : "#ccc" }}>
+                    {pkg.label}
+                  </div>
+                  <div style={{ fontSize: 12, color: "#666", marginTop: 2 }}>{pkg.price}</div>
+                </>
+              )}
+            </button>
+          ))}
         </div>
 
-        {/* Buttons */}
         <button
           onClick={() => { router.push("/pricing"); onClose(); }}
           style={{
-            width: "100%", height: 48, borderRadius: 10, border: "none",
-            background: "linear-gradient(135deg, #F0563A, #c44527)",
-            color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer",
-            marginBottom: 10,
+            width: "100%", height: 40, borderRadius: 10, border: "1px solid #333",
+            background: "transparent", color: "#888", fontSize: 13, cursor: "pointer",
+            marginBottom: 8,
           }}
         >
-          ⚡ Ver planos e recarregar
+          Ver todos os planos →
         </button>
         <button
           onClick={onClose}
           style={{
-            width: "100%", height: 40, borderRadius: 10,
-            border: "1px solid #2a2a2a", background: "transparent",
-            color: "#666", fontSize: 13, cursor: "pointer",
+            width: "100%", height: 36, borderRadius: 10,
+            border: "1px solid #222", background: "transparent",
+            color: "#555", fontSize: 12, cursor: "pointer",
           }}
         >
           Fechar

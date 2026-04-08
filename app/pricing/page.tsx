@@ -106,10 +106,32 @@ const FAQ = [
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
+const TOPUP_PACKAGES: { key: string; label: string; price: string; perCr: string; highlight?: boolean }[] = [
+  { key: "small",  label: "100 créditos",  price: "R$ 9",  perCr: "R$ 0,09/cr" },
+  { key: "medium", label: "300 créditos",  price: "R$ 19", perCr: "R$ 0,06/cr", highlight: true },
+  { key: "large",  label: "1000 créditos", price: "R$ 49", perCr: "R$ 0,05/cr" },
+];
+
 export default function PricingPage() {
   const router = useRouter();
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+  const [loadingPack, setLoadingPack] = useState<string | null>(null);
+
+  async function handleTopup(pack: string) {
+    setLoadingPack(pack);
+    try {
+      const res = await fetch("/api/stripe/topup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pack }),
+      });
+      const data = await res.json() as { url?: string };
+      if (data.url) window.location.href = data.url;
+    } finally {
+      setLoadingPack(null);
+    }
+  }
 
   async function handleCheckout(planId: string) {
     setLoadingPlan(planId);
@@ -248,6 +270,46 @@ export default function PricingPage() {
         <p className="text-center text-xs text-gray-700 mt-8">
           ✓ Sem fidelidade &nbsp;·&nbsp; ✓ Cancele quando quiser &nbsp;·&nbsp; ✓ Pagamento seguro via Stripe
         </p>
+      </div>
+
+      {/* ── CREDIT TOP-UP ───────────────────────────────────────────────────── */}
+      <div className="border-t px-6 py-16" style={{ borderColor: "rgba(255,255,255,0.05)" }}>
+        <div className="max-w-2xl mx-auto text-center">
+          <h2 className="text-xl font-black text-white mb-2" style={{ letterSpacing: "-0.03em" }}>
+            ⚡ Recarregar créditos
+          </h2>
+          <p className="text-sm text-gray-500 mb-8">
+            Compra única, sem assinatura. Os créditos são somados ao seu saldo atual.
+          </p>
+          <div className="grid grid-cols-3 gap-4">
+            {TOPUP_PACKAGES.map(pkg => (
+              <button
+                key={pkg.key}
+                onClick={() => handleTopup(pkg.key)}
+                disabled={loadingPack !== null}
+                style={{
+                  padding: "20px 12px", borderRadius: 12, cursor: "pointer",
+                  border: pkg.highlight ? "1px solid #F0563A66" : "1px solid rgba(255,255,255,0.08)",
+                  background: pkg.highlight ? "#F0563A12" : "rgba(255,255,255,0.03)",
+                  opacity: loadingPack && loadingPack !== pkg.key ? 0.5 : 1,
+                  transition: "all 0.2s",
+                }}
+              >
+                {loadingPack === pkg.key ? (
+                  <Loader2 className="w-5 h-5 animate-spin mx-auto text-gray-400" />
+                ) : (
+                  <>
+                    <div className="text-lg font-black" style={{ color: pkg.highlight ? "#F0563A" : "#e5e7eb" }}>
+                      {pkg.label}
+                    </div>
+                    <div className="text-2xl font-black text-white mt-1">{pkg.price}</div>
+                    <div className="text-xs mt-1" style={{ color: "#555" }}>{pkg.perCr}</div>
+                  </>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* ── FAQ ─────────────────────────────────────────────────────────────── */}

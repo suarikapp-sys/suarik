@@ -21,11 +21,30 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
-  const sub = (event.data.object as Stripe.Subscription);
-
   switch (event.type) {
+    // ── One-time credit top-up ──────────────────────────────────────────────
+    case "checkout.session.completed": {
+      const session = event.data.object as Stripe.Checkout.Session;
+      if (session.metadata?.type !== "topup") break;
+
+      const userId  = session.metadata?.supabase_user_id;
+      const toAdd   = parseInt(session.metadata?.credits ?? "0", 10);
+      if (!userId || !toAdd) break;
+
+      const { data } = await supabaseAdmin
+        .from("profiles").select("credits").eq("id", userId).single();
+      const current = (data as { credits: number } | null)?.credits ?? 0;
+
+      await supabaseAdmin.from("profiles")
+        .update({ credits: current + toAdd, updated_at: new Date().toISOString() })
+        .eq("id", userId);
+      break;
+    }
+
+    // ── Subscription events ─────────────────────────────────────────────────
     case "customer.subscription.created":
     case "customer.subscription.updated": {
+      const sub = event.data.object as Stripe.Subscription;
       const userId = sub.metadata?.supabase_user_id;
       const plan   = sub.metadata?.plan as PlanKey | undefined;
       if (!userId) break;
@@ -44,7 +63,8 @@ export async function POST(request: Request) {
     }
 
     case "customer.subscription.deleted": {
-      const userId = sub.metadata?.supabase_user_id;
+      const sub2 = event.data.object as Stripe.Subscription;
+      const userId = sub2.metadata?.supabase_user_id;
       if (!userId) break;
 
       await supabaseAdmin.from("profiles").update({
