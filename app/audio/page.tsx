@@ -330,13 +330,14 @@ export default function AudioPage() {
   const [generatingSfx, setGeneratingSfx] = useState(false);
   const [sfxError,      setSfxError]      = useState<string | null>(null);
 
-  // ── Pixabay Library ──
+  // ── Free Music Library (Jamendo) ──
   const [pixabayQuery,   setPixabayQuery]   = useState("");
-  const [pixabayResults, setPixabayResults] = useState<{ id: number; title: string; audio: string; duration: number; user: string }[]>([]);
+  const [pixabayResults, setPixabayResults] = useState<{ id: string; name: string; artist_name: string; audio: string; duration: number }[]>([]);
   const [pixabayLoading, setPixabayLoading] = useState(false);
   const [pixabayPage,    setPixabayPage]    = useState(1);
   const [pixabayTotal,   setPixabayTotal]   = useState(0);
-  const [pixabayPlaying, setPixabayPlaying] = useState<number | null>(null);
+  const [pixabayPlaying, setPixabayPlaying] = useState<string | null>(null);
+  const [pixabaySearched, setPixabaySearched] = useState(false);
 
   // ── History state ──
   const [historySearch,   setHistorySearch]   = useState("");
@@ -406,18 +407,17 @@ export default function AudioPage() {
     }
   }, [toast]);
 
-  // ── Pixabay Search ──
+  // ── Free Music Search (Jamendo via proxy) ──
   const searchPixabay = useCallback(async (page = 1) => {
     const q = pixabayQuery.trim() || "ambient";
     setPixabayLoading(true);
     try {
-      const res = await fetch(
-        `https://pixabay.com/api/music/?key=${process.env.NEXT_PUBLIC_PIXABAY_API_KEY}&q=${encodeURIComponent(q)}&per_page=12&page=${page}`
-      );
+      const res = await fetch(`/api/music-library?q=${encodeURIComponent(q)}&page=${page}`);
       const data = await res.json();
-      setPixabayResults(data.hits ?? []);
-      setPixabayTotal(data.totalHits ?? 0);
+      setPixabayResults(data.results ?? []);
+      setPixabayTotal(data.total ?? 0);
       setPixabayPage(page);
+      setPixabaySearched(true);
     } catch {
       setPixabayResults([]);
     } finally {
@@ -1391,7 +1391,7 @@ export default function AudioPage() {
               {/* Pixabay Free Library */}
               <div>
                 <h2 style={{ fontSize: 14, fontWeight: 600, color: "#88cc88", textTransform: "uppercase", letterSpacing: 1, marginBottom: 16 }}>
-                  🎵 Biblioteca Gratuita — Pixabay Music
+                  🎵 Biblioteca Gratuita — Jamendo Music
                 </h2>
                 <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
                   <input
@@ -1423,10 +1423,10 @@ export default function AudioPage() {
                       {pixabayResults.map(track => (
                         <div key={track.id} style={{ background: "#1a1a1a", borderRadius: 10, padding: 14, border: "1px solid #2a2a2a" }}>
                           <div style={{ fontSize: 12, fontWeight: 600, color: "#ccc", marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {track.title}
+                            {track.name}
                           </div>
                           <div style={{ fontSize: 10, color: "#555", marginBottom: 8 }}>
-                            {track.user} · {Math.floor(track.duration / 60)}:{String(track.duration % 60).padStart(2, "0")}
+                            {track.artist_name} · {Math.floor(track.duration / 60)}:{String(track.duration % 60).padStart(2, "0")}
                           </div>
                           <audio
                             controls
@@ -1437,7 +1437,7 @@ export default function AudioPage() {
                           />
                           <a
                             href={track.audio}
-                            download={`${track.title}.mp3`}
+                            download={`${track.name}.mp3`}
                             style={{ display: "block", marginTop: 8, textAlign: "center", fontSize: 11, color: "#888", textDecoration: "none" }}
                           >
                             ⬇ Download
@@ -1469,7 +1469,9 @@ export default function AudioPage() {
 
                 {!pixabayLoading && pixabayResults.length === 0 && (
                   <div style={{ textAlign: "center", padding: "30px 0", color: "#444", fontSize: 13 }}>
-                    Digite um termo e clique em Buscar para encontrar músicas gratuitas.
+                    {pixabaySearched
+                      ? "Nenhuma música encontrada. Tente outro termo."
+                      : "Digite um termo e clique em Buscar para encontrar músicas gratuitas."}
                   </div>
                 )}
               </div>
