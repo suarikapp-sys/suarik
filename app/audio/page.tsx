@@ -113,22 +113,48 @@ function Waveform({ active, progress }: { active: boolean; progress: number }) {
   );
 }
 
+// ─── WAV encoder (for trimmer) ────────────────────────────────────────────────
+function audioBufferToWav(buf: AudioBuffer): Blob {
+  const numCh = buf.numberOfChannels, sr = buf.sampleRate, len = buf.length;
+  const data = new Float32Array(len * numCh);
+  for (let c = 0; c < numCh; c++) buf.getChannelData(c).forEach((v, i) => { data[i * numCh + c] = v; });
+  const pcm = new Int16Array(data.length);
+  data.forEach((v, i) => { pcm[i] = Math.max(-1, Math.min(1, v)) * 0x7fff; });
+  const header = new ArrayBuffer(44);
+  const view = new DataView(header);
+  const write = (off: number, val: number, b: number) => b === 4 ? view.setUint32(off, val, true) : b === 2 ? view.setUint16(off, val, true) : view.setUint8(off, val);
+  [..."RIFF"].forEach((c, i) => write(i, c.charCodeAt(0), 1));
+  write(4, 36 + pcm.byteLength, 4);
+  [..."WAVE"].forEach((c, i) => write(8 + i, c.charCodeAt(0), 1));
+  [..."fmt "].forEach((c, i) => write(12 + i, c.charCodeAt(0), 1));
+  write(16, 16, 4); write(20, 1, 2); write(22, numCh, 2);
+  write(24, sr, 4); write(28, sr * numCh * 2, 4); write(32, numCh * 2, 2); write(34, 16, 2);
+  [..."data"].forEach((c, i) => write(36 + i, c.charCodeAt(0), 1));
+  write(40, pcm.byteLength, 4);
+  return new Blob([header, pcm.buffer], { type: "audio/wav" });
+}
+
 // ─── Audio Player ─────────────────────────────────────────────────────────────
 function AudioPlayer({ entry, onSendToTimeline }: { entry: AudioEntry; onSendToTimeline: (e: AudioEntry) => void }) {
-  const audioRef  = useRef<HTMLAudioElement>(null);
-  const [playing,  setPlaying]  = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [current,  setCurrent]  = useState(0);
+  const audioRef    = useRef<HTMLAudioElement>(null);
+  const [playing,   setPlaying]   = useState(false);
+  const [progress,  setProgress]  = useState(0);
+  const [current,   setCurrent]   = useState(0);
+  const [rate,      setRate]      = useState(1);
+  const [showTrim,  setShowTrim]  = useState(false);
+  const [trimStart, setTrimStart] = useState(0);
+  const [trimEnd,   setTrimEnd]   = useState(0);
+  const [trimming,  setTrimming]  = useState(false);
 
   useEffect(() => {
-    setPlaying(false);
-    setProgress(0);
-    setCurrent(0);
-    if (audioRef.current) {
-      audioRef.current.src = entry.url;
-      audioRef.current.load();
-    }
-  }, [entry.url]);
+    setPlaying(false); setProgress(0); setCurrent(0);
+    setTrimStart(0); setTrimEnd(entry.duration || 0); setShowTrim(false);
+    if (audioRef.current) { audioRef.current.src = entry.url; audioRef.current.load(); }
+  }, [entry.url, entry.duration]);
+
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.playbackRate = rate;
+  }, [rate]);
 
   const toggle = () => {
     const a = audioRef.current;
@@ -143,9 +169,33 @@ function AudioPlayer({ entry, onSendToTimeline }: { entry: AudioEntry; onSendToT
     const a = audioRef.current;
     if (!a || !a.duration) return;
     const rect = e.currentTarget.getBoundingClientRect();
-    const ratio = (e.clientX - rect.left) / rect.width;
-    a.currentTime = ratio * a.duration;
+    a.currentTime = ((e.clientX - rect.left) / rect.width) * a.duration;
   }
+
+  const applyTrim = async () => {
+    if (trimStart >= trimEnd) return;
+    setTrimming(true);
+    try {
+      const arrayBuf = await entry.blob.arrayBuffer();
+      const ctx = new AudioContext();
+      const decoded = await ctx.decodeAudioData(arrayBuf);
+      const sr = decoded.sampleRate;
+      const startSample = Math.floor(trimStart * sr);
+      const endSample   = Math.min(Math.floor(trimEnd * sr), decoded.length);
+      const length      = endSample - startSample;
+      const trimmed = ctx.createBuffer(decoded.numberOfChannels, length, sr);
+      for (let c = 0; c < decoded.numberOfChannels; c++) {
+        trimmed.copyToChannel(decoded.getChannelData(c).slice(startSample, endSample), c);
+      }
+      // Encode to WAV blob
+      const wavBlob = audioBufferToWav(trimmed);
+      const url = URL.createObjectURL(wavBlob);
+      if (audioRef.current) { audioRef.current.src = url; audioRef.current.load(); }
+      entry.url = url; entry.blob = wavBlob; entry.duration = trimEnd - trimStart;
+      setTrimStart(0); setTrimEnd(entry.duration); setShowTrim(false);
+      await ctx.close();
+    } catch { /* silent */ } finally { setTrimming(false); }
+  };
 
   return (
     <div style={{ background: "#1a1a1a", borderRadius: 12, padding: 16, border: "1px solid #2a2a2a" }}>
@@ -160,7 +210,6 @@ function AudioPlayer({ entry, onSendToTimeline }: { entry: AudioEntry; onSendToT
         onEnded={() => { setPlaying(false); setProgress(0); setCurrent(0); }}
       />
 
-      {/* Voice label */}
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
         <span style={{ fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: 1 }}>
           {entry.voiceLabel} · {entry.emotion}
@@ -170,63 +219,68 @@ function AudioPlayer({ entry, onSendToTimeline }: { entry: AudioEntry; onSendToT
         </span>
       </div>
 
-      {/* Waveform / seeker */}
-      <div
-        onClick={handleSeek}
-        style={{ cursor: "pointer", marginBottom: 8, borderRadius: 6, overflow: "hidden",
-                 background: "#111", padding: "4px 0" }}
-      >
+      <div onClick={handleSeek} style={{ cursor: "pointer", marginBottom: 8, borderRadius: 6, overflow: "hidden", background: "#111", padding: "4px 0" }}>
         <Waveform active={playing} progress={progress} />
       </div>
 
-      {/* Time */}
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#555", marginBottom: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#555", marginBottom: 10 }}>
         <span>{fmt(current)}</span>
         <span>{fmt(entry.duration)}</span>
       </div>
 
-      {/* Controls */}
-      <div style={{ display: "flex", gap: 8 }}>
-        {/* Play/Pause */}
-        <button
-          onClick={toggle}
-          style={{
-            flex: 1, height: 40, borderRadius: 8, border: "none", cursor: "pointer",
-            background: "#F0563A", color: "#fff", fontWeight: 700, fontSize: 18,
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}
-        >
+      {/* Speed control */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
+        {[0.5, 0.75, 1, 1.5, 2].map(r => (
+          <button key={r} onClick={() => setRate(r)}
+            style={{ flex: 1, padding: "4px 0", borderRadius: 6, fontSize: 11, cursor: "pointer", border: "none",
+              background: rate === r ? "#F0563A" : "#111",
+              color:      rate === r ? "#fff"    : "#666",
+              fontWeight: rate === r ? 700       : 400 }}>
+            {r}x
+          </button>
+        ))}
+      </div>
+
+      {/* Main controls */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+        <button onClick={toggle} style={{ flex: 1, height: 40, borderRadius: 8, border: "none", cursor: "pointer", background: "#F0563A", color: "#fff", fontWeight: 700, fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center" }}>
           {playing ? "⏸" : "▶"}
         </button>
-
-        {/* Download */}
-        <a
-          href={entry.url}
-          download={`suarik-audio-${entry.id}.mp3`}
-          style={{
-            width: 40, height: 40, borderRadius: 8, border: "1px solid #333",
-            background: "#222", color: "#ccc", fontSize: 16,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            textDecoration: "none",
-          }}
-          title="Baixar MP3"
-        >
-          ↓
-        </a>
-
-        {/* Send to timeline */}
-        <button
-          onClick={() => onSendToTimeline(entry)}
-          title="Enviar para o Editor"
-          style={{
-            flex: 1, height: 40, borderRadius: 8, border: "1px solid #6305ef55",
-            background: "#6305ef22", color: "#a78bfa", fontWeight: 700, fontSize: 13,
-            cursor: "pointer",
-          }}
-        >
+        <a href={entry.url} download={`suarik-audio-${entry.id}.mp3`}
+          style={{ width: 40, height: 40, borderRadius: 8, border: "1px solid #333", background: "#222", color: "#ccc", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
+          title="Baixar MP3">↓</a>
+        <button onClick={() => setShowTrim(t => !t)}
+          style={{ width: 40, height: 40, borderRadius: 8, border: `1px solid ${showTrim ? "#F0563A55" : "#333"}`, background: showTrim ? "#F0563A22" : "#222", color: showTrim ? "#F0563A" : "#ccc", fontSize: 15, cursor: "pointer" }}
+          title="Trimmer">✂</button>
+        <button onClick={() => onSendToTimeline(entry)}
+          style={{ flex: 1, height: 40, borderRadius: 8, border: "1px solid #6305ef55", background: "#6305ef22", color: "#a78bfa", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
           ⚡ Editor
         </button>
       </div>
+
+      {/* Trimmer panel */}
+      {showTrim && (
+        <div style={{ background: "#111", borderRadius: 8, padding: 12, border: "1px solid #2a2a2a", marginTop: 4 }}>
+          <div style={{ fontSize: 11, color: "#888", marginBottom: 10 }}>✂ Trimmer — {fmt(trimStart)} → {fmt(trimEnd)}</div>
+          <div style={{ marginBottom: 8 }}>
+            <label style={{ fontSize: 10, color: "#666" }}>Início: {fmt(trimStart)}</label>
+            <input type="range" min={0} max={entry.duration} step={0.1} value={trimStart}
+              onChange={e => setTrimStart(Math.min(+e.target.value, trimEnd - 0.5))}
+              style={{ width: "100%", accentColor: "#F0563A" }} />
+          </div>
+          <div style={{ marginBottom: 10 }}>
+            <label style={{ fontSize: 10, color: "#666" }}>Fim: {fmt(trimEnd)}</label>
+            <input type="range" min={0} max={entry.duration} step={0.1} value={trimEnd}
+              onChange={e => setTrimEnd(Math.max(+e.target.value, trimStart + 0.5))}
+              style={{ width: "100%", accentColor: "#F0563A" }} />
+          </div>
+          <button onClick={applyTrim} disabled={trimming || trimStart >= trimEnd}
+            style={{ width: "100%", padding: "8px 0", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600,
+              background: trimming ? "#333" : "#F0563A", color: "#fff" }}>
+            {trimming ? "Cortando..." : "✓ Aplicar Corte"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -243,6 +297,7 @@ export default function AudioPage() {
       if (!user) { router.push("/login"); return; }
       setInitials((user.email ?? "U")[0].toUpperCase());
     });
+    loadHistoryFromDB();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -275,9 +330,29 @@ export default function AudioPage() {
   const [generatingSfx, setGeneratingSfx] = useState(false);
   const [sfxError,      setSfxError]      = useState<string | null>(null);
 
+  // ── Pixabay Library ──
+  const [pixabayQuery,   setPixabayQuery]   = useState("");
+  const [pixabayResults, setPixabayResults] = useState<{ id: number; title: string; audio: string; duration: number; user: string }[]>([]);
+  const [pixabayLoading, setPixabayLoading] = useState(false);
+  const [pixabayPage,    setPixabayPage]    = useState(1);
+  const [pixabayTotal,   setPixabayTotal]   = useState(0);
+  const [pixabayPlaying, setPixabayPlaying] = useState<number | null>(null);
+
+  // ── History state ──
+  const [historySearch,   setHistorySearch]   = useState("");
+  const [historyFilter,   setHistoryFilter]   = useState<"all" | "tts" | "music" | "sfx">("all");
+  const [historyPage,     setHistoryPage]     = useState(0);
+  const [historyFromDB,   setHistoryFromDB]   = useState<AudioEntry[]>([]);
+  const [deletingId,      setDeletingId]      = useState<string | null>(null);
+
   // ── History ──
   const [history,      setHistory]      = useState<AudioEntry[]>([]);
   const [activeEntry,  setActiveEntry]  = useState<AudioEntry | null>(null);
+
+  // ── Voice Preview ──
+  const [previewUrl,     setPreviewUrl]     = useState<string | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState<string | null>(null); // voiceId em loading
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // ── Credits ──
   const { credits, plan, spend, cost, refresh } = useCredits();
@@ -287,6 +362,112 @@ export default function AudioPage() {
 
   const charCount = text.length;
   const voiceObj  = VOICES.find(v => v.id === voiceId) ?? VOICES[0];
+
+  // ── Voice Preview ──
+  const loadVoicePreview = useCallback(async (vid: string) => {
+    // Check localStorage cache (24h)
+    const cacheKey = `voice_preview_${vid}`;
+    const cached = typeof window !== "undefined" ? localStorage.getItem(cacheKey) : null;
+    if (cached) {
+      setPreviewUrl(cached);
+      if (previewAudioRef.current) {
+        previewAudioRef.current.src = cached;
+        previewAudioRef.current.play().catch(() => {});
+      }
+      return;
+    }
+    setLoadingPreview(vid);
+    try {
+      const res = await fetch("/api/tts/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ voiceId: vid }),
+      });
+      if (!res.ok) throw new Error("Preview falhou");
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      // Cache base64 in localStorage for 24h
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        try { localStorage.setItem(cacheKey, reader.result as string); } catch { /* quota */ }
+      };
+      reader.readAsDataURL(blob);
+      setPreviewUrl(url);
+      setTimeout(() => {
+        if (previewAudioRef.current) {
+          previewAudioRef.current.src = url;
+          previewAudioRef.current.play().catch(() => {});
+        }
+      }, 50);
+    } catch {
+      toast.error("Não foi possível gerar o preview.");
+    } finally {
+      setLoadingPreview(null);
+    }
+  }, [toast]);
+
+  // ── Pixabay Search ──
+  const searchPixabay = useCallback(async (page = 1) => {
+    const q = pixabayQuery.trim() || "ambient";
+    setPixabayLoading(true);
+    try {
+      const res = await fetch(
+        `https://pixabay.com/api/music/?key=${process.env.NEXT_PUBLIC_PIXABAY_API_KEY}&q=${encodeURIComponent(q)}&per_page=12&page=${page}`
+      );
+      const data = await res.json();
+      setPixabayResults(data.hits ?? []);
+      setPixabayTotal(data.totalHits ?? 0);
+      setPixabayPage(page);
+    } catch {
+      setPixabayResults([]);
+    } finally {
+      setPixabayLoading(false);
+    }
+  }, [pixabayQuery]);
+
+  // ── History helpers ──
+  const determineType = (e: AudioEntry) => {
+    if (e.voiceId === "music-ai") return "music";
+    if (e.voiceId === "sfx")      return "sfx";
+    return "tts";
+  };
+
+  const loadHistoryFromDB = useCallback(async () => {
+    try {
+      const res = await fetch("/api/projects");
+      if (!res.ok) return;
+      const data = await res.json();
+      const audioProjects = (data.projects ?? [])
+        .filter((p: Record<string, unknown>) => p.tool === "audio")
+        .map((p: Record<string, unknown>) => ({
+          id:         p.id as string,
+          text:       p.title as string,
+          voiceId:    (p.meta as Record<string, unknown>)?.voiceId as string ?? "unknown",
+          voiceLabel: (p.meta as Record<string, unknown>)?.voiceLabel as string ?? "",
+          emotion:    (p.meta as Record<string, unknown>)?.emotion as string ?? "",
+          speed:      (p.meta as Record<string, unknown>)?.speed as number ?? 1,
+          blob:       new Blob(),
+          url:        p.result_url as string ?? "",
+          duration:   (p.meta as Record<string, unknown>)?.duration as number ?? 0,
+          createdAt:  new Date(p.created_at as string).getTime(),
+        }));
+      setHistoryFromDB(audioProjects);
+    } catch { /* silent */ }
+  }, []);
+
+  const deleteHistoryEntry = useCallback(async (id: string) => {
+    setDeletingId(id);
+    try {
+      await fetch(`/api/projects?id=${id}`, { method: "DELETE" });
+      setHistory(h => h.filter(e => e.id !== id));
+      setHistoryFromDB(h => h.filter(e => e.id !== id));
+      toast.success("Entrada removida");
+    } catch {
+      toast.error("Erro ao deletar");
+    } finally {
+      setDeletingId(null);
+    }
+  }, [toast]);
 
   // ── TTS Generate ──
   const generate = useCallback(async () => {
@@ -734,25 +915,53 @@ export default function AudioPage() {
                 </label>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
                   {VOICES.map(v => (
-                    <button
+                    <div
                       key={v.id}
-                      onClick={() => setVoiceId(v.id)}
                       style={{
                         padding: "10px 12px", borderRadius: 10, textAlign: "left",
-                        cursor: "pointer", transition: "all 0.15s",
-                        border:   voiceId === v.id ? "1.5px solid #F0563A" : "1px solid #2a2a2a",
-                        background: voiceId === v.id ? "#F0563A18"        : "#1a1a1a",
+                        transition: "all 0.15s",
+                        border:     voiceId === v.id ? "1.5px solid #F0563A" : "1px solid #2a2a2a",
+                        background: voiceId === v.id ? "#F0563A18"           : "#1a1a1a",
+                        cursor: "pointer",
                       }}
+                      onClick={() => setVoiceId(v.id)}
                     >
                       <div style={{ fontSize: 11, fontWeight: 600, color: voiceId === v.id ? "#F0563A" : "#ccc", marginBottom: 2 }}>
                         {v.label}
                       </div>
-                      <div style={{ fontSize: 10, color: "#555" }}>
-                        {v.lang} · {v.gender === "M" ? "Masculino" : "Feminino"}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <div style={{ fontSize: 10, color: "#555" }}>
+                          {v.lang} · {v.gender === "M" ? "Masculino" : "Feminino"}
+                        </div>
+                        <button
+                          onClick={e => { e.stopPropagation(); loadVoicePreview(v.id); }}
+                          disabled={loadingPreview === v.id}
+                          title="Preview desta voz"
+                          style={{
+                            background: "none", border: "none", cursor: "pointer",
+                            fontSize: 13, padding: "2px 4px", borderRadius: 4,
+                            color: loadingPreview === v.id ? "#555" : "#888",
+                            opacity: loadingPreview === v.id ? 0.5 : 1,
+                          }}
+                        >
+                          {loadingPreview === v.id ? "⏳" : "🔊"}
+                        </button>
                       </div>
-                    </button>
+                    </div>
                   ))}
                 </div>
+                {/* Preview player inline */}
+                {previewUrl && (
+                  <div style={{ marginTop: 10, padding: "10px 12px", background: "#111", borderRadius: 8, border: "1px solid #2a2a2a" }}>
+                    <div style={{ fontSize: 11, color: "#888", marginBottom: 6 }}>Preview de voz</div>
+                    <audio
+                      ref={previewAudioRef}
+                      controls
+                      src={previewUrl}
+                      style={{ width: "100%", height: 32, accentColor: "#F0563A" }}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Emotion */}
@@ -1155,7 +1364,6 @@ export default function AudioPage() {
                               padding: "10px 12px", borderRadius: 6, border: "1px solid #333",
                               background: "#0a0a0a", color: "#ccc", cursor: "pointer",
                               fontSize: 11, textAlign: "left", transition: "all 0.2s",
-                              hover: { background: "#1a1a1a", borderColor: "#F0563A" }
                             }}
                             onMouseEnter={(e) => {
                               e.currentTarget.style.background = "#1a1a1a";
@@ -1180,72 +1388,193 @@ export default function AudioPage() {
                 </div>
               </div>
 
-              {/* Free Library Notice */}
-              <div style={{ background: "linear-gradient(135deg, #1a3a1a, #2a1a1a)", borderRadius: 12, padding: 20, border: "1px solid #3a3a2a" }}>
-                <h2 style={{ fontSize: 14, fontWeight: 600, color: "#88cc88", textTransform: "uppercase", letterSpacing: 1, margin: "0 0 8px 0" }}>
-                  🎵 Biblioteca Gratuita
+              {/* Pixabay Free Library */}
+              <div>
+                <h2 style={{ fontSize: 14, fontWeight: 600, color: "#88cc88", textTransform: "uppercase", letterSpacing: 1, marginBottom: 16 }}>
+                  🎵 Biblioteca Gratuita — Pixabay Music
                 </h2>
-                <p style={{ fontSize: 12, color: "#999", margin: 0, lineHeight: 1.6 }}>
-                  Acesso a milhões de trilhas sonoras gratuitas via Pixabay Music + Free Sound Effects.
-                  <br />
-                  Integração em breve para buscar e usar diretamente no estúdio.
-                </p>
+                <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                  <input
+                    value={pixabayQuery}
+                    onChange={e => setPixabayQuery(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && searchPixabay(1)}
+                    placeholder="Buscar músicas... (ex: ambient, cinematic, hype)"
+                    style={{
+                      flex: 1, padding: "10px 14px", borderRadius: 8, fontSize: 13,
+                      background: "#111", border: "1px solid #333", color: "#fff", outline: "none",
+                    }}
+                  />
+                  <button
+                    onClick={() => searchPixabay(1)}
+                    disabled={pixabayLoading}
+                    style={{
+                      padding: "10px 18px", borderRadius: 8, fontSize: 13, fontWeight: 600,
+                      background: "#F0563A", border: "none", color: "#fff", cursor: "pointer",
+                      opacity: pixabayLoading ? 0.6 : 1,
+                    }}
+                  >
+                    {pixabayLoading ? "..." : "🔍 Buscar"}
+                  </button>
+                </div>
+
+                {pixabayResults.length > 0 && (
+                  <>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 10, marginBottom: 16 }}>
+                      {pixabayResults.map(track => (
+                        <div key={track.id} style={{ background: "#1a1a1a", borderRadius: 10, padding: 14, border: "1px solid #2a2a2a" }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: "#ccc", marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {track.title}
+                          </div>
+                          <div style={{ fontSize: 10, color: "#555", marginBottom: 8 }}>
+                            {track.user} · {Math.floor(track.duration / 60)}:{String(track.duration % 60).padStart(2, "0")}
+                          </div>
+                          <audio
+                            controls
+                            src={track.audio}
+                            onPlay={() => setPixabayPlaying(track.id)}
+                            onPause={() => setPixabayPlaying(null)}
+                            style={{ width: "100%", height: 28, accentColor: "#F0563A" }}
+                          />
+                          <a
+                            href={track.audio}
+                            download={`${track.title}.mp3`}
+                            style={{ display: "block", marginTop: 8, textAlign: "center", fontSize: 11, color: "#888", textDecoration: "none" }}
+                          >
+                            ⬇ Download
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+                      <button
+                        onClick={() => searchPixabay(pixabayPage - 1)}
+                        disabled={pixabayPage <= 1 || pixabayLoading}
+                        style={{ padding: "7px 16px", borderRadius: 6, background: "#1a1a1a", border: "1px solid #333", color: "#aaa", cursor: "pointer", fontSize: 12 }}
+                      >
+                        ← Anterior
+                      </button>
+                      <span style={{ padding: "7px 12px", fontSize: 12, color: "#666" }}>
+                        Página {pixabayPage} · {pixabayTotal} resultados
+                      </span>
+                      <button
+                        onClick={() => searchPixabay(pixabayPage + 1)}
+                        disabled={pixabayPage * 12 >= pixabayTotal || pixabayLoading}
+                        style={{ padding: "7px 16px", borderRadius: 6, background: "#1a1a1a", border: "1px solid #333", color: "#aaa", cursor: "pointer", fontSize: 12 }}
+                      >
+                        Próxima →
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {!pixabayLoading && pixabayResults.length === 0 && (
+                  <div style={{ textAlign: "center", padding: "30px 0", color: "#444", fontSize: 13 }}>
+                    Digite um termo e clique em Buscar para encontrar músicas gratuitas.
+                  </div>
+                )}
               </div>
             </div>
           )}
 
           {/* ── HISTORY TAB ── */}
-          {activeTab === "history" && (
-            <div style={{ maxWidth: 720, margin: "0 auto" }}>
-              <div style={{ marginBottom: 24 }}>
-                <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>🕘 Histórico</h1>
-                <p style={{ color: "#666", fontSize: 13, marginTop: 4 }}>
-                  Áudios gerados nesta sessão
-                </p>
-              </div>
+          {activeTab === "history" && (() => {
+            const allEntries = [
+              ...history,
+              ...historyFromDB.filter(db => !history.find(h => h.id === db.id)),
+            ].sort((a, b) => b.createdAt - a.createdAt);
 
-              {history.length === 0 ? (
-                <div style={{
-                  textAlign: "center", padding: "60px 20px",
-                  color: "#444", fontSize: 14,
-                }}>
-                  <div style={{ fontSize: 40, marginBottom: 12 }}>🎙️</div>
-                  Nenhum áudio gerado ainda.<br />
-                  <span style={{ color: "#F0563A", cursor: "pointer" }}
-                    onClick={() => setActiveTab("tts")}
-                  >Ir para o Studio</span>
+            const filtered = allEntries.filter(e => {
+              const typeOk = historyFilter === "all" || determineType(e) === historyFilter;
+              const searchOk = !historySearch || e.text.toLowerCase().includes(historySearch.toLowerCase());
+              return typeOk && searchOk;
+            });
+            const pages = Math.ceil(filtered.length / 20) || 1;
+            const paged = filtered.slice(historyPage * 20, historyPage * 20 + 20);
+            const typeIcon = (e: AudioEntry) => ({ tts: "🎙️", music: "🎵", sfx: "⚡" })[determineType(e)];
+
+            return (
+              <div style={{ maxWidth: 720, margin: "0 auto" }}>
+                <div style={{ marginBottom: 20 }}>
+                  <h1 style={{ fontSize: 22, fontWeight: 700, margin: "0 0 16px" }}>🕘 Histórico</h1>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input
+                      value={historySearch}
+                      onChange={e => { setHistorySearch(e.target.value); setHistoryPage(0); }}
+                      placeholder="Buscar por texto..."
+                      style={{ flex: 1, padding: "8px 12px", borderRadius: 8, fontSize: 13, background: "#111", border: "1px solid #333", color: "#fff", outline: "none" }}
+                    />
+                    {(["all", "tts", "music", "sfx"] as const).map(f => (
+                      <button key={f} onClick={() => { setHistoryFilter(f); setHistoryPage(0); }}
+                        style={{ padding: "8px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", border: "none",
+                          background: historyFilter === f ? "#F0563A" : "#1a1a1a",
+                          color: historyFilter === f ? "#fff" : "#888" }}>
+                        {f === "all" ? "Todos" : f === "tts" ? "🎙️ TTS" : f === "music" ? "🎵 Music" : "⚡ SFX"}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  {history.map(e => (
-                    <div
-                      key={e.id}
-                      onClick={() => setActiveEntry(e)}
-                      style={{
-                        padding: "14px 16px", borderRadius: 10, cursor: "pointer",
-                        border: activeEntry?.id === e.id ? "1.5px solid #F0563A" : "1px solid #2a2a2a",
-                        background: activeEntry?.id === e.id ? "#F0563A0a" : "#1a1a1a",
-                        transition: "all 0.15s",
-                      }}
-                    >
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: "#ccc" }}>
-                          {e.voiceLabel} · {e.emotion}
-                        </span>
-                        <span style={{ fontSize: 11, color: "#555" }}>
-                          {Math.round(e.duration)}s
-                        </span>
-                      </div>
-                      <p style={{ fontSize: 12, color: "#666", margin: 0, lineHeight: 1.5,
-                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {e.text}
-                      </p>
+
+                {paged.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "60px 20px", color: "#444", fontSize: 14 }}>
+                    <div style={{ fontSize: 40, marginBottom: 12 }}>🎙️</div>
+                    {allEntries.length === 0
+                      ? <><span>Nenhum áudio gerado ainda. </span><span style={{ color: "#F0563A", cursor: "pointer" }} onClick={() => setActiveTab("tts")}>Ir para o Studio</span></>
+                      : "Nenhum resultado para este filtro."}
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {paged.map(e => (
+                        <div key={e.id} style={{ padding: "14px 16px", borderRadius: 10, background: "#1a1a1a", border: "1px solid #2a2a2a", display: "flex", alignItems: "center", gap: 12 }}>
+                          <div style={{ fontSize: 20, flexShrink: 0 }}>{typeIcon(e)}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 12, color: "#ccc", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.text}</div>
+                            <div style={{ fontSize: 10, color: "#555", marginTop: 2 }}>
+                              {e.voiceLabel && `${e.voiceLabel} · `}{Math.round(e.duration)}s · {new Date(e.createdAt).toLocaleDateString("pt-BR")}
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                            {e.url && (
+                              <button onClick={() => setActiveEntry(e)}
+                                style={{ padding: "5px 10px", borderRadius: 6, fontSize: 11, background: "#111", border: "1px solid #333", color: "#aaa", cursor: "pointer" }}>
+                                ▶
+                              </button>
+                            )}
+                            {determineType(e) === "tts" && e.text && (
+                              <button onClick={() => { setText(e.text); setActiveTab("tts"); toast.success("Prompt copiado"); }}
+                                style={{ padding: "5px 10px", borderRadius: 6, fontSize: 11, background: "#111", border: "1px solid #333", color: "#aaa", cursor: "pointer" }}>
+                                ↻
+                              </button>
+                            )}
+                            <button onClick={() => deleteHistoryEntry(e.id)}
+                              disabled={deletingId === e.id}
+                              style={{ padding: "5px 10px", borderRadius: 6, fontSize: 11, background: "#111", border: "1px solid #333", color: deletingId === e.id ? "#444" : "#F05", cursor: "pointer" }}>
+                              ✕
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+                    {pages > 1 && (
+                      <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 16 }}>
+                        <button onClick={() => setHistoryPage(p => Math.max(0, p - 1))} disabled={historyPage === 0}
+                          style={{ padding: "7px 16px", borderRadius: 6, background: "#1a1a1a", border: "1px solid #333", color: "#aaa", cursor: "pointer", fontSize: 12 }}>
+                          ← Anterior
+                        </button>
+                        <span style={{ padding: "7px 12px", fontSize: 12, color: "#666" }}>
+                          {historyPage + 1} / {pages}
+                        </span>
+                        <button onClick={() => setHistoryPage(p => Math.min(pages - 1, p + 1))} disabled={historyPage >= pages - 1}
+                          style={{ padding: "7px 16px", borderRadius: 6, background: "#1a1a1a", border: "1px solid #333", color: "#aaa", cursor: "pointer", fontSize: 12 }}>
+                          Próxima →
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            );
+          })()}
         </main>
 
         {/* ── RIGHT PANEL ── */}

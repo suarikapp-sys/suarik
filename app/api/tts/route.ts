@@ -11,23 +11,8 @@ export const maxDuration = 60;
 const MINIMAX_API_KEY = process.env.MINIMAX_API_KEY!;
 const MINIMAX_ENDPOINT = "https://api.minimax.io/v1/t2a_v2";
 
-// Available voices
-export const TTS_VOICES = [
-  // English Voices
-  { id: "English_expressive_narrator", label: "English — Expressive Narrator" },
-  { id: "English_Graceful_Lady", label: "English — Graceful Lady" },
-  { id: "English_Insightful_Speaker", label: "English — Insightful Speaker" },
-  { id: "English_radiant_girl", label: "English — Radiant Girl" },
-  { id: "English_Persuasive_Man", label: "English — Persuasive Man" },
-  { id: "English_Lucky_Robot", label: "English — Lucky Robot" },
-  // Chinese Voices
-  { id: "Chinese (Mandarin)_Lyrical_Voice", label: "Chinese (Mandarin) — Lyrical Voice" },
-  { id: "Chinese (Mandarin)_HK_Flight_Attendant", label: "Chinese (Mandarin) — HK Flight Attendant" },
-  // Japanese Voices
-  { id: "Japanese_Whisper_Belle", label: "Japanese — Whisper Belle" },
-] as const;
-
-export type TTSVoiceId = (typeof TTS_VOICES)[number]["id"];
+import { TTS_VOICES } from "../../lib/ttsVoices";
+export type { TTSVoiceId } from "../../lib/ttsVoices";
 
 export async function POST(req: NextRequest) {
   // Auth check
@@ -61,7 +46,7 @@ export async function POST(req: NextRequest) {
 
   try {
     // Validate voice_id exists
-    const validVoice = TTS_VOICES.find(v => v.id === voiceId);
+    const validVoice = TTS_VOICES.find((v: { id: string }) => v.id === voiceId);
     if (!validVoice) {
       return NextResponse.json({ error: `Voice "${voiceId}" não existe` }, { status: 400 });
     }
