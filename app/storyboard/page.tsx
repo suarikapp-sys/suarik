@@ -4044,10 +4044,11 @@ export default function SuarikHome() {
       }
       const { uploadUrl, publicUrl } = await presignRes.json();
 
-      // Upload via proxy (evita CORS do R2)
+      // Upload direto ao R2 via presigned URL (CORS configurado no bucket)
+      // Sem proxy — sem limite de tamanho do servidor, qualquer formato de vídeo
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        xhr.open("PUT", `/api/upload/proxy?target=${encodeURIComponent(uploadUrl)}`);
+        xhr.open("PUT", uploadUrl); // direto ao R2
         xhr.setRequestHeader("Content-Type", videoFile.type || "video/mp4");
         xhr.upload.onprogress = (e) => {
           if (e.lengthComputable) setUploadProgress(Math.round((e.loaded / e.total) * 100));
@@ -4093,8 +4094,8 @@ export default function SuarikHome() {
 
         if (wavPresignRes.ok) {
           const { uploadUrl: wavUploadUrl, publicUrl: wavPublicUrl } = await wavPresignRes.json();
-          // Upload WAV via proxy (evita CORS do R2)
-          const wavUpRes = await fetch(`/api/upload/proxy?target=${encodeURIComponent(wavUploadUrl)}`, {
+          // Upload WAV direto ao R2 (CORS configurado no bucket)
+          const wavUpRes = await fetch(wavUploadUrl, {
             method: "PUT",
             headers: { "Content-Type": "audio/wav" },
             body: wavBlob,

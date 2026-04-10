@@ -60,12 +60,13 @@ async function uploadToR2(blob: Blob, filename: string, contentType: string): Pr
     body:    JSON.stringify({ filename, contentType }),
   }).then(r => r.json());
 
-  const proxyRes = await fetch(`/api/upload/proxy?target=${encodeURIComponent(uploadUrl)}`, {
+  // Upload direto ao R2 via presigned URL (CORS configurado no bucket)
+  const r2Res = await fetch(uploadUrl, {
     method:  "PUT",
     headers: { "Content-Type": contentType },
     body:    blob,
   });
-  if (!proxyRes.ok) throw new Error(`Upload falhou (HTTP ${proxyRes.status})`);
+  if (!r2Res.ok) throw new Error(`Upload falhou (HTTP ${r2Res.status})`);
   return publicUrl as string;
 }
 
