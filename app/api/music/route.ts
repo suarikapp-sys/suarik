@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
 
   // ── Rate limit: 10 music/sfx calls per user per minute ───────────────────
-  if (!rateLimit(`music:${user.id}`, 10, 60_000)) {
+  if (!await rateLimit(`music:${user.id}`, 10, 60_000)) {
     return NextResponse.json({ error: "Muitas requisições. Aguarde 1 minuto." }, { status: 429 });
   }
 

@@ -46,8 +46,9 @@ export default function ProjectsPage() {
   const [projects,  setProjects]  = useState<Project[]>([]);
   const [loading,   setLoading]   = useState(true);
   const [filter,    setFilter]    = useState<string>("all");
-  const [deleting,  setDeleting]  = useState<string | null>(null);
-  const [preview,   setPreview]   = useState<Project | null>(null);
+  const [deleting,    setDeleting]    = useState<string | null>(null);
+  const [preview,     setPreview]     = useState<Project | null>(null);
+  const [confirmDel,  setConfirmDel]  = useState<Project | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -378,7 +379,7 @@ export default function ProjectsPage() {
                             >↓</a>
                           )}
                           <button
-                            onClick={e => { e.stopPropagation(); deleteProject(p.id); }}
+                            onClick={e => { e.stopPropagation(); setConfirmDel(p); }}
                             disabled={deleting === p.id}
                             style={{
                               width: 36, height: 36, borderRadius: 7,
@@ -400,6 +401,57 @@ export default function ProjectsPage() {
           )}
         </main>
       </div>
+
+      {/* ── DELETE CONFIRMATION MODAL ── */}
+      {confirmDel && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 9999,
+          background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}
+          onClick={() => setConfirmDel(null)}
+        >
+          <div style={{
+            background: "#1a1a1a", border: "1px solid #333", borderRadius: 14,
+            padding: "28px 32px", maxWidth: 380, width: "90%",
+            boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
+          }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ fontSize: 28, marginBottom: 12 }}>🗑️</div>
+            <h2 style={{ fontSize: 16, fontWeight: 700, color: "#fff", margin: "0 0 8px" }}>
+              Apagar projeto?
+            </h2>
+            <p style={{ fontSize: 13, color: "#777", margin: "0 0 24px", lineHeight: 1.5 }}>
+              <span style={{ color: "#ccc" }}>{confirmDel.title}</span>
+              <br />Esta ação não pode ser desfeita.
+            </p>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                onClick={() => setConfirmDel(null)}
+                style={{
+                  flex: 1, padding: "10px 0", borderRadius: 8,
+                  border: "1px solid #333", background: "transparent",
+                  color: "#888", fontSize: 13, fontWeight: 600, cursor: "pointer",
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => { deleteProject(confirmDel.id); setConfirmDel(null); }}
+                disabled={deleting === confirmDel.id}
+                style={{
+                  flex: 1, padding: "10px 0", borderRadius: 8,
+                  border: "1px solid #7f1d1d", background: "#450a0a",
+                  color: "#f87171", fontSize: 13, fontWeight: 700, cursor: "pointer",
+                }}
+              >
+                {deleting === confirmDel.id ? "Apagando…" : "Sim, apagar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }

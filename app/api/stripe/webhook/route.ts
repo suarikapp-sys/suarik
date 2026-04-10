@@ -35,6 +35,20 @@ export async function POST(request: Request) {
       const toAdd   = parseInt(session.metadata?.credits ?? "0", 10);
       if (!userId || !toAdd) break;
 
+      // ── Idempotency guard: mark PaymentIntent as processed via Stripe metadata
+      // If this webhook fires twice (Stripe retry), we skip the second credit add.
+      const paymentIntentId = session.payment_intent as string | null;
+      if (paymentIntentId) {
+        const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
+        if (pi.metadata?.credits_processed === "true") {
+          console.log(`[webhook] Skipping duplicate topup for PI ${paymentIntentId}`);
+          break;
+        }
+        await stripe.paymentIntents.update(paymentIntentId, {
+          metadata: { ...pi.metadata, credits_processed: "true" },
+        });
+      }
+
       const { data } = await supabaseAdmin
         .from("profiles").select("credits").eq("id", userId).single();
       const current = (data as { credits: number } | null)?.credits ?? 0;

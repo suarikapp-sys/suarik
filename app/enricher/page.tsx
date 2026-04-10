@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Upload, Zap, Film, Gauge, Lock, Settings, User } from "lucide-react";
 
@@ -24,7 +24,21 @@ export default function EnricherPage() {
   const [file, setFile] = useState<File | null>(null);
   const [selectedFormat, setSelectedFormat] = useState<"16:9"|"9:16"|"1:1">("9:16");
   const [analyzing, setAnalyzing] = useState(false);
+  const [recentProjects, setRecentProjects] = useState<{ id: string; title: string; created_at: string }[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Load 3 most recent storyboard/enricher projects from API
+  useEffect(() => {
+    fetch("/api/projects")
+      .then(r => r.json())
+      .then((d: { projects?: { id: string; tool: string; title: string; created_at: string }[] }) => {
+        const projects = (d.projects ?? [])
+          .filter(p => p.tool === "storyboard")
+          .slice(0, 3);
+        setRecentProjects(projects);
+      })
+      .catch(() => {}); // non-critical
+  }, []);
 
   // Accept any file that looks like a video — MIME type is unreliable for MKV, AVI, MOV, etc.
   const isVideoFile = (f: File) =>
@@ -57,10 +71,7 @@ export default function EnricherPage() {
     }
   };
 
-  const recent = [
-    { name: "CITY_SCENE_V1.mp4" },
-    { name: "INTERVIEW_A_ROLL.mp4" },
-  ];
+  // recentProjects loaded from API (see useEffect above)
 
   return (
     <div className="flex h-screen bg-[#131313] text-[#E5E2E1] overflow-hidden">
@@ -140,12 +151,15 @@ export default function EnricherPage() {
           <div className="mt-auto p-6">
             <p className="font-mono text-[10px] uppercase tracking-widest text-[#E5E2E1]/30 mb-4">Recentes</p>
             <div className="space-y-4">
-              {recent.map(r => (
-                <div key={r.name} className="flex items-center gap-3 group cursor-pointer">
+              {recentProjects.length === 0 ? (
+                <p className="font-mono text-[9px] text-[#E5E2E1]/20">Nenhum projeto ainda</p>
+              ) : recentProjects.map(r => (
+                <div key={r.id} className="flex items-center gap-3 group cursor-pointer"
+                  onClick={() => router.push("/projects")}>
                   <div className="w-12 h-8 bg-[#2a2a2a] rounded border border-white/5 flex items-center justify-center">
                     <Film size={12} className="text-[#E5E2E1]/40 group-hover:text-[#F0563A] transition-colors" />
                   </div>
-                  <span className="font-mono text-[9px] text-[#E5E2E1]/60 truncate">{r.name}</span>
+                  <span className="font-mono text-[9px] text-[#E5E2E1]/60 truncate">{r.title}</span>
                 </div>
               ))}
             </div>

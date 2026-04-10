@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
 
   // ── Rate limit: 15 TTS calls per user per minute ──────────────────────────
-  if (!rateLimit(`tts:${user.id}`, 15, 60_000)) {
+  if (!await rateLimit(`tts:${user.id}`, 15, 60_000)) {
     return NextResponse.json({ error: "Muitas requisições. Aguarde 1 minuto." }, { status: 429 });
   }
 
@@ -71,10 +71,15 @@ export async function POST(req: NextRequest) {
   await supabaseAdmin.from("profiles")
     .update({ credits: currentCredits - cost }).eq("id", user.id);
 
+  // Helper: restore credits on non-exception early returns
+  const refund = () =>
+    supabaseAdmin.from("profiles").update({ credits: currentCredits }).eq("id", user.id);
+
   try {
     // Validate voice_id exists
     const validVoice = TTS_VOICES.find((v: { id: string }) => v.id === voiceId);
     if (!validVoice) {
+      await refund();
       return NextResponse.json({ error: `Voice "${voiceId}" não existe` }, { status: 400 });
     }
 
@@ -125,6 +130,7 @@ export async function POST(req: NextRequest) {
     if (!res.ok) {
       const err = await res.text().catch(() => "");
       console.error("[/api/tts] MiniMax HTTP error:", res.status, err);
+      await refund();
       return NextResponse.json({ error: `MiniMax error ${res.status}` }, { status: 502 });
     }
 
@@ -133,6 +139,7 @@ export async function POST(req: NextRequest) {
     const base = data?.base_resp;
     if (base?.status_code !== 0) {
       console.error("[/api/tts] MiniMax API error:", base);
+      await refund();
       return NextResponse.json(
         { error: `MiniMax: ${base?.status_msg ?? "erro desconhecido"} (${base?.status_code})` },
         { status: 502 },
@@ -141,6 +148,7 @@ export async function POST(req: NextRequest) {
 
     const audioHex: string = data?.data?.audio ?? data?.audio;
     if (!audioHex) {
+      await refund();
       return NextResponse.json({ error: "Resposta sem campo 'audio'" }, { status: 502 });
     }
 

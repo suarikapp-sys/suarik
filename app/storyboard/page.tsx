@@ -1377,8 +1377,9 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
       setTtsError(e instanceof Error ? e.message : "Erro ao gerar voz");
     } finally {
       setTtsLoading(false);
+      refreshCredits();
     }
-  },[ttsVoice, ttsSpeed]);
+  },[ttsVoice, ttsSpeed, refreshCredits]);
 
   // ── Real video duration (from avatar video) overrides DRS estimates ────────
   const [realVideoDur, setRealVideoDur] = useState<number|null>(null);
@@ -3675,6 +3676,17 @@ export default function SuarikHome() {
   const [userPlan,      setUserPlan]      = useState("Free");
   const [userCredits,   setUserCredits]   = useState<number|null>(null);
 
+  // ── Refresh credit balance from server after any paid action ─────────────
+  const refreshCredits = useCallback(async () => {
+    try {
+      const res = await fetch("/api/credits");
+      if (res.ok) {
+        const d = await res.json() as { credits?: number };
+        if (typeof d.credits === "number") setUserCredits(d.credits);
+      }
+    } catch { /* non-critical — stale display is better than crashing */ }
+  }, []);
+
   // ── Pending cross-tool payloads (read once at mount, before auth resolves) ──
   const [pendingTtsUrl,    setPendingTtsUrl]    = useState<string|null>(null);
   const [pendingAvatarUrl, setPendingAvatarUrl] = useState<string|null>(null);
@@ -3862,6 +3874,7 @@ export default function SuarikHome() {
       setHomeTtsError(e instanceof Error ? e.message : "Erro ao gerar voz");
     } finally {
       setHomeTtsLoading(false);
+      refreshCredits();
     }
   };
 
@@ -3927,6 +3940,7 @@ export default function SuarikHome() {
       toast.error(e instanceof Error?e.message:"Erro ao gerar storyboard.");
     } finally{
       setIsGenerating(false);
+      refreshCredits();
     }
   };
 
@@ -4168,6 +4182,8 @@ export default function SuarikHome() {
       const msg = err instanceof Error ? err.message : "Erro inesperado no upload.";
       setError(msg);
       toast.error(msg);
+    } finally {
+      refreshCredits();
     }
   };
 
