@@ -3533,9 +3533,7 @@ ${clipEls.join("\n")}
   );
 }
 
-// ─── generateMockDrsByDuration ────────────────────────────────────────────────
-// Fills the ENTIRE video duration with DRS scenes (4–6s each), cycling phrases
-// and Mixkit B-roll videos. No more 30s hard cap.
+// B-roll pool used by buildDrsFromWhisper for initial video placeholders
 const MOCK_BROLL_POOL = [
   "https://assets.mixkit.co/videos/18296/18296-360.mp4",
   "https://assets.mixkit.co/videos/24354/24354-360.mp4",
@@ -3544,61 +3542,6 @@ const MOCK_BROLL_POOL = [
   "https://assets.mixkit.co/videos/25575/25575-360.mp4",
   "https://assets.mixkit.co/videos/5601/5601-360.mp4",
 ];
-function generateMockDrsByDuration(totalSec: number, lang: "auto"|"pt"|"en"|"es"): DirectResponseScene[] {
-  const phrases_pt = [
-    "Eu estava cansado","de trabalhar 12 horas","não conseguia pagar","as contas atrasadas.",
-    "Minha esposa me olhava","com aquele olhar…","Um amigo me mostrou","esse método incrível.",
-    "Em apenas 30 dias","tudo mudou de vez.","Hoje acordo sem alarme","trabalho de casa.",
-    "Minha família está","orgulhosa de mim.","Se eu consegui,","você também consegue.",
-    "Não perca mais tempo.","A janela vai fechar.","Essa é sua chance","de mudar tudo.",
-    "Cada dia que passa","você está perdendo","dinheiro e oportunidade.","Aja agora.",
-  ];
-  const phrases_en = [
-    "I was exhausted","working 12 hours","couldn't pay","my bills.",
-    "My wife looked at me","with that look…","A friend showed me","this method.",
-    "In just 30 days","everything changed.","Now I wake up","without an alarm.",
-    "My family is","proud of me.","If I did it,","so can you.",
-    "Don't waste more time.","The window is closing.","This is your chance","to change everything.",
-    "Every passing day","you are losing","money and opportunity.","Act now.",
-  ];
-  const phrases_es = [
-    "Estaba cansado","de trabajar 12 horas","no podía pagar","las cuentas.",
-    "Mi esposa me miraba","con esa mirada…","Un amigo me mostró","este método.",
-    "En solo 30 días","todo cambió.","Ahora me despierto","sin alarma.",
-    "Mi familia está","orgullosa de mí.","Si yo pude,","tú también puedes.",
-    "No pierdas más tiempo.","La ventana se cierra.","Esta es tu oportunidad","de cambiar todo.",
-    "Cada día que pasa","estás perdiendo","dinero y oportunidad.","Actúa ahora.",
-  ];
-  const EMOTIONS = ["Dor","Revelação","Oportunidade","Urgência","Choque","CTA","Esperança","Mistério"];
-  const phrases = lang==="en" ? phrases_en : lang==="es" ? phrases_es : phrases_pt;
-  const scenes: DirectResponseScene[] = [];
-  let cursor = 0; let idx = 0;
-  while(cursor < totalSec - 0.5) {
-    const remaining = totalSec - cursor;
-    const dur = Math.min(remaining, 4 + (idx % 3) * 0.7); // 4s / 4.7s / 5.4s alternating
-    if(dur < 1) break;
-    const text  = phrases[idx % phrases.length];
-    const vUrl  = MOCK_BROLL_POOL[idx % MOCK_BROLL_POOL.length];
-    const vUrl2 = MOCK_BROLL_POOL[(idx+1) % MOCK_BROLL_POOL.length];
-    scenes.push({
-      id:           `mock-${idx}`,
-      textSnippet:  text,
-      duration:     dur,
-      emotion:      EMOTIONS[idx % EMOTIONS.length],
-      searchQueries:[text, text, text],
-      suggestedSfx: null,
-      videoUrl:     vUrl,
-      thumbUrl:     null,
-      videoOptions: [
-        { url: vUrl,  thumb: "", query: text },
-        { url: vUrl2, thumb: "", query: text },
-      ],
-    });
-    cursor += dur; idx++;
-  }
-  return scenes;
-}
-
 // ─── buildDrsFromWhisper ──────────────────────────────────────────────────────
 // Converte palavras reais do Whisper (com timestamps) em cenas DRS.
 // Agrupa palavras em frases de ~5s cada, atribui emoções e B-rolls cíclicos.

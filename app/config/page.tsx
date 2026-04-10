@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Film, Settings, User, Zap } from "lucide-react";
+import { ChevronRight, Film, Settings, User, Zap, Clock } from "lucide-react";
 
 const ASPECT_RATIOS = [
   { ratio: "16:9", label: "Cinematic", wClass: "w-12 h-7" },
@@ -97,8 +97,18 @@ export default function ConfigPage() {
         <section className="flex-1 bg-[#131313] p-8 overflow-y-auto">
           <div className="max-w-5xl mx-auto">
             <header className="mb-12">
-              <h1 className="text-4xl font-black tracking-tighter mb-2">Configuração do Projeto</h1>
-              <p className="text-[#E5E2E1]/60 font-medium">Verifique as configurações da sequência antes de entrar na timeline.</p>
+              <div className="flex items-center gap-3 mb-3">
+                <h1 className="text-4xl font-black tracking-tighter">Configuração do Projeto</h1>
+                <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest"
+                  style={{ background: "rgba(240,86,58,0.12)", border: "1px solid rgba(240,86,58,0.3)", color: "#F0563A" }}>
+                  <Clock size={12} /> Em breve
+                </span>
+              </div>
+              <p className="text-[#E5E2E1]/60 font-medium">
+                Essas configurações serão aplicadas quando o editor de timeline estiver disponível.
+                Por enquanto, use o <button onClick={() => router.push("/storyboard")}
+                  className="underline text-[#F0563A] hover:opacity-80 transition-opacity">Storyboard AI</button> para criar sua edição.
+              </p>
             </header>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -219,17 +229,17 @@ export default function ConfigPage() {
                     </div>
                   </div>
 
-                  {/* Launch */}
+                  {/* Launch — disabled until timeline editor is ready */}
                   <button
-                    onClick={() => router.push("/processing")}
-                    className="w-full py-5 rounded-xl flex items-center justify-center gap-3 group transition-transform active:scale-95"
-                    style={{ background: "linear-gradient(135deg,#F0563A,#c44527)", boxShadow: "0 0 24px rgba(240,86,58,0.3)" }}>
-                    <span className="text-white font-black tracking-tighter text-xl uppercase">Launch Timeline</span>
-                    <ChevronRight size={20} className="text-white group-hover:translate-x-1 transition-transform" />
+                    disabled
+                    className="w-full py-5 rounded-xl flex items-center justify-center gap-3 cursor-not-allowed"
+                    style={{ background: "rgba(240,86,58,0.15)", border: "1px solid rgba(240,86,58,0.2)" }}>
+                    <Clock size={18} style={{ color: "#F0563A" }} />
+                    <span className="font-black tracking-tighter text-xl uppercase" style={{ color: "#F0563A" }}>Em Breve</span>
                   </button>
 
                   <p className="text-center text-[10px] font-mono text-[#E5E2E1]/40 uppercase tracking-widest">
-                    Ao clicar em Launch você aceita os parâmetros da sessão.
+                    Editor de timeline estará disponível em breve.
                   </p>
                 </div>
               </div>

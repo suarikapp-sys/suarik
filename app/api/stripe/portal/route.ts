@@ -20,7 +20,7 @@ export async function POST() {
 
   const session = await stripe.billingPortal.sessions.create({
     customer:   profile.stripe_customer_id,
-    return_url: `${process.env.NEXT_PUBLIC_APP_URL ?? "https://copiloto-edicao.vercel.app"}/`,
+    return_url: `${process.env.NEXT_PUBLIC_APP_URL ?? "https://suarik.com.br"}/`,
   });
 
   return NextResponse.json({ url: session.url });
