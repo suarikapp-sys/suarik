@@ -9,13 +9,14 @@ export interface CostMeta {
 
 // Static fallback costs for tools that don't use metadata
 const STATIC_COST: Record<string, number> = {
-  sfx:           5,
-  lipsync:       50,
-  talkingphoto:  40,
+  sfx:            5,
+  lipsync:        50,
+  talkingphoto:   40,
   videotranslate: 60,
-  voiceclone:    30,
-  dreamact:      45,
-  storyboard:    20,
+  voiceclone:     30,
+  dreamact:       45,
+  storyboard:     20,
+  timeline:        3,   // VSL scene-cutter (gpt-4o-mini, fast)
 };
 
 /**

@@ -25,6 +25,9 @@ export default function ConfigPage() {
       {/* Header */}
       <nav className="flex justify-between items-center w-full px-6 h-16 bg-[#131313] fixed top-0 z-50 border-b border-white/[0.04]">
         <div className="flex items-center gap-8">
+          <button onClick={() => router.back()} className="flex items-center gap-1.5 text-sm font-semibold text-zinc-400 hover:text-white transition-colors">
+            ← Voltar
+          </button>
           <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => router.push("/dashboard")}>
             <div className="w-7 h-7 rounded-lg flex items-center justify-center font-black text-white text-sm"
               style={{ background: "#F0563A", boxShadow: "0 0 16px rgba(240,86,58,0.4)" }}>S</div>

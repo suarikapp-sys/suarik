@@ -17,17 +17,35 @@ type SavedVoice = {
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+// Uploads blob to R2 and returns a clean proxy URL (/api/voiceclone/audio?key=...)
+// so external APIs like Newport AI can fetch it without presigned-URL complexity.
 async function uploadToR2(blob: Blob, filename: string, contentType: string): Promise<string> {
-  const { uploadUrl, publicUrl } = await fetch("/api/upload", {
+  const res = await fetch("/api/upload", {
     method:  "POST",
     headers: { "Content-Type": "application/json" },
     body:    JSON.stringify({ filename, contentType }),
-  }).then(r => r.json());
-  await fetch(uploadUrl, { method: "PUT", body: blob, headers: { "Content-Type": contentType } });
-  return publicUrl as string;
+  });
+  if (!res.ok) throw new Error(`Falha ao obter URL de upload (HTTP ${res.status})`);
+  const { uploadUrl, key, downloadUrl, publicUrl } = await res.json() as {
+    uploadUrl: string; key: string; downloadUrl?: string; publicUrl: string;
+  };
+  if (!uploadUrl || !key) throw new Error("Resposta inválida do servidor de upload");
+  // Route through proxy to avoid CORS/403 on direct R2 PUT from browser
+  const proxyRes = await fetch(`/api/upload/proxy?target=${encodeURIComponent(uploadUrl)}`, {
+    method:  "PUT",
+    headers: { "Content-Type": contentType },
+    body:    blob,
+  });
+  if (!proxyRes.ok) throw new Error(`Upload falhou (HTTP ${proxyRes.status})`);
+  // In production: use clean proxy URL (simple, no presigned complexity, no long AWS params)
+  // In development: Newport AI can't reach localhost — use presigned R2 URL instead
+  const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+  if (!isLocalhost) {
+    return `${window.location.origin}/api/voiceclone/audio?key=${encodeURIComponent(key)}`;
+  }
+  return (downloadUrl ?? publicUrl) as string;
 }
 
-function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
 
 function fmtSec(s: number) {
   return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
@@ -109,6 +127,10 @@ export default function VoiceClonePage() {
   const [savedVoices,   setSavedVoices]   = useState<SavedVoice[]>([]);
   const [activeVoiceId, setActiveVoiceId] = useState<string | null>(null);
 
+  // ── Voice management (rename/delete) ──
+  const [renamingId,  setRenamingId]  = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+
   // ── Step 4: TTS with clone ──
   const [ttsText,    setTtsText]    = useState("");
   const [ttsSpeed,   setTtsSpeed]   = useState(1.0);
@@ -132,17 +154,44 @@ export default function VoiceClonePage() {
     try { localStorage.setItem("suarik_cloned_voices", JSON.stringify(updated)); } catch {}
   }
 
+  function deleteVoice(voiceId: string) {
+    const updated = savedVoices.filter(x => x.voiceId !== voiceId);
+    setSavedVoices(updated);
+    try { localStorage.setItem("suarik_cloned_voices", JSON.stringify(updated)); } catch {}
+    if (activeVoiceId === voiceId) {
+      setActiveVoiceId(updated[0]?.voiceId ?? null);
+      if (updated.length === 0) setStage("setup");
+    }
+    toast.success("Voz removida");
+  }
+
+  function commitRename(voiceId: string) {
+    const name = renameValue.trim();
+    if (!name) { setRenamingId(null); return; }
+    const updated = savedVoices.map(x => x.voiceId === voiceId ? { ...x, voiceName: name } : x);
+    setSavedVoices(updated);
+    try { localStorage.setItem("suarik_cloned_voices", JSON.stringify(updated)); } catch {}
+    setRenamingId(null);
+    toast.success("Nome actualizado");
+  }
+
   // ── Handle sample file select ──
   async function handleSampleSelect(file: File) {
     setSampleFile(file);
     const obj = URL.createObjectURL(file);
     setSampleObjUrl(obj);
     setUploadingSample(true);
+    setErrMsg("");
     try {
-      const url = await uploadToR2(file, `sample-${Date.now()}.${file.name.split(".").pop()}`, file.type);
+      const ext = (file as File & { name?: string }).name?.split(".").pop()
+        ?? file.type.split("/")[1]?.replace("mpeg", "mp3")
+        ?? "webm";
+      const contentType = file.type || "audio/webm";
+      const url = await uploadToR2(file, `sample-${Date.now()}.${ext}`, contentType);
       setSampleUrl(url);
-    } catch {
-      setErrMsg("Erro ao enviar áudio de amostra.");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Erro ao enviar áudio de amostra.";
+      setErrMsg(msg);
     } finally {
       setUploadingSample(false);
     }
@@ -179,11 +228,9 @@ export default function VoiceClonePage() {
   // ── Clone voice ──
   const cloneVoice = useCallback(async () => {
     if (!sampleUrl || !voiceName.trim()) return;
-    const creditResult = await spend("voiceclone");
-    if (!creditResult.ok) { setCreditAction("voiceclone"); setShowCreditModal(true); return; }
     setStage("cloning");
-    setProgress(5);
-    setStatusMsg("Enviando amostra para análise...");
+    setProgress(10);
+    setStatusMsg("A descarregar e analisar amostra de voz...");
 
     try {
       const res = await fetch("/api/voiceclone", {
@@ -191,55 +238,38 @@ export default function VoiceClonePage() {
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ audioUrl: sampleUrl, voiceName: voiceName.trim() }),
       });
-      const j = await res.json() as { taskId?: string; error?: string };
-      if (!j.taskId) throw new Error(j.error ?? "Erro ao iniciar clonagem");
+      if (res.status === 402) {
+        setStage("setup");
+        setCreditAction("voiceclone"); setShowCreditModal(true); return;
+      }
+      const j = await res.json() as { voiceId?: string; taskId?: string; error?: string; debug?: Record<string, unknown> };
 
-      const taskId = j.taskId;
-      setProgress(20);
-      setStatusMsg("Clonando padrões vocais...");
-
-      const start = Date.now();
-      const MAX   = 5 * 60 * 1000;
-
-      while (Date.now() - start < MAX) {
-        await sleep(4000);
-        const pollRes = await fetch("/api/voiceclone/poll", {
-          method:  "POST",
-          headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify({ taskId }),
-        });
-        const p = await pollRes.json() as { status: number; voiceId: string | null };
-
-        if (p.status === 4) throw new Error("Clonagem falhou no servidor");
-        if (p.status === 3 && p.voiceId) {
-          const cloned: SavedVoice = {
-            voiceId:   p.voiceId,
-            voiceName: voiceName.trim(),
-            createdAt: Date.now(),
-          };
-          persistVoice(cloned);
-          setClonedVoiceId(p.voiceId);
-          setActiveVoiceId(p.voiceId);
-          setProgress(100);
-          setStatusMsg("Voz clonada com sucesso!");
-          setStage("ready");
-          toast.success(`Voz "${voiceName}" clonada com sucesso! 🧬`);
-          return;
-        }
-
-        const pct = Math.min(90, 20 + Math.floor(((Date.now() - start) / MAX) * 70));
-        setProgress(pct);
-        if (p.status === 1) setStatusMsg("Aguardando na fila...");
-        if (p.status === 2) setStatusMsg("Analisando padrões vocais...");
+      // MiniMax returns voiceId directly (synchronous) — no polling needed
+      if (j.voiceId) {
+        const cloned: SavedVoice = {
+          voiceId:   j.voiceId,
+          voiceName: voiceName.trim(),
+          createdAt: Date.now(),
+        };
+        persistVoice(cloned);
+        setClonedVoiceId(j.voiceId);
+        setActiveVoiceId(j.voiceId);
+        setProgress(100);
+        setStatusMsg("Voz clonada com sucesso!");
+        setStage("ready");
+        toast.success(`Voz "${voiceName}" clonada com sucesso! 🧬`);
+        return;
       }
 
-      throw new Error("Tempo limite excedido. Tente novamente.");
+      // No voiceId returned — error
+      if (j.debug) console.error("[voiceclone] Debug:", JSON.stringify(j.debug, null, 2));
+      throw new Error(j.error ?? "Erro ao iniciar clonagem");
+
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro desconhecido";
       setErrMsg(msg);
       setStage("error");
       toast.error(msg);
-      await refund("voiceclone");
     }
   }, [sampleUrl, voiceName, savedVoices, toast]);
 
@@ -253,8 +283,6 @@ export default function VoiceClonePage() {
     setStatusMsg("Gerando áudio com sua voz...");
 
     try {
-      // Cloned voices come from Newport AI — use the dedicated endpoint
-      // MiniMax presets are standard voice IDs
       const isMiniMaxVoice = [
         "English_expressive_narrator",
         "English_Graceful_Lady",
@@ -331,10 +359,30 @@ export default function VoiceClonePage() {
 
   function handleSendToEditor() {
     if (audioResult && typeof window !== "undefined") {
-      sessionStorage.setItem("vb_pending_audio", JSON.stringify({ url: audioResult, label: voiceName, duration: audioDur }));
-      sessionStorage.setItem("vb_restore_requested", "1");
+      // Only store if it's a persisted URL (not a blob: URL which dies on navigation)
+      const url = audioResult.startsWith("blob:") ? null : audioResult;
+      if (url) {
+        sessionStorage.setItem("vb_pending_audio", JSON.stringify({ url, label: voiceName, duration: audioDur }));
+      }
     }
     router.push("/storyboard");
+  }
+
+  async function handleDownload() {
+    if (!audioResult) return;
+    try {
+      // Fetch the audio and create a local blob download (works for cross-origin URLs)
+      const res  = await fetch(audioResult);
+      const blob = await res.blob();
+      const obj  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = obj;
+      a.download = `suarik-${voiceName || "clone"}-${Date.now()}.mp3`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(obj), 10000);
+    } catch {
+      window.open(audioResult, "_blank");
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -409,6 +457,11 @@ export default function VoiceClonePage() {
         background: "#1C1B1B", flexShrink: 0,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button onClick={() => router.back()} style={{
+            background: "transparent", border: "none", color: "#777", fontSize: 13,
+            cursor: "pointer", display: "flex", alignItems: "center", gap: 4, fontWeight: 600,
+          }}>← Voltar</button>
+          <span style={{ color: "#333", fontSize: 16 }}>|</span>
           <div style={{
             width: 32, height: 32, borderRadius: 8, background: "#F0563A",
             display: "flex", alignItems: "center", justifyContent: "center",
@@ -458,25 +511,68 @@ export default function VoiceClonePage() {
               🧬<br />Nenhuma voz clonada ainda
             </div>
           ) : (
-            savedVoices.map(v => (
-              <button
-                key={v.voiceId}
-                onClick={() => { setActiveVoiceId(v.voiceId); if (stage === "setup" || stage === "error") setStage("ready"); }}
-                style={{
-                  display: "flex", flexDirection: "column", alignItems: "flex-start",
-                  padding: "10px 12px", borderRadius: 8, marginBottom: 6, cursor: "pointer", textAlign: "left",
-                  border: activeVoiceId === v.voiceId ? "1.5px solid #34d399" : "1px solid #2a2a2a",
-                  background: activeVoiceId === v.voiceId ? "#34d39910" : "#111",
-                }}
-              >
-                <span style={{ fontSize: 12, fontWeight: 600, color: activeVoiceId === v.voiceId ? "#34d399" : "#ccc" }}>
-                  {v.voiceName}
-                </span>
-                <span style={{ fontSize: 10, color: "#444", marginTop: 2 }}>
-                  {new Date(v.createdAt).toLocaleDateString("pt-BR")}
-                </span>
-              </button>
-            ))
+            savedVoices.map(v => {
+              const isActive  = activeVoiceId === v.voiceId;
+              const isRenaming = renamingId === v.voiceId;
+              return (
+                <div
+                  key={v.voiceId}
+                  className="voice-item"
+                  style={{
+                    borderRadius: 8, marginBottom: 6, overflow: "hidden",
+                    border: isActive ? "1.5px solid #34d399" : "1px solid #2a2a2a",
+                    background: isActive ? "#34d39910" : "#111",
+                  }}
+                >
+                  {/* Main row */}
+                  <div
+                    onClick={() => !isRenaming && (() => { setActiveVoiceId(v.voiceId); if (stage === "setup" || stage === "error") setStage("ready"); })()}
+                    style={{ padding: "10px 12px", cursor: isRenaming ? "default" : "pointer" }}
+                  >
+                    {isRenaming ? (
+                      <input
+                        autoFocus
+                        value={renameValue}
+                        onChange={e => setRenameValue(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter") commitRename(v.voiceId); if (e.key === "Escape") setRenamingId(null); }}
+                        onBlur={() => commitRename(v.voiceId)}
+                        maxLength={40}
+                        onClick={e => e.stopPropagation()}
+                        style={{
+                          width: "100%", background: "#1a1a1a", border: "1px solid #34d399",
+                          borderRadius: 4, padding: "3px 6px", color: "#fff",
+                          fontSize: 12, outline: "none", boxSizing: "border-box",
+                        }}
+                      />
+                    ) : (
+                      <span style={{ fontSize: 12, fontWeight: 600, color: isActive ? "#34d399" : "#ccc", display: "block" }}>
+                        {v.voiceName}
+                      </span>
+                    )}
+                    <span style={{ fontSize: 10, color: "#444", marginTop: 2, display: "block" }}>
+                      {new Date(v.createdAt).toLocaleDateString("pt-BR")}
+                    </span>
+                  </div>
+                  {/* Action row — always visible */}
+                  <div style={{ display: "flex", borderTop: "1px solid #1a1a1a" }}>
+                    <button
+                      onClick={e => { e.stopPropagation(); setRenamingId(v.voiceId); setRenameValue(v.voiceName); }}
+                      title="Renomear"
+                      style={{ flex: 1, padding: "5px 0", background: "transparent", border: "none", color: "#555", fontSize: 11, cursor: "pointer", transition: "color 0.15s" }}
+                      onMouseEnter={e => (e.currentTarget.style.color = "#aaa")}
+                      onMouseLeave={e => (e.currentTarget.style.color = "#555")}
+                    >✏️</button>
+                    <button
+                      onClick={e => { e.stopPropagation(); if (confirm(`Apagar "${v.voiceName}"?`)) deleteVoice(v.voiceId); }}
+                      title="Apagar"
+                      style={{ flex: 1, padding: "5px 0", background: "transparent", border: "none", color: "#555", fontSize: 11, cursor: "pointer", transition: "color 0.15s" }}
+                      onMouseEnter={e => (e.currentTarget.style.color = "#F0563A")}
+                      onMouseLeave={e => (e.currentTarget.style.color = "#555")}
+                    >🗑️</button>
+                  </div>
+                </div>
+              );
+            })
           )}
 
           <div style={{ flex: 1 }} />
@@ -536,8 +632,8 @@ export default function VoiceClonePage() {
 
                 {/* Voice name */}
                 <div style={{ marginBottom: 16 }}>
-                  <label style={{ display: "block", fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>
-                    Nome da voz
+                  <label style={{ display: "block", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6, color: sampleObjUrl && !voiceName.trim() ? "#f59e0b" : "#888" }}>
+                    Nome da voz {sampleObjUrl && !voiceName.trim() && <span style={{ fontWeight: 700 }}>← preenche aqui</span>}
                   </label>
                   <input
                     value={voiceName}
@@ -545,7 +641,8 @@ export default function VoiceClonePage() {
                     placeholder="Ex: Minha Voz, Narrador João..."
                     maxLength={40}
                     style={{
-                      width: "100%", background: "#1a1a1a", border: "1px solid #2a2a2a",
+                      width: "100%", background: "#1a1a1a",
+                      border: `1px solid ${sampleObjUrl && !voiceName.trim() ? "#f59e0b66" : "#2a2a2a"}`,
                       borderRadius: 8, padding: "11px 14px", color: "#fff",
                       fontSize: 14, outline: "none", boxSizing: "border-box",
                     }}
@@ -603,21 +700,38 @@ export default function VoiceClonePage() {
                 {sampleObjUrl && (
                   <div style={{
                     marginBottom: 16, padding: "14px 16px", borderRadius: 10,
-                    background: "#34d39908", border: "1px solid #34d39930",
+                    background: uploadingSample ? "#11111108" : sampleUrl ? "#34d39908" : errMsg ? "#ef444408" : "#f59e0b08",
+                    border: `1px solid ${uploadingSample ? "#2a2a2a" : sampleUrl ? "#34d39930" : errMsg ? "#ef444430" : "#f59e0b30"}`,
                     display: "flex", alignItems: "center", gap: 12,
                   }}>
-                    <span style={{ fontSize: 20 }}>✓</span>
+                    <span style={{ fontSize: 20 }}>
+                      {uploadingSample ? "⏳" : sampleUrl ? "✓" : errMsg ? "⚠" : "⏫"}
+                    </span>
                     <div style={{ flex: 1 }}>
-                      <p style={{ margin: 0, fontSize: 13, color: "#34d399", fontWeight: 600 }}>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: uploadingSample ? "#888" : sampleUrl ? "#34d399" : errMsg ? "#ef4444" : "#f59e0b" }}>
                         {sampleFile instanceof File ? sampleFile.name : "Gravação"}
                       </p>
                       <p style={{ margin: 0, fontSize: 11, color: "#555", marginTop: 2 }}>
-                        {uploadingSample ? "Enviando para o servidor…" : "Pronto para clonar"}
+                        {uploadingSample ? "A enviar para o servidor…"
+                          : sampleUrl    ? "Áudio carregado — pronto para clonar"
+                          : errMsg       ? errMsg
+                          : "A preparar upload…"}
                       </p>
                     </div>
                     <audio src={sampleObjUrl} controls style={{ height: 32 }} />
                   </div>
                 )}
+
+                {/* Audio requirements hint */}
+                <div style={{
+                  marginBottom: 14, padding: "10px 14px", borderRadius: 8,
+                  background: "#1a1a1a", border: "1px solid #2a2a2a", fontSize: 11, color: "#666",
+                  lineHeight: 1.6,
+                }}>
+                  <span style={{ color: "#888", fontWeight: 600 }}>Requisitos do áudio: </span>
+                  Mín. 10 seg · MP3, WAV, M4A · Voz humana real (não IA/TTS)
+                  <span style={{ color: "#555" }}> · Sem música ou ruído de fundo</span>
+                </div>
 
                 {/* Clone button */}
                 <button
@@ -628,11 +742,15 @@ export default function VoiceClonePage() {
                     cursor: (!sampleUrl || !voiceName.trim() || uploadingSample) ? "not-allowed" : "pointer",
                     background: (!sampleUrl || !voiceName.trim() || uploadingSample)
                       ? "#222" : "linear-gradient(135deg, #34d399, #059669)",
-                    color: (!sampleUrl || !voiceName.trim() || uploadingSample) ? "#444" : "#fff",
+                    color: (!sampleUrl || !voiceName.trim() || uploadingSample) ? "#555" : "#fff",
                     fontSize: 15, fontWeight: 700, letterSpacing: 0.5,
                   }}
                 >
-                  {uploadingSample ? "Enviando amostra…" : "🧬 Clonar Voz"}
+                  {uploadingSample        ? "A enviar amostra…"
+                    : !sampleUrl && errMsg ? "⚠ Upload falhou — tenta de novo"
+                    : !sampleUrl          ? "⏳ A aguardar upload…"
+                    : !voiceName.trim()   ? "← Dá um nome à voz primeiro"
+                    : "🧬 Clonar Voz"}
                 </button>
               </div>
             )}
@@ -730,26 +848,49 @@ export default function VoiceClonePage() {
                       <MiniWave progress={playProg} active={playing} />
                     </div>
 
-                    <div style={{ display: "flex", gap: 8 }}>
+                    {/* Row 1: play + download */}
+                    <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
                       <button onClick={togglePlay} style={{
-                        flex: 1, height: 40, borderRadius: 8, border: "none",
+                        flex: 1, height: 42, borderRadius: 8, border: "none",
                         background: "#34d399", color: "#fff", fontSize: 18, cursor: "pointer",
-                        display: "flex", alignItems: "center", justifyContent: "center",
+                        display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                        fontWeight: 700,
                       }}>
-                        {playing ? "⏸" : "▶"}
+                        {playing ? "⏸" : "▶"} <span style={{ fontSize: 13 }}>{playing ? "Pausar" : "Ouvir"}</span>
                       </button>
-                      <a href={audioResult} download={`suarik-clone-${Date.now()}.mp3`} style={{
-                        width: 40, height: 40, borderRadius: 8, border: "1px solid #333",
-                        background: "#1a1a1a", color: "#ccc", fontSize: 16,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        textDecoration: "none",
-                      }}>↓</a>
-                      <button onClick={handleSendToEditor} style={{
-                        flex: 1, height: 40, borderRadius: 8, border: "1px solid #6305ef55",
-                        background: "#6305ef22", color: "#a78bfa",
-                        fontSize: 13, fontWeight: 700, cursor: "pointer",
+                      <button onClick={handleDownload} style={{
+                        flex: 1, height: 42, borderRadius: 8, border: "1px solid #333",
+                        background: "#1a1a1a", color: "#ccc", fontSize: 13, fontWeight: 600,
+                        cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                       }}>
+                        ⬇ Descarregar MP3
+                      </button>
+                    </div>
+
+                    {/* Row 2: send to editor + dreamface */}
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        onClick={handleSendToEditor}
+                        disabled={audioResult?.startsWith("blob:")}
+                        title={audioResult?.startsWith("blob:") ? "A guardar áudio…" : "Enviar ao Editor"}
+                        style={{
+                          flex: 1, height: 42, borderRadius: 8,
+                          border: "1px solid #6305ef55",
+                          background: audioResult?.startsWith("blob:") ? "#111" : "#6305ef22",
+                          color: audioResult?.startsWith("blob:") ? "#444" : "#a78bfa",
+                          fontSize: 13, fontWeight: 700, cursor: audioResult?.startsWith("blob:") ? "not-allowed" : "pointer",
+                        }}
+                      >
                         ⚡ Enviar ao Editor
+                      </button>
+                      <button onClick={() => router.push("/dreamface")} style={{
+                        flex: 1, height: 42, borderRadius: 8,
+                        border: "1px solid #F0563A44",
+                        background: "#F0563A11", color: "#F0563A",
+                        fontSize: 13, fontWeight: 700, cursor: "pointer",
+                        display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                      }}>
+                        🎭 Ir para LipSync
                       </button>
                     </div>
                   </div>

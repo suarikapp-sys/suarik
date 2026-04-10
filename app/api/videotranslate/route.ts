@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient }        from "@supabase/ssr";
 import { cookies }                   from "next/headers";
+import { creditGuard }               from "@/app/lib/creditGuard";
 
 const NEWPORT_BASE = "https://api.newportai.com";
 const API_KEY      = process.env.DREAMFACE_API_KEY!;
@@ -41,6 +42,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "videoUrl e targetLanguage são obrigatórios" }, { status: 400 });
   }
 
+  // ── Credits ────────────────────────────────────────────────────────────────
+  const guard = await creditGuard(user.id, "videotranslate");
+  if (guard.error) return guard.error;
+
   const res = await fetch(`${NEWPORT_BASE}/api/async/video-translate`, {
     method:  "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${API_KEY}` },
@@ -51,8 +56,9 @@ export async function POST(req: NextRequest) {
 
   if (data.code !== 0 || !data.data?.taskId) {
     console.error("[videotranslate] error:", data);
+    await guard.refund();
     return NextResponse.json({ error: data.message ?? "Erro ao iniciar tradução" }, { status: 500 });
   }
 
-  return NextResponse.json({ taskId: data.data.taskId });
+  return NextResponse.json({ taskId: data.data.taskId, cost: guard.cost });
 }

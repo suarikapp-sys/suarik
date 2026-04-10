@@ -15,7 +15,12 @@ async function uploadToR2(blob: Blob, filename: string, contentType: string): Pr
     headers: { "Content-Type": "application/json" },
     body:    JSON.stringify({ filename, contentType }),
   }).then(r => r.json());
-  await fetch(uploadUrl, { method: "PUT", body: blob, headers: { "Content-Type": contentType } });
+  const proxyRes = await fetch(`/api/upload/proxy?target=${encodeURIComponent(uploadUrl)}`, {
+    method:  "PUT",
+    headers: { "Content-Type": contentType },
+    body:    blob,
+  });
+  if (!proxyRes.ok) throw new Error(`Upload falhou (HTTP ${proxyRes.status})`);
   return publicUrl as string;
 }
 
@@ -458,7 +463,11 @@ export default function AudioPage() {
   const deleteHistoryEntry = useCallback(async (id: string) => {
     setDeletingId(id);
     try {
-      await fetch(`/api/projects?id=${id}`, { method: "DELETE" });
+      await fetch("/api/projects", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
       setHistory(h => h.filter(e => e.id !== id));
       setHistoryFromDB(h => h.filter(e => e.id !== id));
       toast.success("Entrada removida");
@@ -698,6 +707,20 @@ export default function AudioPage() {
     }
   }, [sfxPrompt, sfxDuration, generatingSfx, toast, refresh]);
 
+  // ── Keyboard shortcut: Cmd/Ctrl+Enter → generate ──
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        e.preventDefault();
+        if (activeTab === "tts"   && !generating)      generate();
+        if (activeTab === "music" && !generatingMusic) generateMusic();
+        if (activeTab === "sfx"   && !generatingSfx)   generateSfx();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [activeTab, generating, generatingMusic, generatingSfx, generate, generateMusic, generateSfx]);
+
   // ── Send to timeline ──
   function handleSendToTimeline(entry: AudioEntry) {
     if (typeof window !== "undefined") {
@@ -729,6 +752,11 @@ export default function AudioPage() {
         background: "#1C1B1B", flexShrink: 0,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button onClick={() => router.back()} style={{
+            background: "transparent", border: "none", color: "#777", fontSize: 13,
+            cursor: "pointer", fontWeight: 600,
+          }}>← Voltar</button>
+          <span style={{ color: "#333", fontSize: 16 }}>|</span>
           <div style={{
             width: 32, height: 32, borderRadius: 8,
             background: "#F0563A", display: "flex", alignItems: "center",
@@ -1058,6 +1086,7 @@ export default function AudioPage() {
               <button
                 onClick={generate}
                 disabled={!text.trim() || generating}
+                title="⌘ Enter"
                 style={{
                   width: "100%", height: 52, borderRadius: 12, border: "none",
                   cursor: !text.trim() || generating ? "not-allowed" : "pointer",
@@ -1080,9 +1109,39 @@ export default function AudioPage() {
                     Gerando áudio...
                   </>
                 ) : (
-                  <>✦ Gerar Áudio <span style={{ fontSize: 11, opacity: 0.7 }}>({computeCost("tts", { chars: text.length })} créditos)</span></>
+                  <>
+                    ✦ Gerar Áudio
+                    <span style={{ fontSize: 11, opacity: 0.7 }}>({computeCost("tts", { chars: text.length })} cr)</span>
+                    <kbd style={{ fontSize: 10, opacity: 0.45, background: "rgba(0,0,0,0.25)", borderRadius: 4, padding: "1px 5px", fontFamily: "monospace" }}>⌘↵</kbd>
+                  </>
                 )}
               </button>
+
+              {/* Inline result after generation */}
+              {activeEntry && !generating && (
+                <div style={{ marginTop: 20 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                    <span style={{ fontSize: 12, color: "#aaa", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8 }}>
+                      Áudio gerado
+                    </span>
+                    <span style={{ fontSize: 11, color: "#34d399" }}>✓ Pronto</span>
+                  </div>
+                  <AudioPlayer entry={activeEntry} onSendToTimeline={handleSendToTimeline} />
+                  <button
+                    onClick={() => handleSendToTimeline(activeEntry)}
+                    style={{
+                      marginTop: 10, width: "100%", height: 46, borderRadius: 10, border: "none",
+                      cursor: "pointer",
+                      background: "linear-gradient(135deg, #6305ef, #4b03b5)",
+                      color: "#fff", fontSize: 14, fontWeight: 700, letterSpacing: 0.5,
+                      display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                      transition: "all 0.2s",
+                    }}
+                  >
+                    ⚡ Enviar para a Timeline
+                  </button>
+                </div>
+              )}
 
             </div>
           )}
@@ -1420,31 +1479,128 @@ export default function AudioPage() {
 
                 {pixabayResults.length > 0 && (
                   <>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 10, marginBottom: 16 }}>
-                      {pixabayResults.map(track => (
-                        <div key={track.id} style={{ background: "#1a1a1a", borderRadius: 10, padding: 14, border: "1px solid #2a2a2a" }}>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: "#ccc", marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {track.name}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 10, marginBottom: 16 }}>
+                      {pixabayResults.map(track => {
+                        const isPlaying = pixabayPlaying === track.id;
+                        const fmtDur = `${Math.floor(track.duration / 60)}:${String(track.duration % 60).padStart(2, "0")}`;
+                        return (
+                          <div key={track.id} style={{
+                            background: isPlaying ? "#1e1a1a" : "#1a1a1a",
+                            borderRadius: 10, padding: 14,
+                            border: isPlaying ? "1px solid #F0563A55" : "1px solid #2a2a2a",
+                            transition: "border-color 0.15s",
+                          }}>
+                            {/* Title + duration */}
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 2 }}>
+                              <div style={{ fontSize: 12, fontWeight: 600, color: "#ccc", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, marginRight: 8 }}>
+                                {track.name}
+                              </div>
+                              <span style={{ fontSize: 10, color: "#555", flexShrink: 0 }}>{fmtDur}</span>
+                            </div>
+                            <div style={{ fontSize: 10, color: "#555", marginBottom: 10 }}>
+                              {track.artist_name}
+                            </div>
+
+                            {/* Hidden audio element */}
+                            <audio
+                              id={`pxaudio-${track.id}`}
+                              src={track.audio}
+                              onPlay={() => setPixabayPlaying(track.id)}
+                              onPause={() => setPixabayPlaying(null)}
+                              onEnded={() => setPixabayPlaying(null)}
+                            />
+
+                            {/* Custom mini-player */}
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                              <button
+                                onClick={() => {
+                                  const el = document.getElementById(`pxaudio-${track.id}`) as HTMLAudioElement | null;
+                                  if (!el) return;
+                                  // Pause all others
+                                  pixabayResults.forEach(t => {
+                                    if (t.id !== track.id) {
+                                      const o = document.getElementById(`pxaudio-${t.id}`) as HTMLAudioElement | null;
+                                      o?.pause();
+                                    }
+                                  });
+                                  isPlaying ? el.pause() : el.play().catch(() => {});
+                                }}
+                                style={{
+                                  width: 32, height: 32, borderRadius: "50%", border: "none",
+                                  background: isPlaying ? "#F0563A" : "#2a2a2a",
+                                  color: "#fff", cursor: "pointer", fontSize: 12,
+                                  display: "flex", alignItems: "center", justifyContent: "center",
+                                  flexShrink: 0, transition: "background 0.15s",
+                                }}
+                              >
+                                {isPlaying ? "⏸" : "▶"}
+                              </button>
+                              <div style={{ flex: 1, height: 3, borderRadius: 2, background: "#2a2a2a", overflow: "hidden" }}>
+                                <div style={{
+                                  height: "100%", borderRadius: 2,
+                                  background: isPlaying ? "#F0563A" : "#333",
+                                  width: isPlaying ? "100%" : "0%",
+                                  transition: isPlaying ? `width ${track.duration}s linear` : "none",
+                                }} />
+                              </div>
+                            </div>
+
+                            {/* Actions */}
+                            <div style={{ display: "flex", gap: 6 }}>
+                              <button
+                                onClick={async () => {
+                                  // Add to session history as music entry
+                                  const blob = await fetch(track.audio).then(r => r.blob()).catch(() => null);
+                                  const url = blob ? URL.createObjectURL(blob) : track.audio;
+                                  const entry: AudioEntry = {
+                                    id: `lib-${track.id}-${Date.now()}`,
+                                    text: track.name,
+                                    voiceId: "music-ai",
+                                    voiceLabel: track.artist_name,
+                                    emotion: "library",
+                                    speed: 1,
+                                    blob: blob ?? new Blob(),
+                                    url,
+                                    duration: track.duration,
+                                    createdAt: Date.now(),
+                                  };
+                                  setMusicEntry(entry);
+                                  setActiveEntry(entry);
+                                  setActiveTab("tts");
+                                  toast.success(`"${track.name}" adicionado ao player`);
+                                }}
+                                style={{
+                                  flex: 1, padding: "6px 0", borderRadius: 6, border: "1px solid #F0563A44",
+                                  background: "#F0563A11", color: "#F0563A",
+                                  fontSize: 11, fontWeight: 600, cursor: "pointer",
+                                }}
+                              >
+                                ⚡ Usar no Projeto
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const res = await fetch(track.audio);
+                                    const blob = await res.blob();
+                                    const obj = URL.createObjectURL(blob);
+                                    const a = document.createElement("a");
+                                    a.href = obj; a.download = `${track.name}.mp3`;
+                                    a.click();
+                                    setTimeout(() => URL.revokeObjectURL(obj), 10000);
+                                  } catch { window.open(track.audio, "_blank"); }
+                                }}
+                                style={{
+                                  padding: "6px 10px", borderRadius: 6, border: "1px solid #333",
+                                  background: "#111", color: "#888",
+                                  fontSize: 11, cursor: "pointer",
+                                }}
+                              >
+                                ⬇
+                              </button>
+                            </div>
                           </div>
-                          <div style={{ fontSize: 10, color: "#555", marginBottom: 8 }}>
-                            {track.artist_name} · {Math.floor(track.duration / 60)}:{String(track.duration % 60).padStart(2, "0")}
-                          </div>
-                          <audio
-                            controls
-                            src={track.audio}
-                            onPlay={() => setPixabayPlaying(track.id)}
-                            onPause={() => setPixabayPlaying(null)}
-                            style={{ width: "100%", height: 28, accentColor: "#F0563A" }}
-                          />
-                          <a
-                            href={track.audio}
-                            download={`${track.name}.mp3`}
-                            style={{ display: "block", marginTop: 8, textAlign: "center", fontSize: 11, color: "#888", textDecoration: "none" }}
-                          >
-                            ⬇ Download
-                          </a>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                     <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
                       <button

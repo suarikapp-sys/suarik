@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient }        from "@supabase/ssr";
 import { cookies }                   from "next/headers";
+import { creditGuard }               from "@/app/lib/creditGuard";
 
 const NEWPORT_BASE = "https://api.newportai.com";
 const API_KEY      = process.env.DREAMFACE_API_KEY!;
@@ -30,6 +31,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "srcVideoUrl e audioUrl são obrigatórios" }, { status: 400 });
   }
 
+  // ── Credits ─────────────────────────────────────────────────────────────
+  const guard = await creditGuard(user.id, "lipsync");
+  if (guard.error) return guard.error;
+
   // ── Call Newport AI ─────────────────────────────────────────────────────
   const payload: Record<string, unknown> = {
     srcVideoUrl: body.srcVideoUrl,
@@ -57,8 +62,9 @@ export async function POST(req: NextRequest) {
 
   if (data.code !== 0 || !data.data?.taskId) {
     console.error("[dreamface] Newport AI error:", data);
+    await guard.refund();
     return NextResponse.json({ error: data.message ?? "Erro ao iniciar LipSync" }, { status: 500 });
   }
 
-  return NextResponse.json({ taskId: data.data.taskId });
+  return NextResponse.json({ taskId: data.data.taskId, cost: guard.cost });
 }

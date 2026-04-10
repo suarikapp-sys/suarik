@@ -22,7 +22,7 @@ export default function SettingsPage() {
       setUserName(user.user_metadata?.full_name ?? user.email?.split("@")[0] ?? "");
       const { data: prof } = await supabase.from("profiles").select("plan,credits").eq("id", user.id).single();
       if (prof) {
-        const labels: Record<string,string> = { free:"Free", starter:"Starter", pro:"PRO", agency:"Agency", premium:"Premium" };
+        const labels: Record<string,string> = { free:"Free", starter:"Starter", pro:"Pro", growth:"Growth", enterprise:"Enterprise" };
         setUserPlan(labels[prof.plan] ?? "Free");
         setCredits(prof.credits ?? 0);
       }

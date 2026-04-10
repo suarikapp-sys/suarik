@@ -4,10 +4,26 @@ import { useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Upload, Zap, Film, Gauge, Lock, Settings, User } from "lucide-react";
 
+async function storeFileInIDB(file: File): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open("enricherDB", 1);
+    req.onupgradeneeded = () => req.result.createObjectStore("files");
+    req.onsuccess = () => {
+      const tx = req.result.transaction("files", "readwrite");
+      tx.objectStore("files").put(file, "pending");
+      tx.oncomplete = () => { req.result.close(); resolve(); };
+      tx.onerror = () => reject(tx.error);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
 export default function EnricherPage() {
   const router = useRouter();
   const [dragging, setDragging] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const [selectedFormat, setSelectedFormat] = useState<"16:9"|"9:16"|"1:1">("9:16");
+  const [analyzing, setAnalyzing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -24,10 +40,17 @@ export default function EnricherPage() {
     if (f) setFile(f);
   };
 
-  const handleAnalyze = () => {
-    // Signal storyboard to open the upload modal for B-roll enrichment
-    sessionStorage.setItem("vb_open_upload_modal", "1");
-    router.push("/storyboard");
+  const handleAnalyze = async () => {
+    if (!file || analyzing) return;
+    setAnalyzing(true);
+    try {
+      await storeFileInIDB(file);
+      sessionStorage.setItem("vb_enricher_format", selectedFormat);
+      sessionStorage.setItem("vb_enricher_pending", "1");
+      router.push("/storyboard");
+    } catch {
+      setAnalyzing(false);
+    }
   };
 
   const recent = [
@@ -40,6 +63,9 @@ export default function EnricherPage() {
       {/* ─── Header ──────────────────────────────────────────────────────────── */}
       <header className="fixed top-0 z-50 flex justify-between items-center w-full px-6 h-16 bg-[#131313] border-b border-white/[0.04]">
         <div className="flex items-center gap-8">
+          <button onClick={() => router.back()} className="flex items-center gap-1.5 text-sm font-semibold text-[#E5E2E1]/50 hover:text-[#E5E2E1] transition-colors">
+            ← Voltar
+          </button>
           <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => router.push("/dashboard")}>
             <div className="w-7 h-7 rounded-lg flex items-center justify-center font-black text-white text-sm"
               style={{ background: "#F0563A", boxShadow: "0 0 16px rgba(240,86,58,0.4)" }}>S</div>
@@ -208,35 +234,40 @@ export default function EnricherPage() {
                     <p className="font-mono text-[10px] uppercase tracking-widest text-[#E5E2E1]/40 mb-4">Formato de Saída</p>
                     <div className="grid grid-cols-3 gap-4">
                       {[
-                        { ratio: "16:9", label: "Cinematic", w: "w-12", h: "h-7" },
-                        { ratio: "9:16", label: "Social / Reels", w: "w-7", h: "h-12" },
-                        { ratio: "1:1",  label: "Square", w: "w-9", h: "h-9" },
-                      ].map((f, i) => (
-                        <button key={f.ratio}
-                          className="flex flex-col items-center justify-center p-6 rounded-xl transition-all border"
-                          style={{
-                            background: i === 0 ? "rgba(240,86,58,0.08)" : "rgba(42,42,42,0.4)",
-                            borderColor: i === 0 ? "rgba(240,86,58,0.4)" : "rgba(92,64,55,0.2)",
-                          }}>
-                          <div className={`${f.w} ${f.h} rounded-sm mb-3 border`}
+                        { ratio: "16:9" as const, label: "Cinematic", w: "w-12", h: "h-7" },
+                        { ratio: "9:16" as const, label: "Social / Reels", w: "w-7", h: "h-12" },
+                        { ratio: "1:1"  as const, label: "Square", w: "w-9", h: "h-9" },
+                      ].map((fmt) => {
+                        const isSelected = selectedFormat === fmt.ratio;
+                        return (
+                          <button key={fmt.ratio}
+                            onClick={() => setSelectedFormat(fmt.ratio)}
+                            className="flex flex-col items-center justify-center p-6 rounded-xl transition-all border"
                             style={{
-                              background: i === 0 ? "rgba(240,86,58,0.2)" : "rgba(229,226,225,0.08)",
-                              borderColor: i === 0 ? "rgba(240,86,58,0.5)" : "rgba(229,226,225,0.2)",
-                            }} />
-                          <span className="font-mono text-sm font-bold" style={{ color: i === 0 ? "#F0563A" : "#E5E2E1" }}>
-                            {f.ratio}
-                          </span>
-                          <span className="text-[10px] text-[#E5E2E1]/50 mt-1">{f.label}</span>
-                        </button>
-                      ))}
+                              background: isSelected ? "rgba(240,86,58,0.08)" : "rgba(42,42,42,0.4)",
+                              borderColor: isSelected ? "rgba(240,86,58,0.4)" : "rgba(92,64,55,0.2)",
+                            }}>
+                            <div className={`${fmt.w} ${fmt.h} rounded-sm mb-3 border`}
+                              style={{
+                                background: isSelected ? "rgba(240,86,58,0.2)" : "rgba(229,226,225,0.08)",
+                                borderColor: isSelected ? "rgba(240,86,58,0.5)" : "rgba(229,226,225,0.2)",
+                              }} />
+                            <span className="font-mono text-sm font-bold" style={{ color: isSelected ? "#F0563A" : "#E5E2E1" }}>
+                              {fmt.ratio}
+                            </span>
+                            <span className="text-[10px] text-[#E5E2E1]/50 mt-1">{fmt.label}</span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 
                   <button
                     onClick={handleAnalyze}
-                    className="w-full py-5 rounded-xl font-black text-sm uppercase tracking-wider transition-all active:scale-95 text-white"
+                    disabled={analyzing}
+                    className="w-full py-5 rounded-xl font-black text-sm uppercase tracking-wider transition-all active:scale-95 text-white disabled:opacity-60"
                     style={{ background: "linear-gradient(135deg,#F0563A,#c44527)", boxShadow: "0 0 24px rgba(240,86,58,0.3)" }}>
-                    ⚡ Iniciar Análise Neural
+                    {analyzing ? "⏳ Preparando análise..." : "⚡ Iniciar Análise Neural"}
                   </button>
                 </div>
               )}

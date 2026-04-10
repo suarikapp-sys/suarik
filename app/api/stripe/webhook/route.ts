@@ -11,7 +11,11 @@ const supabaseAdmin = createClient(
 
 export async function POST(request: Request) {
   const body = await request.text();
-  const sig  = request.headers.get("stripe-signature")!;
+  const sig  = request.headers.get("stripe-signature");
+
+  if (!sig) {
+    return NextResponse.json({ error: "Missing stripe-signature header" }, { status: 400 });
+  }
 
   let event: Stripe.Event;
   try {
@@ -67,11 +71,12 @@ export async function POST(request: Request) {
       const userId = sub2.metadata?.supabase_user_id;
       if (!userId) break;
 
+      // Preserve whatever credits the user has — don't wipe them on cancellation.
+      // Only downgrade the plan and clear the subscription reference.
       await supabaseAdmin.from("profiles").update({
         plan:                   "free",
         subscription_status:    "canceled",
         stripe_subscription_id: null,
-        credits:                100,
         updated_at:             new Date().toISOString(),
       }).eq("id", userId);
       break;

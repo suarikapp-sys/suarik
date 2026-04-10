@@ -3,11 +3,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdmin } from "@supabase/supabase-js";
-
-const CREDIT_COST: Record<string, number> = {
-  tts: 10, music: 15, sfx: 10, lipsync: 50, talkingphoto: 40,
-  videotranslate: 60, voiceclone: 30, dreamact: 45, storyboard: 20,
-};
+import { computeCost, CostMeta } from "@/app/lib/creditCost";
 
 const supabaseAdmin = createAdmin(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -19,8 +15,8 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { action } = await req.json() as { action: string };
-  const cost = CREDIT_COST[action];
+  const { action, meta } = await req.json() as { action: string; meta?: CostMeta };
+  const cost = computeCost(action, meta);
   if (!cost) return NextResponse.json({ error: "Ação inválida" }, { status: 400 });
 
   const { data: profile } = await supabaseAdmin

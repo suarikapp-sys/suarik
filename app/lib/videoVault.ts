@@ -22,7 +22,7 @@ export interface VaultVideo {
   url:   string;
 }
 
-const R2 = "https://pub-midiacopiloto.r2.dev/videos";
+const R2 = `${process.env.R2_PUBLIC_URL_MIDIAS ?? "https://pub-9937ef38e0a744128bd67f59e5476f23.r2.dev"}/videos`;
 
 export const VIDEO_VAULT: Record<string, VaultVideo[]> = {
 

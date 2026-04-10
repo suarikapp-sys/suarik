@@ -12,7 +12,7 @@ const PLANS = [
     name: "Starter",
     price: "R$ 97",
     period: "/mês",
-    description: "Perfeito para editores independentes que querem começar a escalar.",
+    description: "Para criadores Faceless que querem montar sua linha de produção de VSLs.",
     icon: Rocket,
     iconColor: "text-blue-400",
     iconBg: "rgba(37,99,235,0.12)",
@@ -23,19 +23,20 @@ const PLANS = [
     ctaLabel: "Começar agora",
     ctaStyle: { background: "rgba(37,99,235,0.15)", border: "1px solid rgba(59,130,246,0.3)", color: "#93c5fd" },
     features: [
-      "500 Créditos / mês",
+      "5.000 Moedas / mês",
+      "1 renderização simultânea",
       "Exportação XML para Premiere",
-      "Marca d'água removida",
-      "Pexels + Freesound integrado",
+      "B-rolls via Pexels + Pixabay",
+      "Voz neural integrada",
       "Suporte por e-mail",
     ],
   },
   {
     id: "pro",
-    name: "PRO",
+    name: "Pro",
     price: "R$ 197",
     period: "/mês",
-    description: "Para profissionais e agências que precisam de volume e qualidade máxima.",
+    description: "Para editores de VSL diários. Volume, qualidade e Avatar integrado.",
     icon: Zap,
     iconColor: "text-amber-400",
     iconBg: "rgba(234,179,8,0.1)",
@@ -43,23 +44,23 @@ const PLANS = [
     accentBorder: "rgba(79,70,229,0.4)",
     accentGlow: "rgba(79,70,229,0.12)",
     badgeText: "Mais Escolhido",
-    ctaLabel: "Assinar PRO",
+    ctaLabel: "Assinar Pro",
     ctaStyle: { background: "linear-gradient(135deg,#4f46e5,#7c3aed)", color: "#fff", boxShadow: "0 8px 32px rgba(79,70,229,0.4)" },
     features: [
-      "2.000 Créditos / mês",
-      "Acesso ao Cofre Kraft Premium",
-      "Uploads de vídeo ilimitados",
+      "15.000 Moedas / mês",
+      "3 renderizações simultâneas",
+      "Avatar + LipSync desbloqueados",
+      "Acesso ao Cofre Premium de B-Rolls",
       "Todos os nichos do Acervo",
-      "Exportação em batch",
       "Suporte prioritário",
     ],
   },
   {
-    id: "agency",
-    name: "Agency",
+    id: "growth",
+    name: "Growth",
     price: "R$ 497",
     period: "/mês",
-    description: "Para agências e produtoras com múltiplas equipes e clientes.",
+    description: "Para operações de escala com múltiplas campanhas rodando em paralelo.",
     icon: Building2,
     iconColor: "text-emerald-400",
     iconBg: "rgba(16,185,129,0.1)",
@@ -67,49 +68,52 @@ const PLANS = [
     accentBorder: "rgba(16,185,129,0.15)",
     accentGlow: "rgba(16,185,129,0.06)",
     badgeText: null,
-    ctaLabel: "Falar com vendas",
+    ctaLabel: "Assinar Growth",
     ctaStyle: { background: "rgba(16,185,129,0.12)", border: "1px solid rgba(16,185,129,0.25)", color: "#6ee7b7" },
     features: [
-      "10.000 Créditos / mês",
-      "Múltiplos usuários (até 10 seats)",
-      "Workspace de equipe compartilhado",
-      "Cofre B-Roll exclusivo Agency",
-      "Relatórios de uso avançados",
+      "45.000 Moedas / mês",
+      "5 renderizações simultâneas",
+      "Acesso Multi-contas",
+      "Avatar + LipSync desbloqueados",
+      "Cofre B-Roll exclusivo",
       "Suporte VIP dedicado",
-      "Onboarding personalizado",
     ],
   },
 ];
 
 const FAQ = [
   {
-    q: "O que são Créditos?",
-    a: "Cada geração de timeline consome 1 crédito. Créditos não utilizados expiram no final do ciclo mensal.",
+    q: "O que são Moedas?",
+    a: "Moedas são a unidade de consumo do Copiloto. Cada ação — gerar uma timeline, sintetizar uma voz, renderizar um avatar — consome uma quantidade proporcional ao custo de API. Ações de alta margem (B-rolls, voz neural) consomem poucas moedas. Ações premium (avatar, lip-sync) consomem mais.",
   },
   {
-    q: "Posso cancelar a qualquer momento?",
-    a: "Sim. Não há fidelidade nem multa. Cancele quando quiser diretamente no painel da sua conta.",
+    q: "As moedas acumulam de um mês para o outro?",
+    a: "Não. As moedas seguem a regra 'Use it or Lose it': o saldo reseta no início de cada ciclo de faturamento. Isso nos permite manter os preços baixos e garantir capacidade de servidor para todos os usuários.",
+  },
+  {
+    q: "Qual é a garantia?",
+    a: "Oferecemos garantia de 7 dias ou até o consumo de 1.500 moedas (o que ocorrer primeiro). Isso permite que você teste o produto de verdade sem risco.",
   },
   {
     q: "O XML gerado é compatível com o Premiere Pro?",
     a: "Sim. Exportamos no formato FCP 7 XML (xmeml v4), que o Premiere Pro importa nativamente. Os clips abrem como 'Offline Media' para você fazer o Link Media.",
   },
   {
-    q: "O que é o Cofre Kraft Premium?",
-    a: "É nossa biblioteca exclusiva de B-rolls, trilhas sonoras e SFX curados para Direct Response, imobiliário, nutra e outros nichos. Disponível a partir do plano PRO.",
+    q: "Posso fazer upgrade ou downgrade do plano?",
+    a: "Sim, a qualquer momento. O novo valor é calculado proporcionalmente (pro-rata) no próximo ciclo.",
   },
   {
-    q: "Posso fazer upgrade ou downgrade do plano?",
-    a: "Sim, você pode alterar seu plano a qualquer momento. O novo valor é cobrado no próximo ciclo.",
+    q: "O que são os Top-Ups?",
+    a: "Quando sua operação zera o saldo antes do próximo ciclo, você pode comprar moedas avulsas com um clique — sem precisar esperar o reset mensal. Os créditos são somados ao saldo atual imediatamente.",
   },
 ];
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
-const TOPUP_PACKAGES: { key: string; label: string; price: string; perCr: string; highlight?: boolean }[] = [
-  { key: "small",  label: "100 créditos",  price: "R$ 9",  perCr: "R$ 0,09/cr" },
-  { key: "medium", label: "300 créditos",  price: "R$ 19", perCr: "R$ 0,06/cr", highlight: true },
-  { key: "large",  label: "1000 créditos", price: "R$ 49", perCr: "R$ 0,05/cr" },
+const TOPUP_PACKAGES: { key: string; name: string; label: string; price: string; perCr: string; highlight?: boolean }[] = [
+  { key: "small",  name: "Salva-Vidas",    label: "5.000 moedas",  price: "R$ 47",  perCr: "R$ 0,0094/moeda" },
+  { key: "medium", name: "Escala",         label: "15.000 moedas", price: "R$ 117", perCr: "R$ 0,0078/moeda", highlight: true },
+  { key: "large",  name: "Agência",        label: "50.000 moedas", price: "R$ 347", perCr: "R$ 0,0069/moeda" },
 ];
 
 export default function PricingPage() {
@@ -266,9 +270,31 @@ export default function PricingPage() {
           })}
         </div>
 
+        {/* Enterprise teaser */}
+        <div className="max-w-5xl mx-auto mt-5 rounded-2xl px-6 py-5 flex flex-col md:flex-row items-center justify-between gap-4"
+          style={{ background: "rgba(255,215,0,0.04)", border: "1px solid rgba(255,215,0,0.12)" }}>
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Star className="w-4 h-4 text-yellow-400 fill-current" />
+              <span className="text-sm font-black text-yellow-300">Enterprise — R$ 1.997/mês</span>
+            </div>
+            <p className="text-xs text-gray-500">
+              250.000 moedas · 10 renders simultâneos · Fila VIP Exclusiva (zero tempo de espera) · Multi-contas · Onboarding dedicado
+            </p>
+          </div>
+          <button
+            onClick={() => handleCheckout("enterprise")}
+            disabled={loadingPlan !== null}
+            className="shrink-0 px-5 py-2.5 rounded-xl text-sm font-black transition-all disabled:opacity-60"
+            style={{ background: "rgba(255,215,0,0.1)", border: "1px solid rgba(255,215,0,0.25)", color: "#fde047" }}
+          >
+            {loadingPlan === "enterprise" ? <Loader2 className="w-4 h-4 animate-spin" /> : "Falar com vendas"}
+          </button>
+        </div>
+
         {/* Guarantee strip */}
         <p className="text-center text-xs text-gray-700 mt-8">
-          ✓ Sem fidelidade &nbsp;·&nbsp; ✓ Cancele quando quiser &nbsp;·&nbsp; ✓ Pagamento seguro via Stripe
+          ✓ Garantia de 7 dias ou 1.500 moedas &nbsp;·&nbsp; ✓ Sem fidelidade &nbsp;·&nbsp; ✓ Pagamento seguro via Stripe
         </p>
       </div>
 
@@ -299,6 +325,9 @@ export default function PricingPage() {
                   <Loader2 className="w-5 h-5 animate-spin mx-auto text-gray-400" />
                 ) : (
                   <>
+                    <div className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: pkg.highlight ? "#F0563A" : "#555" }}>
+                      {pkg.name}
+                    </div>
                     <div className="text-lg font-black" style={{ color: pkg.highlight ? "#F0563A" : "#e5e7eb" }}>
                       {pkg.label}
                     </div>

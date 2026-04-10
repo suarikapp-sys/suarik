@@ -5,11 +5,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { NextRequest, NextResponse } from "next/server";
-import { S3Client, PutObjectCommand }  from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl }                from "@aws-sdk/s3-request-presigner";
 import { createClient }                from "@/lib/supabase/server";
 
 // ── S3-compatible client apontando para o Cloudflare R2 ─────────────────────
+// requestChecksumCalculation: "WHEN_REQUIRED" prevents the SDK from injecting
+// x-amz-checksum-crc32 into pre-signed URLs — Cloudflare R2 rejects those with 403.
 const r2 = new S3Client({
   region:   "auto",
   endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
@@ -17,6 +19,8 @@ const r2 = new S3Client({
     accessKeyId:     process.env.R2_ACCESS_KEY_ID!,
     secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
   },
+  requestChecksumCalculation: "WHEN_REQUIRED",
+  responseChecksumValidation: "WHEN_REQUIRED",
 });
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -57,10 +61,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Aceita vídeo e áudio (WAV para transcrição)
-    if (!contentType.startsWith("video/") && !contentType.startsWith("audio/")) {
+    // Aceita vídeo, áudio e imagem (foto para Talking Photo / DreamAct)
+    if (
+      !contentType.startsWith("video/") &&
+      !contentType.startsWith("audio/") &&
+      !contentType.startsWith("image/")
+    ) {
       return NextResponse.json(
-        { error: "Apenas arquivos de vídeo ou áudio são permitidos." },
+        { error: "Apenas arquivos de vídeo, áudio ou imagem são permitidos." },
         { status: 415 },
       );
     }
@@ -80,7 +88,12 @@ export async function POST(req: NextRequest) {
     // URL pública de leitura (após o upload completar)
     const publicUrl = `${process.env.R2_PUBLIC_URL_UPLOADS}/${key}`;
 
-    return NextResponse.json({ uploadUrl, publicUrl, key });
+    // Presigned GET URL — para APIs externas que precisam descarregar o ficheiro
+    // (não requer que o bucket seja público)
+    const getCommand = new GetObjectCommand({ Bucket: bucket, Key: key });
+    const downloadUrl = await getSignedUrl(r2, getCommand, { expiresIn: 86400 }); // 24h
+
+    return NextResponse.json({ uploadUrl, publicUrl, downloadUrl, key });
   } catch (err: unknown) {
     console.error("[/api/upload] Erro ao gerar pre-signed URL:", err);
     return NextResponse.json(

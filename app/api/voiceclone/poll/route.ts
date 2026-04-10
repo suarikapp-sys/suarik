@@ -1,5 +1,4 @@
 // ─── /api/voiceclone/poll ── Verifica status do clone de voz ─────────────────
-// Reutiliza o mesmo endpoint de polling da Newport AI
 // status: 1=queued 2=processing 3=done 4=failed
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient }        from "@supabase/ssr";
@@ -32,21 +31,49 @@ export async function POST(req: NextRequest) {
     body: JSON.stringify({ taskId }),
   });
 
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    console.error("[voiceclone/poll] HTTP error:", res.status, errText.slice(0, 200));
+    return NextResponse.json({ error: `Newport AI poll HTTP ${res.status}` }, { status: 502 });
+  }
+
   const data = await res.json() as {
     code:    number;
     message: string;
     data?: {
-      task:    { taskId: string; status: number };
+      task: {
+        taskId:      string;
+        status:      number;
+        errorMsg?:   string;
+        failReason?: string;
+        error?:      string;
+        reason?:     string;
+      };
       voices?: { voiceId: string; voiceName: string }[];
     };
   };
 
   if (data.code !== 0) {
+    console.error("[voiceclone/poll] code != 0 — taskId:", taskId, "response:", JSON.stringify(data));
     return NextResponse.json({ error: data.message ?? "Erro ao verificar status" }, { status: 500 });
   }
 
   const status  = data.data?.task?.status ?? 1;
   const voiceId = data.data?.voices?.[0]?.voiceId ?? null;
+  const task    = data.data?.task;
 
-  return NextResponse.json({ status, voiceId, taskId });
+  // Extract error reason from any field Newport AI might use
+  const reason =
+    task?.errorMsg    ??
+    task?.failReason  ??
+    task?.error       ??
+    task?.reason      ??
+    (status === 4 ? data.message : null) ??
+    null;
+
+  if (status === 4) {
+    console.error("[voiceclone/poll] Job FAILED — taskId:", taskId, "reason:", reason, "full task:", JSON.stringify(task), "full data:", JSON.stringify(data));
+  }
+
+  return NextResponse.json({ status, voiceId, taskId, reason });
 }

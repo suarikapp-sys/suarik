@@ -16,7 +16,12 @@ async function uploadToR2(blob: Blob, filename: string, contentType: string): Pr
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ filename, contentType }),
   }).then(r => r.json());
-  await fetch(uploadUrl, { method: "PUT", body: blob, headers: { "Content-Type": contentType } });
+  const proxyRes = await fetch(`/api/upload/proxy?target=${encodeURIComponent(uploadUrl)}`, {
+    method:  "PUT",
+    headers: { "Content-Type": contentType },
+    body:    blob,
+  });
+  if (!proxyRes.ok) throw new Error(`Upload falhou (HTTP ${proxyRes.status})`);
   return publicUrl as string;
 }
 
@@ -89,8 +94,13 @@ export default function DreamActPage() {
     try {
       const url = await uploadToR2(file, `dreamact-img-${Date.now()}.${file.name.split(".").pop()}`, file.type || "image/jpeg");
       setImageUrl(url);
-    } catch { setErrorMsg("Erro ao enviar imagem."); }
-    finally   { setUploadingImg(false); }
+    } catch {
+      setErrorMsg("Erro ao enviar imagem.");
+      toast.error("Falha ao fazer upload da imagem. Tenta novamente.");
+      setImageFile(null); setImagePreview(null); setImageUrl(null);
+    }
+    finally { setUploadingImg(false); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Poll ──
@@ -300,6 +310,11 @@ export default function DreamActPage() {
         background: "#1C1B1B", flexShrink: 0,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button onClick={() => router.back()} style={{
+            background: "transparent", border: "none", color: "#777", fontSize: 13,
+            cursor: "pointer", display: "flex", alignItems: "center", gap: 4, fontWeight: 600,
+          }}>← Voltar</button>
+          <span style={{ color: "#333", fontSize: 16 }}>|</span>
           <div style={{
             width: 32, height: 32, borderRadius: 8, background: "#F0563A",
             display: "flex", alignItems: "center", justifyContent: "center",

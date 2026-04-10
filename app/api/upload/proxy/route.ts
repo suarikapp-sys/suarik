@@ -8,10 +8,11 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "edge";
 
-// Allowed R2 hostnames — only requests to these go through the proxy
-const ALLOWED_R2_HOSTS = [
-  `${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-  new URL(process.env.R2_PUBLIC_URL_UPLOADS ?? "https://invalid").hostname,
+// Allowed R2 hostname suffixes — any subdomain of these is permitted.
+// Presigned URLs use virtual-hosted style: {bucket}.{accountId}.r2.cloudflarestorage.com
+const ALLOWED_R2_SUFFIXES = [
+  ".r2.cloudflarestorage.com",
+  "r2.cloudflarestorage.com",
 ];
 
 export async function PUT(req: NextRequest) {
@@ -24,10 +25,11 @@ export async function PUT(req: NextRequest) {
     );
   }
 
-  // Block SSRF — only forward to known R2 buckets
+  // Block SSRF — only forward to Cloudflare R2 storage endpoints
   try {
     const { hostname, protocol } = new URL(target);
-    const allowed = protocol === "https:" && ALLOWED_R2_HOSTS.some(h => hostname === h);
+    const allowed = protocol === "https:" &&
+      ALLOWED_R2_SUFFIXES.some(suffix => hostname === suffix || hostname.endsWith(suffix));
     if (!allowed) {
       return NextResponse.json({ error: "URL de destino não permitida." }, { status: 403 });
     }

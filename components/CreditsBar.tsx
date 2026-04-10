@@ -11,7 +11,7 @@ type Props = {
 };
 
 const PLAN_MAX: Record<string, number> = {
-  free: 100, starter: 500, pro: 2000, agency: 10000, premium: 50000,
+  free: 100, starter: 5000, pro: 15000, growth: 45000, enterprise: 250000,
 };
 
 export function CreditsBar({ credits, plan, loading, compact = false }: Props) {
@@ -127,9 +127,9 @@ const ACTION_LABEL: Record<string, string> = {
 };
 
 const PACKAGES = [
-  { key: "small",  label: "100 cr",  price: "R$ 9",  highlight: false },
-  { key: "medium", label: "300 cr",  price: "R$ 19", highlight: true  },
-  { key: "large",  label: "1000 cr", price: "R$ 49", highlight: false },
+  { key: "small",  label: "5.000",  price: "R$ 47",  highlight: false },
+  { key: "medium", label: "15.000", price: "R$ 117", highlight: true  },
+  { key: "large",  label: "50.000", price: "R$ 347", highlight: false },
 ] as const;
 
 export function InsufficientCreditsModal({ action, cost, credits, onClose }: InsufficientProps) {

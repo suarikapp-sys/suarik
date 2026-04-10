@@ -1,14 +1,15 @@
-// ─── /api/tts-cloned ── TTS com voz clonada via Newport AI ─────────────────────
-// Usa um voiceId retornado pelo endpoint de voice-clone da Newport AI
-// para gerar fala a partir de texto. Retorna áudio MP3.
+// ─── /api/tts-cloned ── TTS com voz clonada via MiniMax ──────────────────────
+// Uses a voice_id returned by /api/voiceclone (MiniMax) to generate speech.
+// Returns MP3 audio blob directly.
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient }        from "@supabase/ssr";
 import { cookies }                   from "next/headers";
+import { creditGuard }               from "@/app/lib/creditGuard";
 
 export const maxDuration = 60;
 
-const NEWPORT_BASE = "https://api.newportai.com";
-const API_KEY      = process.env.DREAMFACE_API_KEY!;
+const MINIMAX_API_KEY = process.env.MINIMAX_API_KEY!;
+const MINIMAX_ENDPOINT = "https://api.minimax.io/v1/t2a_v2";
 
 export async function POST(req: NextRequest) {
   // ── Auth ──────────────────────────────────────────────────────────────────
@@ -35,67 +36,69 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Texto muito longo (máx 5.000 caracteres)" }, { status: 400 });
   }
 
+  // ── Credits (same formula as regular TTS) ──────────────────────────────────
+  const guard = await creditGuard(user.id, "tts", { chars: text.length });
+  if (guard.error) return guard.error;
+
   try {
-    // Newport AI TTS endpoint for cloned voices
-    const res = await fetch(`${NEWPORT_BASE}/api/tts`, {
+    const controller = new AbortController();
+    const timeoutId  = setTimeout(() => controller.abort(), 55000);
+
+    const res = await fetch(MINIMAX_ENDPOINT, {
       method:  "POST",
       headers: {
+        "Authorization": `Bearer ${MINIMAX_API_KEY}`,
         "Content-Type":  "application/json",
-        "Authorization": `Bearer ${API_KEY}`,
       },
+      signal: controller.signal,
       body: JSON.stringify({
-        text:    text.trim(),
-        voiceId: voiceId,
-        speed:   Math.max(0.5, Math.min(2.0, speed)),
+        model:  "speech-2.8-hd",
+        text:   text.trim(),
+        stream: false,
+        language_boost: "auto",
+        output_format:  "hex",
+        voice_setting: {
+          voice_id: voiceId,
+          speed:    Math.max(0.5, Math.min(2.0, speed)),
+          vol:      1.0,
+          pitch:    0,
+        },
+        audio_setting: {
+          sample_rate: 32000,
+          bitrate:     128000,
+          format:      "mp3",
+          channel:     1,
+        },
       }),
-    });
+    }).finally(() => clearTimeout(timeoutId));
 
     if (!res.ok) {
       const errText = await res.text().catch(() => "");
-      console.error("[tts-cloned] Newport AI HTTP error:", res.status, errText);
-
-      // Fallback: tenta retornar erro útil
-      return NextResponse.json(
-        { error: `Newport AI TTS erro ${res.status}: ${errText.slice(0, 200)}` },
-        { status: 502 }
-      );
+      console.error("[tts-cloned] MiniMax HTTP error:", res.status, errText);
+      await guard.refund();
+      return NextResponse.json({ error: `MiniMax TTS erro ${res.status}` }, { status: 502 });
     }
 
-    const contentType = res.headers.get("content-type") ?? "";
+    const data = await res.json() as {
+      base_resp?: { status_code: number; status_msg: string };
+      data?: { audio?: string; audioUrl?: string };
+    };
 
-    // Se vier JSON, é uma resposta async (task)
-    if (contentType.includes("application/json")) {
-      const data = await res.json() as { code: number; message: string; data?: { audioUrl?: string; audio?: string } };
-
-      if (data.code !== 0) {
-        return NextResponse.json({ error: data.message ?? "Erro Newport AI TTS" }, { status: 502 });
-      }
-
-      // Se vier URL pública do áudio
-      if (data.data?.audioUrl) {
-        const audioRes = await fetch(data.data.audioUrl);
-        const audioBlob = await audioRes.blob();
-        const buf = Buffer.from(await audioBlob.arrayBuffer());
-        return new NextResponse(buf, {
-          status: 200,
-          headers: { "Content-Type": "audio/mpeg", "Cache-Control": "no-store" },
-        });
-      }
-
-      // Se vier base64/hex
-      if (data.data?.audio) {
-        const buf = Buffer.from(data.data.audio, "hex");
-        return new NextResponse(buf, {
-          status: 200,
-          headers: { "Content-Type": "audio/mpeg", "Cache-Control": "no-store" },
-        });
-      }
-
-      return NextResponse.json({ error: "Resposta sem campo 'audio' ou 'audioUrl'" }, { status: 502 });
+    if (data.base_resp?.status_code !== 0) {
+      const msg = data.base_resp?.status_msg ?? "Erro MiniMax TTS";
+      console.error("[tts-cloned] MiniMax error:", msg, data);
+      await guard.refund();
+      return NextResponse.json({ error: msg }, { status: 502 });
     }
 
-    // Se vier binário direto
-    const audioBuffer = Buffer.from(await res.arrayBuffer());
+    // Audio as hex string → Buffer → MP3 response
+    const hexAudio = data.data?.audio;
+    if (!hexAudio) {
+      await guard.refund();
+      return NextResponse.json({ error: "Resposta sem áudio" }, { status: 502 });
+    }
+
+    const audioBuffer = Buffer.from(hexAudio, "hex");
     return new NextResponse(audioBuffer, {
       status: 200,
       headers: {
@@ -106,7 +109,12 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (err) {
-    console.error("[tts-cloned] Unexpected error:", err);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[tts-cloned] Unexpected error:", msg);
+    await guard.refund();
+    if (msg.includes("AbortError") || msg.includes("abort")) {
+      return NextResponse.json({ error: "Tempo limite excedido. Tenta com texto mais curto." }, { status: 504 });
+    }
     return NextResponse.json({ error: "Erro interno no TTS clonado" }, { status: 500 });
   }
 }

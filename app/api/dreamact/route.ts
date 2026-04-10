@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient }        from "@supabase/ssr";
 import { cookies }                   from "next/headers";
+import { creditGuard }               from "@/app/lib/creditGuard";
 
 const NEWPORT_BASE = "https://api.newportai.com";
 const API_KEY      = process.env.DREAMFACE_API_KEY!;
@@ -29,6 +30,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "imageUrl e prompt são obrigatórios" }, { status: 400 });
   }
 
+  // ── Credits ────────────────────────────────────────────────────────────────
+  const guard = await creditGuard(user.id, "dreamact");
+  if (guard.error) return guard.error;
+
   const res = await fetch(`${NEWPORT_BASE}/api/async/dream-act`, {
     method:  "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${API_KEY}` },
@@ -39,8 +44,9 @@ export async function POST(req: NextRequest) {
 
   if (data.code !== 0 || !data.data?.taskId) {
     console.error("[dreamact] error:", data);
+    await guard.refund();
     return NextResponse.json({ error: data.message ?? "Erro ao iniciar DreamAct" }, { status: 500 });
   }
 
-  return NextResponse.json({ taskId: data.data.taskId });
+  return NextResponse.json({ taskId: data.data.taskId, cost: guard.cost });
 }

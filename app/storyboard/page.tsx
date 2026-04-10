@@ -1245,6 +1245,8 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
   const [uploadedVideoUrl,  setUploadedVideoUrl]  = useState<string|null>(null);
   // ── TTS synthetic voice ───────────────────────────────────────────────────
   const [ttsAudioUrl,       setTtsAudioUrl]       = useState<string|null>(initialTtsUrl ?? null);
+  // Sync when parent passes a new TTS URL after WorkstationView is already mounted
+  useEffect(()=>{ if(initialTtsUrl) setTtsAudioUrl(initialTtsUrl); },[initialTtsUrl]);
   const [ttsLoading,        setTtsLoading]        = useState(false);
   const [ttsError,          setTtsError]          = useState<string|null>(null);
   const [ttsVoice,          setTtsVoice]          = useState("English_expressive_narrator");
@@ -1307,7 +1309,12 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
   },[trackA1Muted, ttsAudioUrl]);
 
   // ── TTS: preview voice ────────────────────────────────────────────────────
+  const previewUrlRef = useRef<string|null>(null);
+  const previewAbortRef = useRef<AbortController|null>(null);
   const handlePreviewVoice = useCallback(async () => {
+    // Cancel any in-flight request
+    previewAbortRef.current?.abort();
+    previewAbortRef.current = new AbortController();
     setPreviewLoading(true);
     setPreviewError(null);
     try {
@@ -1319,24 +1326,34 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
           voiceId: ttsVoice,
           speed: 1.0
         }),
+        signal: previewAbortRef.current.signal,
       });
       if (!res.ok) {
         const d = await res.json().catch(()=>({error:"Erro desconhecido"}));
         throw new Error(d.error ?? "Erro ao gerar preview");
       }
       const blob = await res.blob();
+      // Revoke previous URL before creating a new one
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
       const url = URL.createObjectURL(blob);
+      previewUrlRef.current = url;
       setPreviewUrl(url);
       if (previewAudioRef.current) {
         previewAudioRef.current.src = url;
         previewAudioRef.current.play().catch(()=>{});
       }
     } catch(e: unknown) {
+      if (e instanceof Error && e.name === "AbortError") return;
       setPreviewError(e instanceof Error ? e.message : "Erro ao gerar preview");
     } finally {
       setPreviewLoading(false);
     }
   }, [ttsVoice]);
+  // Revoke preview URL on unmount
+  useEffect(() => () => {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    previewAbortRef.current?.abort();
+  }, []);
 
   // ── TTS: generate voice ───────────────────────────────────────────────────
   const handleGenerateTTS = useCallback(async (text: string) => {
@@ -1400,6 +1417,14 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
       : buildTimelineClips(localScenes),
     [localDrScenes, localScenes]
   );
+
+  // ── Reset timeline scroll to start when clips first load ─────────────────
+  useEffect(()=>{
+    if(timelineScrollRef.current && timelineClips.length > 0) {
+      timelineScrollRef.current.scrollTo({ left: 0 });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[timelineClips.length]);
 
   // Apply user overrides (drag/trim) on top of computed positions
   const effectiveClips = useMemo(()=>
@@ -1997,6 +2022,62 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
     saveAs(new Blob([generateSRT(srtScenes)],{type:"text/plain;charset=utf-8"}),"suarik-legendas.srt");
   };
   const downloadMusic=()=>{const t=tracks[selectedMusic];if(t?.url)window.open(t.url,"_blank");};
+
+  // ── FCPXML export (Premiere Pro / CapCut compatible) ─────────────────────────
+  const downloadXML = () => {
+    const fps = 25;
+    const timebase = `${fps}/1s`;
+
+    // Build asset + clip entries from the effective timeline clips
+    const assets: string[] = [];
+    const clipEls: string[] = [];
+    const seenUrls = new Map<string, string>(); // url → assetId
+
+    let assetIdx = 2; // r1 = format
+    effectiveClips.forEach(clip => {
+      if (!clip.url) return;
+      let assetId = seenUrls.get(clip.url);
+      if (!assetId) {
+        assetId = `r${assetIdx++}`;
+        seenUrls.set(clip.url, assetId);
+        const durFrames = Math.round(clip.durSec * fps);
+        assets.push(
+          `    <asset id="${assetId}" name="${clip.label.replace(/"/g,"'")}" src="${clip.url}" start="0s" duration="${durFrames}/${fps}s" hasVideo="1" hasAudio="0"/>`
+        );
+      }
+      const offsetFrames = Math.round(clip.startSec * fps);
+      const durFrames    = Math.round(clip.durSec * fps);
+      clipEls.push(
+        `            <clip name="${clip.label.replace(/"/g,"'")}" ref="${assetId}" offset="${offsetFrames}/${fps}s" duration="${durFrames}/${fps}s" start="0s"/>`
+      );
+    });
+
+    // Total duration
+    const totalFrames = Math.round(totalDur * fps);
+
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE fcpxml>
+<fcpxml version="1.9">
+  <resources>
+    <format id="r1" name="FFVideoFormat1080p${fps}" frameDuration="1/${fps}s" width="1920" height="1080" colorSpace="1-1-1 (Rec. 709)"/>
+${assets.join("\n")}
+  </resources>
+  <library location="file:///suarik-export/">
+    <event name="Suarik Export">
+      <project name="Suarik — ${new Date().toLocaleDateString("pt-BR")}">
+        <sequence format="r1" duration="${totalFrames}/${fps}s" tcStart="0s" tcFormat="NDF" audioLayout="stereo" audioRate="48k">
+          <spine>
+${clipEls.join("\n")}
+          </spine>
+        </sequence>
+      </project>
+    </event>
+  </library>
+</fcpxml>`;
+
+    saveAs(new Blob([xml], { type: "application/xml;charset=utf-8" }), "suarik-timeline.fcpxml");
+    fireToast("📦 FCPXML exportado — importa no Premiere via Arquivo → Importar");
+  };
   const musicOptions:BackgroundTrack[]=[
     ...tracks.slice(0,3),
     ...Array.from({length:Math.max(0,3-tracks.length)},(_,i)=>({
@@ -2006,9 +2087,11 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
   ];
 
   // ── Toast helper ─────────────────────────────────────────────────────────
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout>|null>(null);
   const fireToast = useCallback((msg: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast(msg);
-    setTimeout(() => setToast(null), 3500);
+    toastTimerRef.current = setTimeout(() => setToast(null), 3500);
   }, []);
 
   const handleRaioX = useCallback((ad: WinningAd) => {
@@ -2657,7 +2740,7 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
             <p className="text-sm font-black text-white leading-tight" style={{fontFamily:"'Bebas Neue',sans-serif",letterSpacing:"1px"}}>🎬 Timeline pronta para exportar</p>
             <p className="text-[10px] text-orange-300/70 mt-0.5">Exporte para Premiere Pro com 1 clique — sequência XML completa com cortes, B-rolls e legendas</p>
           </div>
-          <button onClick={()=>setPaywallOpen(true)}
+          <button onClick={downloadXML}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[11px] font-black shrink-0 transition-all hover:scale-105 active:scale-95"
             style={{background:"linear-gradient(135deg,#E8593C,#E8593C)",color:"#fff",boxShadow:"0 4px 20px rgba(232,89,60,0.5)",border:"1px solid rgba(255,255,255,0.15)"}}>
             <FileCode2 className="w-3.5 h-3.5"/>Exportar para Premiere (XML)
@@ -3119,10 +3202,10 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
                   <div className="absolute bottom-full mb-2 right-0 w-52 rounded-xl overflow-hidden z-30"
                     style={{background:"#111",border:"1px solid rgba(255,255,255,0.08)",boxShadow:"0 -20px 40px rgba(0,0,0,0.6)"}}>
                     {[
-                      {label:"Baixar Projeto Completo",icon:"📦",paywall:true},
+                      {label:"Exportar XML (Premiere/CapCut)",icon:"🎬",paywall:false,action:downloadXML},
                       {label:"Baixar Legendas (.srt)", icon:"💬",paywall:false,action:downloadSRT},
                       {label:"Baixar apenas Trilha",   icon:"🎵",paywall:false,action:downloadMusic},
-                      {label:"Baixar Pack de Mídias",  icon:"🎬",paywall:true},
+                      {label:"Baixar Pack de Mídias",  icon:"📦",paywall:true},
                     ].map(opt=>(
                       <button key={opt.label}
                         onClick={()=>{setExportOpen(false);if(opt.paywall)setPaywallOpen(true);else opt.action?.();}}
@@ -3141,10 +3224,10 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
                 style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",color:"#9ca3af"}}>
                 <TrendingUp className="w-3.5 h-3.5"/>Biblioteca
               </button>
-              <button onClick={()=>setPaywallOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all"
-                style={{background:"linear-gradient(135deg,rgba(251,191,36,0.1),rgba(245,158,11,0.06))",border:"1px solid rgba(251,191,36,0.3)",color:"#fbbf24"}}>
-                <FileCode2 className="w-3.5 h-3.5"/>Premiere<Lock className="w-3 h-3"/>
+              <button onClick={downloadXML}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all hover:opacity-80"
+                style={{background:"linear-gradient(135deg,rgba(240,86,58,0.15),rgba(99,5,239,0.1))",border:"1px solid rgba(240,86,58,0.3)",color:"#F0563A"}}>
+                <FileCode2 className="w-3.5 h-3.5"/>Premiere XML
               </button>
             </div>
           </div>
@@ -3675,9 +3758,10 @@ export default function SuarikHome() {
   const [homeTtsUrl,       setHomeTtsUrl]    = useState<string|null>(null);
   const [homeTtsError,     setHomeTtsError]  = useState<string|null>(null);
   const [isDragOver,       setIsDragOver]    = useState(false);
-  const [isEnriching,      setIsEnriching]   = useState(false);
-  const [enrichStep,       setEnrichStep]    = useState(0); // 0-3
-  const [videoLang,        setVideoLang]     = useState<"auto"|"pt"|"en"|"es">("auto");
+  const [isEnriching,           setIsEnriching]           = useState(false);
+  const [enrichStep,            setEnrichStep]            = useState(0); // 0-3
+  const [videoLang,             setVideoLang]             = useState<"auto"|"pt"|"en"|"es">("auto");
+  const [pendingEnrichTrigger,  setPendingEnrichTrigger]  = useState(false);
 
   // ── Load user data from Supabase on mount ─────────────────────────────────
   useEffect(() => {
@@ -3699,12 +3783,46 @@ export default function SuarikHome() {
         setUserCredits(prof.credits ?? 0);
       }
 
-      // ── Open upload modal flag (from /enricher redirect) ─────────────────
+      // ── Open upload modal flag (legacy — just switch to video tab) ──────
       const openUploadFlag = sessionStorage.getItem("vb_open_upload_modal");
       if (openUploadFlag) {
         sessionStorage.removeItem("vb_open_upload_modal");
-        setUploadOpen(true);
         setInputTab("video");
+      }
+
+      // ── Enricher pending file (from /enricher page) ───────────────────────
+      const enricherPending = sessionStorage.getItem("vb_enricher_pending");
+      if (enricherPending) {
+        sessionStorage.removeItem("vb_enricher_pending");
+        try {
+          const pendingFile = await new Promise<File | null>((resolve, reject) => {
+            const req = indexedDB.open("enricherDB", 1);
+            req.onupgradeneeded = () => req.result.createObjectStore("files");
+            req.onsuccess = () => {
+              const tx = req.result.transaction("files", "readonly");
+              const getReq = tx.objectStore("files").get("pending");
+              getReq.onsuccess = () => { req.result.close(); resolve(getReq.result || null); };
+              getReq.onerror = () => reject(getReq.error);
+            };
+            req.onerror = () => reject(req.error);
+          });
+          if (pendingFile) {
+            // Clear file from IDB
+            await new Promise<void>((resolve) => {
+              const req = indexedDB.open("enricherDB", 1);
+              req.onsuccess = () => {
+                const tx = req.result.transaction("files", "readwrite");
+                tx.objectStore("files").delete("pending");
+                tx.oncomplete = () => { req.result.close(); resolve(); };
+                tx.onerror = () => resolve();
+              };
+              req.onerror = () => resolve();
+            });
+            setVideoFile(pendingFile);
+            setInputTab("video");
+            setPendingEnrichTrigger(true);
+          }
+        } catch { /* silent */ }
       }
 
       // ── Restore last workstation session ONLY when explicitly requested ──────
@@ -3766,9 +3884,11 @@ export default function SuarikHome() {
     });
   }, []);
 
+  const homeToastTimerRef = useRef<ReturnType<typeof setTimeout>|null>(null);
   const fireHomeToast = useCallback((msg: string) => {
+    if (homeToastTimerRef.current) clearTimeout(homeToastTimerRef.current);
     setHomeToast(msg);
-    setTimeout(() => setHomeToast(null), 3500);
+    homeToastTimerRef.current = setTimeout(() => setHomeToast(null), 3500);
   }, []);
 
   const handleHomeRaioX = useCallback((ad: WinningAd) => {
@@ -3806,66 +3926,57 @@ export default function SuarikHome() {
     if (!copy.trim() || isGenerating) return;
     setIsGenerating(true); setIsGenerated(false); setError(null); setResult(null);
     try {
-      // ── Fire both API calls in parallel ─────────────────────────────────
-      // /api/generate        → media enrichment (Pexels, Freesound, vault)
-      // /api/generate-timeline → real OpenAI DRS analysis (source of truth)
-      // Promise.all guarantees minimum 3s loading animation even on fast connections.
-      const [[data, drs]] = await Promise.all([
-        Promise.all([
-          // 1. Media + legacy scene structure
-          fetch("/api/generate", {
-            method:"POST", headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({copy, videoFormat:themeMap[aspect], videoTheme:niche, format:aspectFormats[aspect]}),
-          }).then(async res=>{
-            const d = await res.json() as GenerateResponse;
-            if(!res.ok) throw new Error((d as {error?:string}).error??"Erro ao gerar.");
-            return d;
-          }),
-          // 2. OpenAI DRS analysis + Pexels dual-source + music (generate-timeline)
-          fetch("/api/generate-timeline", {
-            method:"POST", headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({copy}),
-          }).then(async res=>{
-            if(!res.ok){
-              console.warn("[generate-timeline] API falhou, usando análise local.");
-              return { scenes: analyzeCopyForDirectResponse(copy), backgroundMusicUrl: undefined, backgroundTracks: undefined };
-            }
-            const d = await res.json();
-            if(d?.scenes && Array.isArray(d.scenes) && d.scenes.length>0)
-              return {
-                scenes: d.scenes as DirectResponseScene[],
-                backgroundMusicUrl: d.backgroundMusicUrl as string|undefined,
-                backgroundTracks:   d.backgroundTracks as BackgroundTrack[]|undefined,
-              };
-            if(Array.isArray(d) && d.length>0)
-              return { scenes: d as DirectResponseScene[], backgroundMusicUrl: undefined, backgroundTracks: undefined };
+      // ── Single API call: generate-timeline is the source of truth ────────
+      // /api/generate (legacy) removed — it was making a redundant LLM call
+      // for the same copy. generate-timeline returns DRS scenes + B-roll + music.
+      // Promise.all with a 3s timer guarantees the loading animation plays fully.
+      const [drs] = await Promise.all([
+        fetch("/api/generate-timeline", {
+          method:"POST", headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({copy}),
+        }).then(async res=>{
+          if(!res.ok){
+            console.warn("[generate-timeline] API falhou, usando análise local.");
             return { scenes: analyzeCopyForDirectResponse(copy), backgroundMusicUrl: undefined, backgroundTracks: undefined };
-          }),
-        ]),
+          }
+          const d = await res.json();
+          if(d?.scenes && Array.isArray(d.scenes) && d.scenes.length>0)
+            return {
+              scenes:             d.scenes as DirectResponseScene[],
+              backgroundMusicUrl: d.backgroundMusicUrl as string|undefined,
+              backgroundTracks:   d.backgroundTracks   as BackgroundTrack[]|undefined,
+            };
+          if(Array.isArray(d) && d.length>0)
+            return { scenes: d as DirectResponseScene[], backgroundMusicUrl: undefined, backgroundTracks: undefined };
+          return { scenes: analyzeCopyForDirectResponse(copy), backgroundMusicUrl: undefined, backgroundTracks: undefined };
+        }),
         new Promise<void>(r=>setTimeout(r,3000)), // minimum 3s loading screen
       ]);
 
-      // Merge DRS background tracks into result (DRS tracks are better quality)
-      const mergedResult = drs.backgroundTracks?.length
-        ? {...data, background_tracks: drs.backgroundTracks}
-        : data;
-      sessionStorage.setItem("vb_project_result", JSON.stringify(mergedResult));
-      sessionStorage.setItem("vb_project_copy", copy);
-      sessionStorage.setItem("vb_project_drScenes", JSON.stringify(drs.scenes));
-      setResult(mergedResult);
+      // Build a minimal GenerateResponse from DRS data (WorkstationView needs it)
+      const result: GenerateResponse = {
+        project_vibe:      themeMap[aspect] ?? "ugc",
+        music_style:       niche,
+        scenes:            [],
+        background_tracks: drs.backgroundTracks ?? [],
+      };
+
+      sessionStorage.setItem("vb_project_result",   JSON.stringify(result));
+      sessionStorage.setItem("vb_project_copy",      copy);
+      sessionStorage.setItem("vb_project_drScenes",  JSON.stringify(drs.scenes));
+      setResult(result);
       setDrScenes(drs.scenes);
       if(drs.backgroundMusicUrl) setBgMusicUrl(drs.backgroundMusicUrl);
-      // Carry home TTS audio into WorkstationView as the narration track
       if(homeTtsUrl) setPendingTtsUrl(homeTtsUrl);
       setIsGenerated(true);
-      // ── Save to Projects ──────────────────────────────────────────────────
-      toast.success(`Storyboard com ${data.scenes?.length ?? 0} cenas gerado! 🎬`);
+
+      toast.success(`Storyboard com ${drs.scenes.length} cenas gerado! 🎬`);
       fetch("/api/projects", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tool: "storyboard",
+          tool:  "storyboard",
           title: copy.trim().slice(0, 80) || "Storyboard sem título",
-          meta: { scenes: data.scenes?.length ?? 0, niche, aspect },
+          meta:  { scenes: drs.scenes.length, niche, aspect },
         }),
       }).catch(() => {});
     } catch(e:unknown){
@@ -4001,7 +4112,7 @@ export default function SuarikHome() {
           const txRes = await fetch("/api/transcribe", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ publicUrl: audioPublicUrl }),
+            body: JSON.stringify({ publicUrl: audioPublicUrl, language: videoLang === "auto" ? undefined : videoLang }),
           });
           if (txRes.ok) {
             const txData = await txRes.json();
@@ -4116,15 +4227,16 @@ export default function SuarikHome() {
     }
   };
 
-  // Full-screen workstation mode
-  if (isGenerated && result) {
-    return <WorkstationView result={result} copy={copy} drScenes={drScenes} initialBgMusicUrl={bgMusicUrl} videoFile={videoFile} whisperWords={whisperWords} initialTtsUrl={pendingTtsUrl} initialAvatarUrl={pendingAvatarUrl} onBack={handleBack}/>;
-  }
+  // ── Auto-trigger enrichment when file arrives from /enricher page ──────────
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (pendingEnrichTrigger && videoFile) {
+      setPendingEnrichTrigger(false);
+      handleEnrich();
+    }
+  }, [pendingEnrichTrigger, videoFile]);
 
-  // Has content ready to process?
-  const hasContent = !!(videoFile || copy.trim());
-
-  // ─── Script Analysis (computed from copy) ──────────────────────────────
+  // ─── Script Analysis (computed from copy) — must be before any early return ──
   const scriptScenes = useMemo(() =>
     copy.trim().split(/\n\n+/).filter(p => p.trim().length > 10),
     [copy]
@@ -4184,6 +4296,14 @@ export default function SuarikHome() {
     ));
     return score;
   }, [copy, wordCount, detectedPowerWords, brollSuggestions, scriptScenes]);
+
+  // Full-screen workstation mode
+  if (isGenerated && result) {
+    return <WorkstationView result={result} copy={copy} drScenes={drScenes} initialBgMusicUrl={bgMusicUrl} videoFile={videoFile} whisperWords={whisperWords} initialTtsUrl={pendingTtsUrl} initialAvatarUrl={pendingAvatarUrl} onBack={handleBack}/>;
+  }
+
+  // Has content ready to process?
+  const hasContent = !!(videoFile || copy.trim());
 
   return (
     <>
@@ -4320,6 +4440,10 @@ export default function SuarikHome() {
           {/* ── Top header ── */}
           <div className="shrink-0 flex items-center justify-between px-5 py-3 border-b" style={{borderColor:"rgba(255,255,255,0.05)",background:"rgba(9,9,11,0.95)"}}>
             <div className="flex items-center gap-3">
+              <button onClick={()=>router.back()} className="text-[11px] font-semibold text-zinc-500 hover:text-zinc-200 transition-colors flex items-center gap-1">
+                ← Voltar
+              </button>
+              <div className="w-px h-4 bg-white/8"/>
               <div className="flex items-center gap-2 text-xs font-semibold text-zinc-500 uppercase tracking-widest">
                 <FileCode2 className="w-3.5 h-3.5"/>
                 Estúdio de Script
@@ -4422,7 +4546,7 @@ export default function SuarikHome() {
                     onDragOver={e=>{e.preventDefault();setIsDragOver(true);}}
                     onDragLeave={()=>setIsDragOver(false)}
                     onDrop={e=>{e.preventDefault();setIsDragOver(false);const f=e.dataTransfer.files[0];if(f&&f.type.startsWith("video/"))setVideoFile(f);}}
-                    onClick={()=>{const i=document.createElement("input");i.type="file";i.accept="video/mp4,video/quicktime";i.onchange=(ev)=>{const f=(ev.target as HTMLInputElement).files?.[0];if(f)setVideoFile(f);};i.click();}}
+                    onClick={()=>{const i=document.createElement("input");i.type="file";i.accept="video/*,.mp4,.mov,.mkv,.webm";i.onchange=(ev)=>{const f=(ev.target as HTMLInputElement).files?.[0];if(f)setVideoFile(f);};i.click();}}
                     className="flex flex-col items-center justify-center gap-4 rounded-2xl cursor-pointer transition-all"
                     style={{
                       width:"min(500px, 100% - 40px)",
@@ -4440,6 +4564,21 @@ export default function SuarikHome() {
                         <div className="text-center">
                           <p className="text-base font-black text-emerald-400 truncate max-w-[300px]">{videoFile.name}</p>
                           <p className="text-[11px] text-zinc-400 mt-1">{(videoFile.size/1024/1024).toFixed(1)} MB · pronto para enriquecer</p>
+                        </div>
+                        {/* Language selector */}
+                        <div onClick={e=>e.stopPropagation()} className="flex items-center gap-2">
+                          <span className="text-[10px] text-zinc-500">Idioma do vídeo:</span>
+                          {(["auto","pt","en","es"] as const).map(lang => (
+                            <button key={lang} onClick={()=>setVideoLang(lang)}
+                              className="px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all"
+                              style={{
+                                background: videoLang===lang ? "rgba(240,86,58,0.15)" : "rgba(255,255,255,0.04)",
+                                border: `1px solid ${videoLang===lang ? "rgba(240,86,58,0.4)" : "rgba(255,255,255,0.08)"}`,
+                                color: videoLang===lang ? "#FF7A5C" : "#71717a",
+                              }}>
+                              {lang === "auto" ? "Auto" : lang.toUpperCase()}
+                            </button>
+                          ))}
                         </div>
                         <button onClick={e=>{e.stopPropagation();setVideoFile(null);}} className="text-[11px] text-zinc-500 hover:text-red-400 transition-colors flex items-center gap-1 mt-1">
                           <X className="w-3.5 h-3.5"/>Remover arquivo

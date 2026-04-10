@@ -60,7 +60,12 @@ async function uploadToR2(blob: Blob, filename: string, contentType: string): Pr
     body:    JSON.stringify({ filename, contentType }),
   }).then(r => r.json());
 
-  await fetch(uploadUrl, { method: "PUT", body: blob, headers: { "Content-Type": contentType } });
+  const proxyRes = await fetch(`/api/upload/proxy?target=${encodeURIComponent(uploadUrl)}`, {
+    method:  "PUT",
+    headers: { "Content-Type": contentType },
+    body:    blob,
+  });
+  if (!proxyRes.ok) throw new Error(`Upload falhou (HTTP ${proxyRes.status})`);
   return publicUrl as string;
 }
 
@@ -154,9 +159,12 @@ export default function DreamFacePage() {
       setAvatarUrl(url);
     } catch (e) {
       console.error("Upload video:", e);
+      toast.error("Falha ao fazer upload do vídeo. Tenta novamente.");
+      setAvatarFile(null); setAvatarPreview(null); setAvatarUrl(null);
     } finally {
       setUploadingVideo(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Upload photo ──────────────────────────────────────────────────────────
@@ -170,9 +178,12 @@ export default function DreamFacePage() {
       setPhotoUrl(url);
     } catch (e) {
       console.error("Upload photo:", e);
+      toast.error("Falha ao fazer upload da foto. Tenta novamente.");
+      setPhotoFile(null); setPhotoPreview(null); setPhotoUrl(null);
     } finally {
       setUploadingPhoto(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Upload translate video ────────────────────────────────────────────────
@@ -186,9 +197,12 @@ export default function DreamFacePage() {
       setTransVideoUrl(url);
     } catch (e) {
       console.error("Upload trans video:", e);
+      toast.error("Falha ao fazer upload do vídeo. Tenta novamente.");
+      setTransVideoFile(null); setTransPreview(null); setTransVideoUrl(null);
     } finally {
       setUploadingTrans(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Generate TTS and upload to R2 ────────────────────────────────────────
@@ -620,6 +634,9 @@ export default function DreamFacePage() {
       <header className="fixed top-0 w-full z-40 h-14 flex items-center justify-between px-6"
         style={{ background: "#131313", borderBottom: "1px solid rgba(92,64,55,0.15)" }}>
         <div className="flex items-center gap-8">
+          <button onClick={() => router.back()} className="flex items-center gap-1.5 text-sm font-semibold text-zinc-400 hover:text-white transition-colors">
+            <span>←</span>Voltar
+          </button>
           <button onClick={() => router.push("/dashboard")} className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg flex items-center justify-center font-black text-white text-sm"
               style={{ background: "#F0563A", boxShadow: "0 0 16px rgba(240,86,58,0.4)" }}>S</div>
@@ -935,21 +952,26 @@ export default function DreamFacePage() {
 
                 {/* Generate Button */}
                 <button
-                  onClick={handleGenerate}
-                  disabled={!canGenerateLipsync}
-                  className="w-full py-5 rounded-2xl font-black text-base uppercase tracking-wider text-white flex items-center justify-center gap-3 transition-all active:scale-[0.98] disabled:opacity-30"
+                  onClick={() => {
+                    if (!avatarUrl && !uploadingVideo) { videoInputRef.current?.click(); return; }
+                    if (!audioUrl && !genAudio) { audioInputRef.current?.click(); return; }
+                    if (canGenerateLipsync) handleGenerate();
+                  }}
+                  disabled={uploadingVideo || genAudio}
+                  className="w-full py-5 rounded-2xl font-black text-base uppercase tracking-wider text-white flex items-center justify-center gap-3 transition-all active:scale-[0.98] disabled:opacity-50"
                   style={{
                     background: canGenerateLipsync
                       ? "linear-gradient(135deg,#F0563A 0%,#6305ef 100%)"
-                      : "#2a2a2a",
+                      : (!avatarUrl || !audioUrl) ? "#2a2a2a" : "#2a2a2a",
                     boxShadow: canGenerateLipsync ? "0 0 32px rgba(240,86,58,0.35), 0 0 64px rgba(99,5,239,0.15)" : "none",
+                    cursor: uploadingVideo || genAudio ? "not-allowed" : "pointer",
                   }}>
                   <span className="text-2xl">⚡</span>
-                  {!avatarUrl && !audioUrl ? "Carrega vídeo e áudio para começar"
-                    : !avatarUrl            ? "Falta o vídeo avatar"
-                    : !audioUrl             ? "Falta o áudio"
-                    : uploadingVideo        ? "A carregar vídeo..."
-                    : genAudio              ? "A processar áudio..."
+                  {uploadingVideo        ? "A carregar vídeo..."
+                    : genAudio           ? "A processar áudio..."
+                    : !avatarUrl && !audioUrl ? "📁 Carregar vídeo e áudio"
+                    : !avatarUrl         ? "📁 Carregar vídeo avatar"
+                    : !audioUrl          ? "📁 Carregar áudio"
                     : `Gerar LipSync (${cost("lipsync")} créditos)`}
                 </button>
 
@@ -1015,21 +1037,26 @@ export default function DreamFacePage() {
 
                 {/* Generate Button */}
                 <button
-                  onClick={handleGenerateTalkingPhoto}
-                  disabled={!canGeneratePhoto}
-                  className="w-full py-5 rounded-2xl font-black text-base uppercase tracking-wider text-white flex items-center justify-center gap-3 transition-all active:scale-[0.98] disabled:opacity-30"
+                  onClick={() => {
+                    if (!photoUrl && !uploadingPhoto) { photoInputRef.current?.click(); return; }
+                    if (!audioUrl && !genAudio) { audioInputRef.current?.click(); return; }
+                    if (canGeneratePhoto) handleGenerateTalkingPhoto();
+                  }}
+                  disabled={uploadingPhoto || genAudio}
+                  className="w-full py-5 rounded-2xl font-black text-base uppercase tracking-wider text-white flex items-center justify-center gap-3 transition-all active:scale-[0.98] disabled:opacity-50"
                   style={{
                     background: canGeneratePhoto
                       ? "linear-gradient(135deg,#F0563A 0%,#6305ef 100%)"
                       : "#2a2a2a",
                     boxShadow: canGeneratePhoto ? "0 0 32px rgba(240,86,58,0.35), 0 0 64px rgba(99,5,239,0.15)" : "none",
+                    cursor: uploadingPhoto || genAudio ? "not-allowed" : "pointer",
                   }}>
                   <span className="text-2xl">🖼️</span>
-                  {!photoUrl && !audioUrl ? "Carrega foto e áudio para começar"
-                    : !photoUrl            ? "Falta a foto"
-                    : !audioUrl            ? "Falta o áudio"
-                    : uploadingPhoto       ? "A carregar foto..."
-                    : genAudio             ? "A processar áudio..."
+                  {uploadingPhoto        ? "A carregar foto..."
+                    : genAudio           ? "A processar áudio..."
+                    : !photoUrl && !audioUrl ? "📁 Carregar foto e áudio"
+                    : !photoUrl          ? "📁 Carregar foto"
+                    : !audioUrl          ? "📁 Carregar áudio"
                     : `Gerar Talking Photo (${cost("talkingphoto")} créditos)`}
                 </button>
 
@@ -1120,18 +1147,22 @@ export default function DreamFacePage() {
 
                 {/* Generate Button */}
                 <button
-                  onClick={handleGenerateTranslate}
-                  disabled={!canGenerateTrans}
-                  className="w-full py-5 rounded-2xl font-black text-base uppercase tracking-wider text-white flex items-center justify-center gap-3 transition-all active:scale-[0.98] disabled:opacity-30"
+                  onClick={() => {
+                    if (!transVideoUrl && !uploadingTrans) { transVideoInputRef.current?.click(); return; }
+                    if (canGenerateTrans) handleGenerateTranslate();
+                  }}
+                  disabled={uploadingTrans}
+                  className="w-full py-5 rounded-2xl font-black text-base uppercase tracking-wider text-white flex items-center justify-center gap-3 transition-all active:scale-[0.98] disabled:opacity-50"
                   style={{
                     background: canGenerateTrans
                       ? "linear-gradient(135deg,#F0563A 0%,#6305ef 100%)"
                       : "#2a2a2a",
                     boxShadow: canGenerateTrans ? "0 0 32px rgba(240,86,58,0.35), 0 0 64px rgba(99,5,239,0.15)" : "none",
+                    cursor: uploadingTrans ? "not-allowed" : "pointer",
                   }}>
                   <span className="text-2xl">🌍</span>
-                  {!transVideoUrl  ? "Carrega um vídeo para começar"
-                    : uploadingTrans ? "A carregar vídeo..."
+                  {uploadingTrans   ? "A carregar vídeo..."
+                    : !transVideoUrl ? "📁 Carregar vídeo para traduzir"
                     : `Traduzir Vídeo (${cost("videotranslate")} créditos)`}
                 </button>
 
