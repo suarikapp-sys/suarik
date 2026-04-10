@@ -200,9 +200,9 @@ export default function EnricherPage() {
                     </div>
                   </div>
 
-                  <h2 className="text-3xl font-extrabold tracking-tight mb-2">Arraste seu A-Roll MP4 aqui</h2>
+                  <h2 className="text-3xl font-extrabold tracking-tight mb-2">Arraste qualquer vídeo aqui</h2>
                   <p className="text-[#E5E2E1]/50 text-sm mb-10 max-w-md">
-                    H.264 10-bit ou ProRes recomendado. A análise IA começa imediatamente após o upload.
+                    MP4, MOV, MKV, AVI, WebM e mais. A análise IA começa imediatamente após o upload.
                   </p>
 
                   <div className="flex gap-4">
