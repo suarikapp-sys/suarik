@@ -4195,7 +4195,7 @@ export default function SuarikHome() {
         background_tracks: enrichBgTracks.length ? enrichBgTracks : [
           ...(backgroundMusicUrl ? [{ url: backgroundMusicUrl, title: "Trilha Principal (IA)", is_premium_vault: true }] : []),
           { url: "https://pub-9937ef38e0a744128bd67f59e5476f23.r2.dev/Epic%20Orchestral%20Cinematic%20Documentary%201.mp3", title: "Epic Orchestral Cinematic", is_premium_vault: true },
-          { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3", title: "Dark Tension Loop", is_premium_vault: false },
+          { url: "https://pub-9937ef38e0a744128bd67f59e5476f23.r2.dev/Epic%20Orchestral%20Cinematic%20Documentary%201.mp3", title: "Dark Tension Loop", is_premium_vault: true },
         ].slice(0, 3),
       };
       sessionStorage.setItem("vb_project_result", JSON.stringify(finalResult));

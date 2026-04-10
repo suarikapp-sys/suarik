@@ -26,13 +26,17 @@ export default function EnricherPage() {
   const [analyzing, setAnalyzing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Accept any file that looks like a video — MIME type is unreliable for MKV, AVI, MOV, etc.
+  const isVideoFile = (f: File) =>
+    f.type.startsWith("video/") ||
+    f.type === "" ||
+    /\.(mp4|mov|avi|mkv|webm|wmv|flv|m4v|mts|m2ts|3gp|ts|mxf)$/i.test(f.name);
+
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setDragging(false);
     const f = e.dataTransfer.files[0];
-    if (f && f.type.startsWith("video/")) {
-      setFile(f);
-    }
+    if (f && isVideoFile(f)) setFile(f);
   }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -185,7 +189,7 @@ export default function EnricherPage() {
                   onDrop={handleDrop}
                   onClick={() => inputRef.current?.click()}
                 >
-                  <input ref={inputRef} type="file" accept="video/*" className="hidden" onChange={handleFileChange} />
+                  <input ref={inputRef} type="file" accept="video/*,.mkv,.avi,.mov,.wmv,.flv,.m4v,.mts,.m2ts,.ts,.mxf" className="hidden" onChange={handleFileChange} />
 
                   <div className="mb-8 relative">
                     <div className="absolute -inset-4 rounded-full opacity-20"

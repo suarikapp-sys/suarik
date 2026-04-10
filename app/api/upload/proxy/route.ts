@@ -38,13 +38,19 @@ export async function PUT(req: NextRequest) {
   }
 
   try {
-    const contentType = req.headers.get("content-type") || "video/mp4";
+    const contentType   = req.headers.get("content-type")   || "video/mp4";
+    const contentLength = req.headers.get("content-length");
+
+    // Forward Content-Length so R2 doesn't reject with 413 (chunked bodies without
+    // a declared size are rejected by R2's S3-compatible endpoint).
+    const forwardHeaders: Record<string, string> = { "Content-Type": contentType };
+    if (contentLength) forwardHeaders["Content-Length"] = contentLength;
 
     // Repassa o body diretamente para o R2 (streaming, sem buffering)
     const r2Res = await fetch(target, {
       method: "PUT",
       body: req.body,
-      headers: { "Content-Type": contentType },
+      headers: forwardHeaders,
       // @ts-expect-error — duplex required for streaming body in edge
       duplex: "half",
     });

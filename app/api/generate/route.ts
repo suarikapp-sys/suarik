@@ -240,8 +240,8 @@ export async function POST(req: NextRequest) {
       parsed.pixabay_search_url = null;
     } else {
       const FALLBACK_TRACKS = [
-        { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", title: "Suspense Ambient (fallback)", is_premium_vault: false },
-        { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3", title: "Dark Cinematic (fallback)",   is_premium_vault: false },
+        { url: "https://pub-9937ef38e0a744128bd67f59e5476f23.r2.dev/Epic%20Orchestral%20Cinematic%20Documentary%201.mp3", title: "Epic Orchestral Cinematic", is_premium_vault: true },
+        { url: "https://pub-9937ef38e0a744128bd67f59e5476f23.r2.dev/Epic%20Orchestral%20Cinematic%20Documentary%201.mp3", title: "Dark Cinematic",             is_premium_vault: true },
       ];
 
       try {
