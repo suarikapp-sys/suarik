@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { saveAs } from "file-saver";
 import { useToast, ToastContainer } from "@/components/Toast";
+import { trackEvent } from "@/components/PostHogProvider";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface VideoOption     { url: string; source?: string; vault_category?: string; thumb?: string; }
@@ -1373,6 +1374,7 @@ function WorkstationView({ result, copy: initialCopy, drScenes: initialDrScenes,
       const url = URL.createObjectURL(blob);
       // Revoke old URL
       setTtsAudioUrl(prev => { if(prev) URL.revokeObjectURL(prev); return url; });
+      trackEvent("tts_generated", { voice: ttsVoice, source: "storyboard" });
     } catch(e: unknown) {
       setTtsError(e instanceof Error ? e.message : "Erro ao gerar voz");
     } finally {
@@ -3927,6 +3929,7 @@ export default function SuarikHome() {
       setIsGenerated(true);
 
       toast.success(`Storyboard com ${drs.scenes.length} cenas gerado! 🎬`);
+      trackEvent("storyboard_generated", { scenes: drs.scenes.length, niche, aspect: String(aspect) });
       fetch("/api/projects", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -4167,6 +4170,7 @@ export default function SuarikHome() {
       setEnrichStep(0);
       setIsGenerated(true);
       toast.success("Vídeo enriquecido com IA! 🎬");
+      trackEvent("video_enriched", { scenes: finalDrs.length });
       fetch("/api/projects", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

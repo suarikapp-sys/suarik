@@ -7,6 +7,7 @@ import { useCredits, computeCost } from "@/hooks/useCredits";
 import { CreditsBar, InsufficientCreditsModal } from "@/components/CreditsBar";
 import { useToast, ToastContainer } from "@/components/Toast";
 import { AUDIO_VAULT } from "../lib/audioVault";
+import { trackEvent } from "@/components/PostHogProvider";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 async function uploadToR2(blob: Blob, filename: string, contentType: string): Promise<string> {
@@ -544,6 +545,7 @@ export default function AudioPage() {
       setHistory(h => [entry, ...h]);
       setActiveEntry(entry);
       toast.success("Áudio gerado com sucesso!");
+      trackEvent("tts_generated", { voice: voiceId, chars: text.length, source: "audio_studio" });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro ao gerar áudio";
       setGenError(msg);
@@ -621,6 +623,7 @@ export default function AudioPage() {
       setHistory(h => [entry, ...h]);
       setActiveEntry(entry);
       toast.success("Música gerada com sucesso! 🎵");
+      trackEvent("music_generated", { mood: musicMood, duration: musicDuration });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro ao gerar música";
       setMusicError(msg);
@@ -697,6 +700,7 @@ export default function AudioPage() {
       setHistory(h => [entry, ...h]);
       setActiveEntry(entry);
       toast.success("SFX gerado com sucesso! ⚡");
+      trackEvent("sfx_generated", { prompt: sfxPrompt.slice(0, 60), duration: sfxDuration });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro ao gerar SFX";
       setSfxError(msg);

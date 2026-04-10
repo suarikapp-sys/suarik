@@ -4,6 +4,7 @@ import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useToast, ToastContainer } from "@/components/Toast";
+import { trackEvent } from "@/components/PostHogProvider";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Profile {
@@ -348,7 +349,7 @@ function DashboardContent() {
             { icon: "📁", label: "Projetos", route: "/projects"   },
           ].map(t => (
             <button key={t.route}
-              onClick={() => router.push(t.route)}
+              onClick={() => { trackEvent("tool_opened", { tool: t.label, route: t.route }); router.push(t.route); }}
               className="w-full flex flex-col items-center py-3 transition-all text-white/40
                          hover:text-[#F0563A] hover:bg-[rgba(240,86,58,0.06)]">
               <span className="text-xl mb-1">{t.icon}</span>

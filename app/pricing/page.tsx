@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Zap, Building2, Rocket, ChevronDown, ArrowLeft, Star, Loader2 } from "lucide-react";
+import { trackEvent } from "@/components/PostHogProvider";
 
 // ─── Data ──────────────────────────────────────────────────────────────────────
 
@@ -123,6 +124,7 @@ export default function PricingPage() {
   const [loadingPack, setLoadingPack] = useState<string | null>(null);
 
   async function handleTopup(pack: string) {
+    trackEvent("topup_initiated", { pack });
     setLoadingPack(pack);
     try {
       const res = await fetch("/api/stripe/topup", {
@@ -138,6 +140,7 @@ export default function PricingPage() {
   }
 
   async function handleCheckout(planId: string) {
+    trackEvent("plan_checkout_initiated", { plan: planId });
     setLoadingPlan(planId);
     try {
       const res = await fetch("/api/stripe/checkout", {
