@@ -87,12 +87,12 @@ const R2_MUSIC = "https://pub-9937ef38e0a744128bd67f59e5476f23.r2.dev/Epic%20Orc
 
 const MUSIC_MOOD_MAP: Record<string, { pixabayQueries: string[]; jamendoTags: string; jamendoSpeed: string; fallbackUrl: string; title: string }> = {
   dark_tension:       { pixabayQueries:["dark tension suspense","horror ambient drone"],        jamendoTags:"dark+ambient+tension",          jamendoSpeed:"low",     fallbackUrl:R2_MUSIC, title:"Dark Tension" },
-  emotional_hope:     { pixabayQueries:["emotional piano hope","heartfelt cinematic strings"],  jamendoTags:"emotional+inspirational+piano", jamendoSpeed:"medium",  fallbackUrl:"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3", title:"Emotional Hope" },
+  emotional_hope:     { pixabayQueries:["emotional piano hope","heartfelt cinematic strings"],  jamendoTags:"emotional+inspirational+piano", jamendoSpeed:"medium",  fallbackUrl:"https://pub-9937ef38e0a744128bd67f59e5476f23.r2.dev/Epic%20Orchestral%20Cinematic%20Documentary%201.mp3", title:"Emotional Hope" },
   epic_cinematic:     { pixabayQueries:["epic orchestral cinematic","powerful dramatic score"], jamendoTags:"epic+cinematic+orchestral",     jamendoSpeed:"high",    fallbackUrl:R2_MUSIC, title:"Epic Cinematic" },
-  urgent_pulse:       { pixabayQueries:["urgent electronic pulse","ticking dark tension"],      jamendoTags:"electronic+dark+urgent",        jamendoSpeed:"high",    fallbackUrl:"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", title:"Urgent Pulse" },
-  mysterious_ambient: { pixabayQueries:["mysterious ambient dark","eerie atmospheric"],         jamendoTags:"ambient+mysterious+dark",       jamendoSpeed:"verylow", fallbackUrl:"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3", title:"Mysterious Ambient" },
+  urgent_pulse:       { pixabayQueries:["urgent electronic pulse","ticking dark tension"],      jamendoTags:"electronic+dark+urgent",        jamendoSpeed:"high",    fallbackUrl:"https://pub-9937ef38e0a744128bd67f59e5476f23.r2.dev/Epic%20Orchestral%20Cinematic%20Documentary%201.mp3", title:"Urgent Pulse" },
+  mysterious_ambient: { pixabayQueries:["mysterious ambient dark","eerie atmospheric"],         jamendoTags:"ambient+mysterious+dark",       jamendoSpeed:"verylow", fallbackUrl:"https://pub-9937ef38e0a744128bd67f59e5476f23.r2.dev/Epic%20Orchestral%20Cinematic%20Documentary%201.mp3", title:"Mysterious Ambient" },
   triumphant:         { pixabayQueries:["triumphant success victory","uplifting motivational"], jamendoTags:"uplifting+motivational+triumph",jamendoSpeed:"high",    fallbackUrl:R2_MUSIC, title:"Triumphant" },
-  melancholic:        { pixabayQueries:["melancholic sad piano","emotional sad background"],    jamendoTags:"melancholic+sad+piano",         jamendoSpeed:"low",     fallbackUrl:"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3", title:"Melancholic" },
+  melancholic:        { pixabayQueries:["melancholic sad piano","emotional sad background"],    jamendoTags:"melancholic+sad+piano",         jamendoSpeed:"low",     fallbackUrl:"https://pub-9937ef38e0a744128bd67f59e5476f23.r2.dev/Epic%20Orchestral%20Cinematic%20Documentary%201.mp3", title:"Melancholic" },
 };
 const EMOTION_TO_MOOD: Record<string, string> = {
   Dor:"dark_tension", Choque:"dark_tension", Urgência:"urgent_pulse", Mistério:"mysterious_ambient",

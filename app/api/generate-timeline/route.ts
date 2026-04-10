@@ -16,8 +16,8 @@ const supabaseAdmin = createAdmin(
 // ─── System prompt (VSL Reader & Cutter) ─────────────────────────────────────
 // Ported from scripts/vsl_cutter.py — identical logic, runs server-side.
 
-const SYSTEM_PROMPT = `You are a Master Editor of Direct Response videos with 500+ VSLs edited.
-Your task: take a long sales script and slice it into a sequence of dynamic scenes for a video timeline.
+const SYSTEM_PROMPT = `You are a Master Editor of Direct Response videos with 500+ VSLs edited. You think visually with the precision of a Netflix DOP.
+Your task: take a sales script and slice it into a sequence of dynamic scenes for a video timeline.
 
 RULES (non-negotiable):
 1. Cover 100% of the narration — every word must appear in some textSnippet, in original order, unaltered.
@@ -28,11 +28,46 @@ RULES (non-negotiable):
    - Min 3.5s · Max 9.0s · Round to 1 decimal.
 4. emotion: EXACTLY one of:
    Revelação · Urgência · Choque · Dor · Esperança · Oportunidade · Mistério · Gancho · CTA · Vantagem · Prova Social
-5. searchQueries: 4 DIFFERENT English queries for Pexels stock footage, each with a unique visual angle:
-   - Q1: PERSON + action + emotion (concrete subject + verb + expression)
-   - Q2: ENVIRONMENT / SCENE + light/atmosphere (no person or blurred background)
-   - Q3: OBJECT / macro detail (extreme close-up of a relevant object)
-   - Q4: Cinematic VISUAL METAPHOR (abstract/symbolic of the central concept)
+5. searchQueries: 4 DIFFERENT English queries for Pexels/Pixabay stock footage. Each must be a unique visual angle.
+   USE THE NICHE to choose ULTRA-SPECIFIC queries — generic queries waste the cut.
+
+   QUERY STRUCTURE (follow exactly):
+   - Q1: PERSON + action + emotion  (concrete subject + verb + facial/body expression)
+     FINANÇAS:     "frustrated man counting empty wallet kitchen night"
+     SAÚDE:        "woman grimacing knee pain holding leg sofa"
+     EMAGRECIMENTO:"woman measuring waist frustrated bathroom mirror"
+     IMOBILIÁRIO:  "couple signing house keys smiling agent office"
+     RELACIONAMENTO:"couple arguing kitchen frustrated night"
+     DIGITAL/RENDA:"young man laptop multiple income screens excited"
+     JURÍDICO:     "stressed man reading legal documents desk night"
+
+   - Q2: ENVIRONMENT + light/atmosphere (no person, or blurred far background)
+     FINANÇAS:     "dark moody office desk scattered bills overdue closeup"
+     SAÚDE:        "hospital corridor white light blur dramatic"
+     EMAGRECIMENTO:"empty plate fork salad light diet table"
+     IMOBILIÁRIO:  "aerial drone luxury neighborhood sunrise suburb"
+     RELACIONAMENTO:"empty bedroom window rain melancholic"
+     DIGITAL/RENDA:"home office setup multiple monitors night glow"
+     JURÍDICO:     "courtroom wood gavel desk dramatic light"
+
+   - Q3: OBJECT macro / extreme close-up
+     FINANÇAS:     "stack hundred dollar bills rotating macro slow motion"
+     SAÚDE:        "pill bottle prescription label closeup macro"
+     EMAGRECIMENTO:"weighing scale number closeup macro"
+     IMOBILIÁRIO:  "house keys hand bokeh sunlight macro"
+     RELACIONAMENTO:"wedding ring box open closeup macro bokeh"
+     DIGITAL/RENDA:"smartphone notification earnings app closeup macro"
+     JURÍDICO:     "contract pen signing closeup macro"
+
+   - Q4: Cinematic VISUAL METAPHOR (abstract/symbolic)
+     FINANÇAS:     "time lapse stock market graph rising falling abstract"
+     SAÚDE:        "healthy cells microscope abstract colorful"
+     EMAGRECIMENTO:"butterfly metamorphosis timelapse transformation abstract"
+     IMOBILIÁRIO:  "sunrise city skyline golden hour timelapse"
+     RELACIONAMENTO:"bridge over calm water sunrise hope abstract"
+     DIGITAL/RENDA:"data streams digital code rain abstract blue"
+     JURÍDICO:     "scales justice balance abstract close up"
+
 6. suggestedSfx: EXACTLY one of or null:
    "riser" · "impact" · "glitch" · "cash_register" · "heartbeat" · "bell" · "whoosh" · "tension_sting" · null
 7. musicMood: EXACTLY one of:
@@ -47,10 +82,10 @@ Return ONLY valid JSON — no markdown, no commentary:
       "duration": 4.2,
       "emotion": "Dor",
       "searchQueries": [
-        "stressed woman crying at kitchen table unpaid bills",
-        "overdue bills stack dark table dramatic light closeup",
-        "empty wallet credit card declined macro",
-        "storm clouds dark horizon time lapse abstract tension"
+        "frustrated man counting empty wallet kitchen night",
+        "dark moody office desk scattered bills overdue closeup",
+        "stack hundred dollar bills rotating macro slow motion",
+        "time lapse stock market graph rising falling abstract"
       ],
       "suggestedSfx": "tension_sting",
       "musicMood": "dark_tension"
@@ -109,12 +144,12 @@ const SFX_TO_FREESOUND: Record<string, string> = {
 };
 const MUSIC_EMOTION_MAP: Record<string, { pixabayQueries: string[]; jamendoTags: string; jamendoSpeed: string; fallbackUrl: string; title: string }> = {
   dark_tension:       { pixabayQueries:["dark tension suspense","horror ambient drone"], jamendoTags:"dark+ambient+tension",     jamendoSpeed:"low",     fallbackUrl:"https://pub-9937ef38e0a744128bd67f59e5476f23.r2.dev/Epic%20Orchestral%20Cinematic%20Documentary%201.mp3", title:"Dark Tension" },
-  emotional_hope:     { pixabayQueries:["emotional piano hope uplifting","heartfelt strings"], jamendoTags:"emotional+inspirational+piano", jamendoSpeed:"medium", fallbackUrl:"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3", title:"Emotional Hope" },
+  emotional_hope:     { pixabayQueries:["emotional piano hope uplifting","heartfelt strings"], jamendoTags:"emotional+inspirational+piano", jamendoSpeed:"medium", fallbackUrl:"https://pub-9937ef38e0a744128bd67f59e5476f23.r2.dev/Epic%20Orchestral%20Cinematic%20Documentary%201.mp3", title:"Emotional Hope" },
   epic_cinematic:     { pixabayQueries:["epic orchestral cinematic","powerful dramatic score"],  jamendoTags:"epic+cinematic+orchestral",    jamendoSpeed:"high",   fallbackUrl:"https://pub-9937ef38e0a744128bd67f59e5476f23.r2.dev/Epic%20Orchestral%20Cinematic%20Documentary%201.mp3", title:"Epic Cinematic" },
-  urgent_pulse:       { pixabayQueries:["urgent electronic pulse","ticking tension"],            jamendoTags:"electronic+dark+urgent",       jamendoSpeed:"high",   fallbackUrl:"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", title:"Urgent Pulse" },
-  mysterious_ambient: { pixabayQueries:["mysterious ambient dark","eerie atmospheric"],          jamendoTags:"ambient+mysterious+dark",       jamendoSpeed:"verylow",fallbackUrl:"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3", title:"Mysterious Ambient" },
+  urgent_pulse:       { pixabayQueries:["urgent electronic pulse","ticking tension"],            jamendoTags:"electronic+dark+urgent",       jamendoSpeed:"high",   fallbackUrl:"https://pub-9937ef38e0a744128bd67f59e5476f23.r2.dev/Epic%20Orchestral%20Cinematic%20Documentary%201.mp3", title:"Urgent Pulse" },
+  mysterious_ambient: { pixabayQueries:["mysterious ambient dark","eerie atmospheric"],          jamendoTags:"ambient+mysterious+dark",       jamendoSpeed:"verylow",fallbackUrl:"https://pub-9937ef38e0a744128bd67f59e5476f23.r2.dev/Epic%20Orchestral%20Cinematic%20Documentary%201.mp3", title:"Mysterious Ambient" },
   triumphant:         { pixabayQueries:["triumphant success victory","uplifting motivational"],  jamendoTags:"uplifting+motivational+triumph",jamendoSpeed:"high",   fallbackUrl:"https://pub-9937ef38e0a744128bd67f59e5476f23.r2.dev/Epic%20Orchestral%20Cinematic%20Documentary%201.mp3", title:"Triumphant" },
-  melancholic:        { pixabayQueries:["melancholic sad piano","emotional sad background"],     jamendoTags:"melancholic+sad+piano",         jamendoSpeed:"low",    fallbackUrl:"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3", title:"Melancholic" },
+  melancholic:        { pixabayQueries:["melancholic sad piano","emotional sad background"],     jamendoTags:"melancholic+sad+piano",         jamendoSpeed:"low",    fallbackUrl:"https://pub-9937ef38e0a744128bd67f59e5476f23.r2.dev/Epic%20Orchestral%20Cinematic%20Documentary%201.mp3", title:"Melancholic" },
 };
 
 // ─── Media helpers ────────────────────────────────────────────────────────────
