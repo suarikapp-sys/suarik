@@ -169,10 +169,11 @@ export default function PricingPage() {
           Voltar
         </button>
 
-        <span className="text-xl font-black tracking-tighter text-white select-none" style={{ letterSpacing: "-0.04em" }}>
+        <button onClick={() => router.push("/dashboard")}
+          className="text-xl font-black tracking-tighter text-white hover:opacity-80 transition-opacity" style={{ letterSpacing: "-0.04em", background: "transparent", border: "none", cursor: "pointer" }}>
           Suarik
           <span className="ml-2 text-[10px] text-blue-500 font-semibold uppercase tracking-widest align-middle">PRO</span>
-        </span>
+        </button>
 
         <button onClick={() => router.push("/login")}
           className="text-sm text-gray-500 hover:text-gray-200 transition-colors">

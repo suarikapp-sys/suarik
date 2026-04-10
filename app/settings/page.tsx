@@ -46,6 +46,13 @@ export default function SettingsPage() {
           Voltar ao Estúdio
         </button>
         <span className="text-zinc-700">·</span>
+        <button onClick={() => router.push("/dashboard")}
+          className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+          <div className="w-6 h-6 rounded-md flex items-center justify-center font-black text-white text-xs"
+            style={{ background: "#F0563A" }}>S</div>
+          <span className="text-sm font-black text-white tracking-tight">SUARIK</span>
+        </button>
+        <span className="text-zinc-700">·</span>
         <div className="flex items-center gap-2">
           <Settings className="w-4 h-4 text-orange-400" />
           <span className="text-sm font-semibold text-zinc-300">Configurações</span>

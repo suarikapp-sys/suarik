@@ -4320,10 +4320,10 @@ export default function SuarikHome() {
     {/* ═══ SIDEBAR FIXA ═══ */}
     <aside className="fixed top-0 left-0 h-screen w-64 flex flex-col z-50" style={{background:"#09090b",borderRight:"1px solid rgba(255,255,255,0.06)"}}>
       {/* ── Logo ── */}
-      <div className="flex items-center gap-2.5 px-5 pt-6 pb-4">
+      <button onClick={()=>router.push("/dashboard")} className="flex items-center gap-2.5 px-5 pt-6 pb-4 hover:opacity-80 transition-opacity w-full" style={{background:"transparent",border:"none",cursor:"pointer"}}>
         <div className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-white text-sm" style={{background:"#F0563A",boxShadow:"0 0 20px rgba(240,86,58,0.35)"}}>S</div>
         <span className="text-xl text-white" style={{fontFamily:"'Bebas Neue',sans-serif",letterSpacing:"2.5px"}}>SUARIK</span>
-      </div>
+      </button>
 
       {/* ── Workspace Selector ── */}
       <button className="mx-4 mb-5 flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl text-left transition-all hover:bg-white/[0.04]"

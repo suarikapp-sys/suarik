@@ -127,12 +127,22 @@ export default function ProjectsPage() {
         background: "#1C1B1B", flexShrink: 0,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{
-            width: 32, height: 32, borderRadius: 8, background: "#F0563A",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontWeight: 900, fontSize: 14, color: "#fff",
-          }}>S</div>
-          <span style={{ fontWeight: 700, fontSize: 15, letterSpacing: 1 }}>SUARIK</span>
+          <button onClick={() => router.back()} style={{
+            background: "transparent", border: "none", color: "#777", fontSize: 13,
+            cursor: "pointer", fontWeight: 600,
+          }}>← Voltar</button>
+          <span style={{ color: "#333", fontSize: 16 }}>|</span>
+          <button onClick={() => router.push("/dashboard")} style={{
+            display: "flex", alignItems: "center", gap: 8,
+            background: "transparent", border: "none", cursor: "pointer", padding: 0,
+          }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: 8, background: "#F0563A",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontWeight: 900, fontSize: 14, color: "#fff",
+            }}>S</div>
+            <span style={{ fontWeight: 700, fontSize: 15, letterSpacing: 1, color: "#fff" }}>SUARIK</span>
+          </button>
           <span style={{ color: "#444", fontSize: 18 }}>/</span>
           <span style={{ color: "#ccc", fontSize: 14 }}>📁 Projetos</span>
         </div>
