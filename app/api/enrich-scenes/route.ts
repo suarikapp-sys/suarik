@@ -1,6 +1,6 @@
 // ─── /api/enrich-scenes ──────────────────────────────────────────────────────
 // Receives real Whisper transcript → generates enriched DRS scenes:
-//   1. gpt-4o-mini — scene splitting + cinematic queries (was gpt-4o, 33× cheaper)
+//   1. gpt-4o — scene splitting + niche-specific cinematic queries
 //   2. Pexels + Pixabay — deduplicated B-roll (unique queries fetched once)
 //   3. Freesound — SFX previews
 //   4. Jamendo → Pixabay Music → vault fallback for background tracks
@@ -22,29 +22,64 @@ const supabaseAdmin = createAdmin(
 );
 
 // ─── System prompt ────────────────────────────────────────────────────────────
-// Stage 1 (context extraction) removed — the scene prompt infers niche directly,
-// saving one full API round-trip (~200 tokens + latency) per call.
+// Parity with generate-timeline: niche-specific query examples for all 7 niches.
+// Uses real Whisper timestamps for accurate per-scene durations.
 
-const SCENE_PROMPT = `You are a senior cinematic Art Director specialized in Direct Response UGC videos.
-You receive a real Whisper transcript and split it into timeline scenes.
+const SCENE_PROMPT = `You are a Master Editor of Direct Response UGC videos with 500+ VSLs edited.
+You receive a real Whisper transcript and split it into a sequence of dynamic timeline scenes.
 
-RULES:
+RULES (non-negotiable):
 1. Cover 100% of the transcript — every word in some textSnippet, original order, unaltered.
-2. Each scene: 1–3 sentences, 4–7 seconds. Use Whisper timestamps for real duration when available.
+2. Each scene: 1–3 sentences. Use Whisper word timestamps for real duration when available.
    duration = real end_ts − start_ts. Min 3.5s · Max 8.0s · Round to 1 decimal.
 3. emotion: EXACTLY one of:
    Revelação · Urgência · Choque · Dor · Esperança · Oportunidade · Mistério · Gancho · CTA · Vantagem · Prova Social
-4. searchQueries: 4 DIFFERENT English Pexels queries, each a unique visual angle:
-   - Q1: PERSON + action + emotion
-   - Q2: ENVIRONMENT + light/atmosphere (no person or blurred bg)
+4. searchQueries: 4 DIFFERENT English queries for Pexels/Pixabay. Each a unique visual angle.
+   DETECT the niche from the transcript and use ULTRA-SPECIFIC queries — generic queries waste the cut.
+
+   QUERY STRUCTURE (follow exactly):
+   - Q1: PERSON + action + emotion  (concrete subject + verb + facial/body expression)
+     FINANÇAS:     "frustrated man counting empty wallet kitchen night"
+     SAÚDE:        "woman grimacing knee pain holding leg sofa"
+     EMAGRECIMENTO:"woman measuring waist frustrated bathroom mirror"
+     IMOBILIÁRIO:  "couple signing house keys smiling agent office"
+     RELACIONAMENTO:"couple arguing kitchen frustrated night"
+     DIGITAL/RENDA:"young man laptop multiple income screens excited"
+     JURÍDICO:     "stressed man reading legal documents desk night"
+
+   - Q2: ENVIRONMENT + light/atmosphere (no person, or blurred far background)
+     FINANÇAS:     "dark moody office desk scattered bills overdue closeup"
+     SAÚDE:        "hospital corridor white light blur dramatic"
+     EMAGRECIMENTO:"empty plate fork salad light diet table"
+     IMOBILIÁRIO:  "aerial drone luxury neighborhood sunrise suburb"
+     RELACIONAMENTO:"empty bedroom window rain melancholic"
+     DIGITAL/RENDA:"home office setup multiple monitors night glow"
+     JURÍDICO:     "courtroom wood gavel desk dramatic light"
+
    - Q3: OBJECT macro / extreme close-up
+     FINANÇAS:     "stack hundred dollar bills rotating macro slow motion"
+     SAÚDE:        "pill bottle prescription label closeup macro"
+     EMAGRECIMENTO:"weighing scale number closeup macro"
+     IMOBILIÁRIO:  "house keys hand bokeh sunlight macro"
+     RELACIONAMENTO:"wedding ring box open closeup macro bokeh"
+     DIGITAL/RENDA:"smartphone notification earnings app closeup macro"
+     JURÍDICO:     "contract pen signing closeup macro"
+
    - Q4: Cinematic VISUAL METAPHOR (abstract/symbolic)
-5. suggestedSfx: one of or null:
+     FINANÇAS:     "time lapse stock market graph rising falling abstract"
+     SAÚDE:        "healthy cells microscope abstract colorful"
+     EMAGRECIMENTO:"butterfly metamorphosis timelapse transformation abstract"
+     IMOBILIÁRIO:  "sunrise city skyline golden hour timelapse"
+     RELACIONAMENTO:"bridge over calm water sunrise hope abstract"
+     DIGITAL/RENDA:"data streams digital code rain abstract blue"
+     JURÍDICO:     "scales justice balance abstract close up"
+
+5. suggestedSfx: EXACTLY one of or null:
    "riser" · "impact" · "glitch" · "cash_register" · "heartbeat" · "bell" · "whoosh" · "tension_sting" · null
-6. musicMood: one of:
+6. musicMood: EXACTLY one of:
    "dark_tension" · "emotional_hope" · "epic_cinematic" · "urgent_pulse" · "mysterious_ambient" · "triumphant" · "melancholic"
 
-Return ONLY valid JSON — no markdown:
+Return ONLY valid JSON — no markdown, no commentary:
 {
   "scenes": [
     {
@@ -52,7 +87,12 @@ Return ONLY valid JSON — no markdown:
       "textSnippet": "exact transcript excerpt",
       "duration": 4.5,
       "emotion": "Dor",
-      "searchQueries": ["q1","q2","q3","q4"],
+      "searchQueries": [
+        "frustrated man counting empty wallet kitchen night",
+        "dark moody office desk scattered bills overdue closeup",
+        "stack hundred dollar bills rotating macro slow motion",
+        "time lapse stock market graph rising falling abstract"
+      ],
       "suggestedSfx": "tension_sting",
       "musicMood": "dark_tension"
     }
@@ -105,7 +145,7 @@ const EMOTION_TO_MOOD: Record<string, string> = {
 async function fetchPexels(query: string, key: string): Promise<VideoOpt[]> {
   try {
     const res = await fetch(
-      `https://api.pexels.com/videos/search?query=${encodeURIComponent(query)}&per_page=3&orientation=landscape&min_width=1280`,
+      `https://api.pexels.com/videos/search?query=${encodeURIComponent(query)}&per_page=5&orientation=landscape&min_width=1280`,
       { headers: { Authorization: key } }
     );
     if (!res.ok) return [];
@@ -125,7 +165,7 @@ async function fetchPexels(query: string, key: string): Promise<VideoOpt[]> {
 async function fetchPixabay(query: string, key: string): Promise<VideoOpt[]> {
   try {
     const res = await fetch(
-      `https://pixabay.com/api/videos/?key=${key}&q=${encodeURIComponent(query)}&per_page=3&video_type=film&min_width=1280`
+      `https://pixabay.com/api/videos/?key=${key}&q=${encodeURIComponent(query)}&per_page=5&video_type=film&min_width=1280`
     );
     if (!res.ok) return [];
     const data = await res.json();
@@ -190,13 +230,13 @@ export async function POST(req: NextRequest) {
     if (!text?.trim())
       return NextResponse.json({ error: "Campo 'text' (transcrição) é obrigatório." }, { status: 400 });
 
-    // ── Scene analysis: gpt-4o-mini (was gpt-4o — 33× cost reduction) ────────
+    // ── Scene analysis: gpt-4o — best niche detection + cinematic query quality ──
     const userMsg = words?.length
       ? `Video transcript (${Math.round(videoDuration ?? 60)}s) with Whisper timestamps:\n\n${text}\n\nTimestamps:\n${words.slice(0, 200).map(w => `[${w.start.toFixed(1)}s-${w.end.toFixed(1)}s] ${w.word}`).join(", ")}`
       : `Video transcript (${Math.round(videoDuration ?? 60)}s):\n\n${text}`;
 
     const completion = await openai.chat.completions.create({
-      model:           "gpt-4o-mini",
+      model:           "gpt-4o",
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: SCENE_PROMPT },

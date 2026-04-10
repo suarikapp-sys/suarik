@@ -237,9 +237,9 @@ export async function POST(req: NextRequest) {
     if (!copy)
       return NextResponse.json({ error: "O campo 'copy' é obrigatório." }, { status: 400 });
 
-    // ── Stage 1: VSL scene-cutter (gpt-4o-mini — fast & cheap) ──────────────
+    // ── Stage 1: VSL scene-cutter (gpt-4o — best niche detection & query quality) ──
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o",
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
@@ -306,8 +306,8 @@ export async function POST(req: NextRequest) {
     const queryResultMap = new Map<string, { pexels: VideoOpt[]; pixabay: VideoOpt[] }>();
     await Promise.all(uniqueQueries.map(async q => {
       const [pexels, pixabay] = await Promise.all([
-        PEXELS_KEY  ? fetchPexels(q, PEXELS_KEY)   : Promise.resolve([] as VideoOpt[]),
-        PIXABAY_KEY ? fetchPixabay(q, PIXABAY_KEY) : Promise.resolve([] as VideoOpt[]),
+        PEXELS_KEY  ? fetchPexels(q, PEXELS_KEY, 5) : Promise.resolve([] as VideoOpt[]),
+        PIXABAY_KEY ? fetchPixabay(q, PIXABAY_KEY, 5) : Promise.resolve([] as VideoOpt[]),
       ]);
       queryResultMap.set(q, { pexels, pixabay });
     }));
