@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useState, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useToast, ToastContainer } from "@/components/Toast";
@@ -26,7 +26,7 @@ const PLAN_LABELS: Record<string, { label: string; color: string }> = {
   starter:    { label: "Starter",     color: "#60a5fa" },
   pro:        { label: "Pro",         color: "#a78bfa" },
   growth:     { label: "Growth",      color: "#34d399" },
-  enterprise: { label: "Enterprise",  color: "#F0563A" },
+  enterprise: { label: "Enterprise",  color: "#E8512A" },
 };
 
 function getInitials(name: string | null, email: string) {
@@ -42,105 +42,101 @@ const TOOLS = [
     label:   "Gerador de Storyboard",
     desc:    "Converta roteiros em B-Rolls sequenciados com pacing dinâmico e transições cinematográficas.",
     tag:     "Motor Narrativo",
-    tagColor:"#F0563A",
-    icon:    "✨",
-    size:    "large",   // md:col-span-8
-    gradient:"radial-gradient(ellipse at 30% 50%, rgba(240,86,58,0.25), transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(99,5,239,0.15), transparent 50%)",
-    cta:     "Lançar Text-to-B-Roll →",
-    ctaBg:   "linear-gradient(135deg,#F0563A,#c44527)",
-    ctaColor:"#fff",
+    tagColor:"#E8512A",
+    icon:    "storyboard",
+    size:    "large",
+    cta:     "Lançar Text-to-B-Roll",
   },
   {
     id:      "audio",
     route:   "/audio",
     label:   "Estúdio de Áudio",
-    desc:    "TTS de alta fidelidade com MiniMax. Vozes EN, ZH e JA. Emoções, velocidade e tom ajustáveis. Clonagem de voz proprietária.",
+    desc:    "TTS de alta fidelidade com MiniMax. Vozes EN, ZH e JA. Emoções, velocidade e tom ajustáveis.",
     tag:     "Motor de Voz",
     tagColor:"#a78bfa",
-    icon:    "🎙️",
-    size:    "medium",  // md:col-span-4
-    gradient:"radial-gradient(ellipse at 80% 20%, rgba(99,5,239,0.18), transparent 60%)",
-    cta:     "Abrir Estúdio de Áudio",
-    ctaBg:   "rgba(99,5,239,0.12)",
-    ctaColor:"#a78bfa",
-    ctaBorder:"rgba(99,5,239,0.3)",
+    icon:    "audio",
+    size:    "medium",
+    cta:     "Abrir Estúdio",
   },
   {
     id:      "dreamface",
     route:   "/dreamface",
     label:   "Estúdio de LipSync",
-    desc:    "Sincronize lábios de avatares com qualquer áudio. Porta-vozes virtuais com LipSync ultra-preciso.",
+    desc:    "Sincronize lábios de avatares com qualquer áudio. LipSync ultra-preciso.",
     tag:     "Motor de Avatar",
-    tagColor:"#F0563A",
-    icon:    "🎭",
-    size:    "medium",  // md:col-span-4
-    gradient:"radial-gradient(ellipse at 30% 60%, rgba(240,86,58,0.12), transparent 50%)",
+    tagColor:"#E8512A",
+    icon:    "lipsync",
+    size:    "medium",
     cta:     "Abrir LipSync",
-    ctaBg:   "rgba(240,86,58,0.1)",
-    ctaColor:"#F0563A",
-    ctaBorder:"rgba(240,86,58,0.25)",
   },
   {
     id:      "voiceclone",
     route:   "/voiceclone",
     label:   "Clone de Voz",
-    desc:    "Clone qualquer voz com apenas 10 segundos de áudio. Crie narrações com sua voz ou de qualquer pessoa.",
+    desc:    "Clone qualquer voz com apenas 10 segundos de áudio.",
     tag:     "Laboratório de Clone",
     tagColor:"#34d399",
-    icon:    "🧬",
-    size:    "medium",  // md:col-span-4
-    gradient:"radial-gradient(ellipse at 60% 30%, rgba(52,211,153,0.12), transparent 60%)",
+    icon:    "clone",
+    size:    "medium",
     cta:     "Clonar Voz",
-    ctaBg:   "rgba(52,211,153,0.08)",
-    ctaColor:"#34d399",
-    ctaBorder:"rgba(52,211,153,0.2)",
   },
   {
     id:      "dreamact",
     route:   "/dreamact",
     label:   "Animador de Avatar",
-    desc:    "Anime qualquer foto com movimentos naturais. Crie avatares que acenam, falam, dançam.",
+    desc:    "Anime qualquer foto com movimentos naturais.",
     tag:     "Laboratório de Movimento",
     tagColor:"#a78bfa",
-    icon:    "🎭",
+    icon:    "dreamact",
     size:    "medium",
-    gradient:"radial-gradient(ellipse at 50% 20%, rgba(167,139,250,0.15), transparent 60%)",
     cta:     "Animar Avatar",
-    ctaBg:   "rgba(167,139,250,0.1)",
-    ctaColor:"#a78bfa",
-    ctaBorder:"rgba(167,139,250,0.25)",
   },
   {
     id:      "enricher",
     route:   "/enricher",
     label:   "Enriquecedor",
-    desc:    "Injete B-Rolls premium em filmagens existentes via análise semântica automática.",
+    desc:    "Injete B-Rolls premium em filmagens existentes via análise semântica.",
     tag:     "Suíte de Sobreposição",
     tagColor:"#22d3ee",
-    icon:    "🎬",
-    size:    "medium",  // md:col-span-4
-    gradient:"radial-gradient(ellipse at 70% 30%, rgba(0,218,243,0.1), transparent 60%)",
+    icon:    "enricher",
+    size:    "medium",
     cta:     "Upload MP4",
-    ctaBg:   "rgba(255,255,255,0.04)",
-    ctaColor:"rgba(255,255,255,0.7)",
-    ctaBorder:"rgba(255,255,255,0.08)",
   },
   {
     id:      "projects",
     route:   "/projects",
     label:   "Meus Projetos",
-    desc:    "Acesse e reabra todos os projetos gerados. Storyboards, áudios, lipsync e avatares em um só lugar.",
+    desc:    "Acesse e reabra todos os projetos gerados.",
     tag:     "Biblioteca",
     tagColor:"#a78bfa",
-    icon:    "📁",
-    size:    "medium",  // md:col-span-4
-    gradient:"radial-gradient(ellipse at 20% 70%, rgba(99,5,239,0.12), transparent 60%)",
+    icon:    "projects",
+    size:    "medium",
     cta:     "Ver Projetos",
-    ctaBg:   "rgba(99,5,239,0.1)",
-    ctaColor:"#a78bfa",
-    ctaBorder:"rgba(99,5,239,0.25)",
   },
 ];
+
+// ─── SVG icons for tools ──────────────────────────────────────────────────────
+function ToolIcon({ name, className, style }: { name: string; className?: string; style?: React.CSSProperties }) {
+  const props = { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.5, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, className, style };
+  switch (name) {
+    case "storyboard":
+      return (<svg {...props}><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M9 3v6M7 13h2M7 17h2M13 13h4M13 17h4" /></svg>);
+    case "audio":
+      return (<svg {...props}><path d="M12 3v18M8 7v10M4 10v4M16 7v10M20 10v4" /></svg>);
+    case "lipsync":
+      return (<svg {...props}><circle cx="12" cy="12" r="9" /><path d="M8 14.5s1.5 2 4 2 4-2 4-2" /><circle cx="9" cy="9.5" r="1" fill="currentColor" stroke="none" /><circle cx="15" cy="9.5" r="1" fill="currentColor" stroke="none" /></svg>);
+    case "clone":
+      return (<svg {...props}><path d="M9 3v18M15 3v18M9 7h6M9 12h6M9 17h6" /><circle cx="9" cy="3" r="1.5" fill="currentColor" stroke="none" /><circle cx="15" cy="3" r="1.5" fill="currentColor" stroke="none" /><circle cx="9" cy="21" r="1.5" fill="currentColor" stroke="none" /><circle cx="15" cy="21" r="1.5" fill="currentColor" stroke="none" /></svg>);
+    case "dreamact":
+      return (<svg {...props}><circle cx="12" cy="5" r="2.5" /><path d="M12 8v5M9 20l3-7 3 7M7 12l-2 3M17 12l2 3" /></svg>);
+    case "enricher":
+      return (<svg {...props}><path d="M12 2 2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg>);
+    case "projects":
+      return (<svg {...props}><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>);
+    default:
+      return (<svg {...props}><circle cx="12" cy="12" r="9" /></svg>);
+  }
+}
 
 // ─── Streak computation ───────────────────────────────────────────────────────
 function computeStreak(projects: RecentProject[]): number {
@@ -179,14 +175,23 @@ interface RecentProject {
 }
 
 const TOOL_META: Record<string, { icon: string; route: string; color: string; label: string }> = {
-  storyboarder: { icon: "✨", route: "/storyboard", color: "#F0563A", label: "Script" },
-  storyboard:   { icon: "✨", route: "/storyboard", color: "#F0563A", label: "Script" },
-  audio:        { icon: "🎙️", route: "/audio",      color: "#a78bfa", label: "Áudio" },
-  dreamface:    { icon: "🎭", route: "/dreamface",   color: "#F0563A", label: "LipSync" },
-  voiceclone:   { icon: "🧬", route: "/voiceclone",  color: "#34d399", label: "Clone" },
-  dreamact:     { icon: "🎭", route: "/dreamact",    color: "#a78bfa", label: "DreamAct" },
-  enricher:     { icon: "🎬", route: "/enricher",    color: "#22d3ee", label: "Enricher" },
+  storyboarder: { icon: "storyboard", route: "/storyboard", color: "#E8512A", label: "Script" },
+  storyboard:   { icon: "storyboard", route: "/storyboard", color: "#E8512A", label: "Script" },
+  audio:        { icon: "audio",      route: "/audio",      color: "#a78bfa", label: "Áudio" },
+  dreamface:    { icon: "lipsync",    route: "/dreamface",  color: "#E8512A", label: "LipSync" },
+  voiceclone:   { icon: "clone",      route: "/voiceclone", color: "#34d399", label: "Clone" },
+  dreamact:     { icon: "dreamact",   route: "/dreamact",   color: "#a78bfa", label: "DreamAct" },
+  enricher:     { icon: "enricher",   route: "/enricher",   color: "#22d3ee", label: "Enricher" },
 };
+
+// ─── Quick Picks ──────────────────────────────────────────────────────────────
+const QUICK_PICKS = [
+  { label: "VSL Suplemento",  prompt: "Crie um VSL de 3 minutos para um suplemento natural de energia e foco. Tom persuasivo, ganchos emocionais, CTA forte no final." },
+  { label: "Financeiro DR",   prompt: "Crie um vídeo estilo Direct Response para um curso de finanças pessoais. Abordagem problema-solução, prova social, urgência." },
+  { label: "Emagrecimento",   prompt: "Crie um VSL de emagrecimento saudável. Comece com dor, mostre a jornada, apresente a solução e depoimentos." },
+  { label: "Relacionamento",  prompt: "Crie um vídeo emocional sobre como melhorar relacionamentos. Tom empático, storytelling pessoal, oferta de curso." },
+  { label: "Curso Online",    prompt: "Crie um vídeo promocional para lançamento de curso online. Autoridade, transformação, bônus e escassez." },
+];
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 function DashboardContent() {
@@ -200,13 +205,13 @@ function DashboardContent() {
   const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
   const [allProjects,    setAllProjects]    = useState<RecentProject[]>([]);
   const [projectsLoaded, setProjectsLoaded] = useState(false);
+  const [heroText,       setHeroText]       = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    // Show success toast after Stripe checkout
     const checkout = searchParams.get("checkout");
     if (checkout === "success") {
       toast.success("Plano ativado! Seus créditos foram adicionados. 🎉", 6000);
-      // Clean URL without reload
       window.history.replaceState({}, "", "/dashboard");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -222,12 +227,11 @@ function DashboardContent() {
         avatar_url: null, plan: "free", credits: 100, subscription_status: "inactive",
       });
       setLoading(false);
-      // Load projects (more for streak, show 4 in UI)
       fetch("/api/projects")
         .then(r => r.ok ? r.json() : null)
         .then(d => {
           if (d?.projects) {
-            setRecentProjects(d.projects.slice(0, 4));
+            setRecentProjects(d.projects.slice(0, 6));
             setAllProjects(d.projects);
           }
           setProjectsLoaded(true);
@@ -243,11 +247,19 @@ function DashboardContent() {
     router.push("/login");
   }
 
+  function handleGenerate() {
+    if (!heroText.trim()) return;
+    trackEvent("hero_generate", { textLength: heroText.length });
+    sessionStorage.setItem("suarik_draft_script", heroText);
+    router.push("/storyboard");
+  }
+
+  // ── Loading ──
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#131313]">
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "#060606" }}>
         <div className="text-center space-y-4">
-          <div className="w-8 h-8 border-2 border-[#353534] border-t-[#F0563A] rounded-full animate-spin mx-auto" />
+          <div className="w-8 h-8 border-2 border-[#131313] border-t-[#E8512A] rounded-full animate-spin mx-auto" />
           <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-white/30">Iniciando Motor Neural...</p>
         </div>
       </div>
@@ -261,396 +273,352 @@ function DashboardContent() {
   const planInfo    = PLAN_LABELS[plan] ?? PLAN_LABELS.free;
   const initials    = getInitials(profile?.full_name ?? null, profile?.email ?? "?");
   const displayName = profile?.full_name ?? profile?.email?.split("@")[0] ?? "Usuário";
+  const firstName   = displayName.split(" ")[0];
+
+  const hour     = new Date().getHours();
+  const greeting = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
 
   const large        = TOOLS.filter(t => t.size === "large");
   const medium       = TOOLS.filter(t => t.size === "medium");
   const streak       = computeStreak(allProjects);
   const totalCreated = allProjects.length;
 
+  function timeAgo(dateStr: string) {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const h = Math.floor(diff / 3600000);
+    if (h < 1) return "Agora mesmo";
+    if (h < 24) return `Há ${h}h`;
+    const d = Math.floor(h / 24);
+    return d === 1 ? "Ontem" : `Há ${d} dias`;
+  }
+
   return (
-    <div className="min-h-screen bg-[#131313] text-[#E5E2E1] font-sans">
+    <div className="min-h-screen text-[#EAEAEA]" style={{ background: "#060606", fontFamily: "'Geist', system-ui, sans-serif" }}>
 
       {/* ═══ TOP NAV ══════════════════════════════════════════════════════════ */}
-      <nav className="fixed top-0 w-full z-50 flex justify-between items-center px-6 h-16
-                      bg-[#131313] border-b border-white/[0.04]">
+      <nav className="sticky top-0 z-50 flex justify-between items-center px-6 h-14" style={{ background: "rgba(6,6,6,0.85)", backdropFilter: "blur(16px)", borderBottom: "1px solid #131313" }}>
         <div className="flex items-center gap-8">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center font-black text-white text-sm"
-              style={{ background: "#F0563A", boxShadow: "0 0 16px rgba(240,86,58,0.4)" }}>S</div>
-            <span className="text-lg font-black text-white tracking-tighter">SUARIK</span>
-          </div>
-          <div className="hidden md:flex items-center gap-5">
-            <button onClick={() => router.push("/projects")}
-              className="text-sm text-white/50 hover:text-[#F0563A] transition-colors font-medium tracking-tight">
-              Projetos
-            </button>
-            <button onClick={() => router.push("/audio")}
-              className="text-sm text-white/50 hover:text-[#F0563A] transition-colors font-medium tracking-tight">
-              Estúdio
-            </button>
-            <button onClick={() => router.push("/pricing")}
-              className="text-sm text-white/50 hover:text-[#F0563A] transition-colors font-medium tracking-tight">
-              Planos
-            </button>
+          {/* Logo */}
+          <button onClick={() => router.push("/dashboard")} className="flex items-center gap-2.5">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <rect x="1" y="1" width="9" height="9" rx="2" fill="#E8512A" />
+              <rect x="14" y="14" width="9" height="9" rx="2" fill="#E8512A" />
+              <rect x="14" y="1" width="9" height="9" rx="2" fill="#E8512A" opacity="0.3" />
+              <rect x="1" y="14" width="9" height="9" rx="2" fill="#E8512A" opacity="0.3" />
+            </svg>
+            <span className="text-[15px] font-extrabold text-white tracking-tight">SUARIK</span>
+          </button>
+
+          <div className="hidden md:flex items-center gap-1">
+            {[
+              { label: "Projetos", route: "/projects" },
+              { label: "Estúdio", route: "/audio" },
+              { label: "Planos",  route: "/pricing" },
+            ].map(l => (
+              <button key={l.route} onClick={() => router.push(l.route)}
+                className="px-3 py-1.5 rounded-md text-[13px] text-white/40 hover:text-white hover:bg-white/[0.04] transition-all">
+                {l.label}
+              </button>
+            ))}
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          {/* Credits bar */}
-          <div className="hidden md:flex flex-col items-end mr-2">
-            <div className="flex items-center gap-1.5 mb-1">
-              <span className="text-[#F0563A] text-sm">🔥</span>
-              <span className="text-[10px] uppercase tracking-widest text-white/40 font-mono">Créditos</span>
+        <div className="flex items-center gap-3">
+          {/* Credits */}
+          <div className="hidden md:flex items-center gap-3 px-3 py-1.5 rounded-lg" style={{ background: "#09090B", border: "1px solid #131313" }}>
+            <div className="flex items-center gap-1.5">
+              <div className="w-1.5 h-1.5 rounded-full" style={{ background: creditsPct < 20 ? "#E8512A" : "#34d399" }} />
+              <span className="text-[11px] font-medium text-white/50">Créditos</span>
             </div>
-            <div className="w-28 h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
-              <div className="h-full rounded-full transition-all"
-                style={{ width: `${creditsPct}%`, background: "linear-gradient(90deg,#F0563A,#ff7a4d)" }} />
+            <div className="w-20 h-1 rounded-full overflow-hidden" style={{ background: "#1a1a1a" }}>
+              <div className="h-full rounded-full transition-all duration-500" style={{ width: `${creditsPct}%`, background: creditsPct < 20 ? "#E8512A" : "#34d399" }} />
             </div>
-            <span className="text-[10px] font-mono mt-0.5" style={{ color: "#F0563A" }}>
-              {credits.toLocaleString("pt-BR")} / {maxCredits.toLocaleString("pt-BR")}
+            <span className="text-[11px] font-mono font-medium" style={{ color: creditsPct < 20 ? "#E8512A" : "#EAEAEA" }}>
+              {credits.toLocaleString("pt-BR")}
             </span>
           </div>
 
-          <button onClick={() => router.push("/storyboard")}
-            className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-bold transition-all hover:opacity-90 text-white"
-            style={{ background: "linear-gradient(135deg,#F0563A,#c44527)" }}>
-            ⚡ Criar
-          </button>
+          {/* Plan badge */}
+          <div className="hidden md:flex px-2.5 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wider"
+            style={{ background: `${planInfo.color}15`, color: planInfo.color, border: `1px solid ${planInfo.color}25` }}>
+            {planInfo.label}
+          </div>
 
+          {/* Avatar */}
           <button onClick={handleSignOut}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white border border-white/10 hover:border-[#F0563A]/40 transition-all"
-            style={{ background: "linear-gradient(135deg,#F0563A,#FF7A5C)" }}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white transition-all hover:ring-2 hover:ring-[#E8512A]/40"
+            style={{ background: "linear-gradient(135deg,#E8512A,#c44020)" }}
             title={`${displayName} · Sair`}>
             {initials}
           </button>
         </div>
       </nav>
 
-      {/* ═══ SIDEBAR ══════════════════════════════════════════════════════════ */}
-      <aside className="fixed left-0 top-16 bottom-0 w-20 flex flex-col items-center py-5 z-40
-                        bg-[#1C1B1B] border-r border-white/[0.04]">
+      {/* ═══ MAIN ═════════════════════════════════════════════════════════════ */}
+      <main className="max-w-[960px] mx-auto px-6 pt-12 pb-24">
 
-        <div className="flex flex-col items-center gap-1 mb-6">
-          <div className="w-10 h-10 rounded-lg flex items-center justify-center text-lg mb-1"
-            style={{ background: "rgba(240,86,58,0.12)", border: "1px solid rgba(240,86,58,0.2)" }}>
-            🧠
-          </div>
-          <span className="text-[9px] uppercase tracking-widest text-white/30 font-mono">Tools</span>
+        {/* ── Greeting ────────────────────────────────────────────────── */}
+        <div className="mb-10">
+          <h1 className="text-[40px] font-extrabold tracking-tight text-white leading-[1.1]">
+            {greeting}, {firstName}.
+          </h1>
+          {streak > 0 && (
+            <div className="flex items-center gap-2 mt-3">
+              <span className="text-sm">{streak >= 7 ? "🔥" : "✦"}</span>
+              <span className="text-[13px] text-white/40">
+                {streak} {streak === 1 ? "dia" : "dias"} em sequência
+                {streak >= 7 && <span className="ml-1.5 text-[#E8512A] font-semibold text-[11px] uppercase">{streak >= 30 ? "Lendário" : streak >= 14 ? "Imparável" : "Em chamas"}</span>}
+              </span>
+            </div>
+          )}
         </div>
 
-        <div className="flex flex-col gap-1 w-full">
-          {[
-            { icon: "✨", label: "Script",    route: "/storyboard" },
-            { icon: "🎙️", label: "Audio",    route: "/audio"      },
-            { icon: "🎤", label: "LipSync",  route: "/dreamface"  },
-            { icon: "🎭", label: "DreamAct", route: "/dreamact"   },
-            { icon: "🧬", label: "Clone",    route: "/voiceclone" },
-            { icon: "🎬", label: "Enricher",  route: "/enricher"   },
-            { icon: "📁", label: "Projetos", route: "/projects"   },
-          ].map(t => (
-            <button key={t.route}
-              onClick={() => { trackEvent("tool_opened", { tool: t.label, route: t.route }); router.push(t.route); }}
-              className="w-full flex flex-col items-center py-3 transition-all text-white/40
-                         hover:text-[#F0563A] hover:bg-[rgba(240,86,58,0.06)]">
-              <span className="text-xl mb-1">{t.icon}</span>
-              <span className="text-[9px] uppercase tracking-widest font-mono">{t.label}</span>
+        {/* ── Hero Input ──────────────────────────────────────────────── */}
+        <section className="mb-6 rounded-xl p-[1px]" style={{ background: "linear-gradient(135deg, #131313, #1a1a1a)" }}>
+          <div className="rounded-xl p-5" style={{ background: "#09090B" }}>
+            <textarea
+              ref={textareaRef}
+              value={heroText}
+              onChange={e => setHeroText(e.target.value)}
+              placeholder="Cole seu roteiro, ou descreva o vídeo que quer criar..."
+              rows={3}
+              className="w-full bg-transparent text-[15px] text-white placeholder:text-white/20 resize-none focus:outline-none leading-relaxed"
+            />
+            <div className="flex items-center justify-between mt-3 pt-3" style={{ borderTop: "1px solid #131313" }}>
+              <div className="flex items-center gap-2 flex-wrap">
+                {[
+                  { label: "Roteiro", icon: "📝" },
+                  { label: "Importar MP4", icon: "📁", action: () => router.push("/enricher") },
+                  { label: "3 min", icon: "⏱" },
+                  { label: "Cinematic", icon: "🎬" },
+                ].map(chip => (
+                  <button key={chip.label} onClick={chip.action}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] text-white/40 hover:text-white/70 hover:bg-white/[0.04] transition-all"
+                    style={{ border: "1px solid #1a1a1a" }}>
+                    <span className="text-[11px]">{chip.icon}</span>
+                    {chip.label}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={handleGenerate}
+                disabled={!heroText.trim()}
+                className="flex items-center gap-2 px-5 py-2 rounded-lg text-[13px] font-semibold text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:opacity-90"
+                style={{ background: heroText.trim() ? "#E8512A" : "#1a1a1a" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
+                Gerar Mapa
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Quick Picks ─────────────────────────────────────────────── */}
+        <div className="flex items-center gap-2 mb-12 flex-wrap">
+          <span className="text-[11px] text-white/20 font-medium mr-1">Nichos:</span>
+          {QUICK_PICKS.map(qp => (
+            <button key={qp.label}
+              onClick={() => { setHeroText(qp.prompt); textareaRef.current?.focus(); trackEvent("quick_pick", { niche: qp.label }); }}
+              className="px-3 py-1.5 rounded-full text-[12px] text-white/35 hover:text-white/70 hover:bg-white/[0.04] transition-all"
+              style={{ border: "1px solid #171717" }}>
+              {qp.label}
             </button>
           ))}
         </div>
 
-        <div className="mt-auto">
-          <button onClick={() => router.push("/storyboard")}
-            className="w-12 h-12 rounded-full flex items-center justify-center text-white shadow-lg active:scale-90 transition-transform"
-            style={{ background: "linear-gradient(135deg,#F0563A,#ff7a4d)", boxShadow: "0 4px 20px rgba(240,86,58,0.35)" }}>
-            +
-          </button>
+        {/* ── Stats row ───────────────────────────────────────────────── */}
+        <div className="grid grid-cols-3 gap-3 mb-10">
+          {[
+            { label: "Projetos", value: totalCreated.toString(), color: "#EAEAEA" },
+            { label: "Créditos", value: credits.toLocaleString("pt-BR"), color: creditsPct < 20 ? "#E8512A" : "#EAEAEA" },
+            { label: "Ferramentas", value: "7", color: "#22d3ee" },
+          ].map(s => (
+            <div key={s.label} className="rounded-xl px-5 py-4" style={{ background: "#09090B", border: "1px solid #131313" }}>
+              <p className="text-[11px] uppercase tracking-wider text-white/25 font-medium mb-1">{s.label}</p>
+              <p className="text-2xl font-bold" style={{ color: s.color }}>{s.value}</p>
+            </div>
+          ))}
         </div>
 
-        <div className="mt-4 px-2">
-          <div className="text-center">
-            <div className="w-10 h-10 rounded-full flex items-center justify-center text-[10px] font-bold text-white mx-auto mb-1"
-              style={{ background: "linear-gradient(135deg,#F0563A,#FF7A5C)" }}>
-              {initials}
-            </div>
-            <p className="text-[8px] font-mono uppercase tracking-widest" style={{ color: planInfo.color }}>
-              {planInfo.label}
-            </p>
-          </div>
-        </div>
-      </aside>
+        {/* ── Tools: Featured ─────────────────────────────────────────── */}
+        <section className="mb-5">
+          <h2 className="text-[11px] uppercase tracking-[0.15em] text-white/20 font-semibold mb-4">Ferramentas</h2>
 
-      {/* ═══ MAIN ═════════════════════════════════════════════════════════════ */}
-      <main className="ml-20 mt-16 p-8 min-h-screen">
-        <div className="max-w-6xl mx-auto">
-
-          <header className="mb-6">
-            <h1 className="text-5xl font-black tracking-tighter text-white mb-2">
-              Orquestrador de Narrativas
-            </h1>
-            <p className="text-lg text-white/40 max-w-xl">
-              Selecione um motor editorial para acelerar sua produção.
-            </p>
-          </header>
-
-          {/* ── Stats row ───────────────────────────────────────────────── */}
-          <div className="flex items-center gap-4 mb-10 flex-wrap">
-            {streak > 0 && (
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg"
-                style={{ background: streak >= 7 ? "rgba(240,86,58,0.12)" : "rgba(255,255,255,0.04)", border: `1px solid ${streak >= 7 ? "rgba(240,86,58,0.3)" : "rgba(255,255,255,0.06)"}` }}>
-                <span className="text-base">{streak >= 7 ? "🔥" : "✦"}</span>
-                <span className="text-xs font-bold text-white">
-                  {streak} {streak === 1 ? "dia" : "dias"} em sequência
-                </span>
-                {streak >= 3 && (
-                  <span className="text-[10px] font-mono" style={{ color: "#F0563A" }}>
-                    {streak >= 30 ? "LENDÁRIO" : streak >= 14 ? "IMPARÁVEL" : streak >= 7 ? "EM CHAMAS" : ""}
-                  </span>
-                )}
-              </div>
-            )}
-            {totalCreated > 0 && (
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg"
-                style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                <span className="text-xs font-mono text-white/30">PROJETOS</span>
-                <span className="text-xs font-bold text-white">{totalCreated}</span>
-              </div>
-            )}
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg"
-              style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-              <span className="text-xs font-mono text-white/30">CRÉDITOS</span>
-              <span className="text-xs font-bold" style={{ color: credits < maxCredits * 0.1 ? "#F0563A" : "#fff" }}>
-                {credits.toLocaleString("pt-BR")}
-              </span>
-            </div>
-          </div>
-
-          {/* ── First-run onboarding ────────────────────────────────────── */}
-          {allProjects.length === 0 && projectsLoaded && (
-            <section className="mb-10 rounded-xl p-6"
-              style={{ background: "linear-gradient(135deg,rgba(240,86,58,0.06),rgba(99,5,239,0.06))", border: "1px solid rgba(240,86,58,0.15)" }}>
-              <div className="flex items-start gap-4">
-                <span className="text-3xl">🚀</span>
-                <div className="flex-1">
-                  <h2 className="text-lg font-black text-white tracking-tight mb-1">
-                    Bem-vindo ao Suarik
-                  </h2>
-                  <p className="text-sm text-white/50 mb-4 leading-relaxed">
-                    Crie seu primeiro projeto em 60 segundos. Cole um roteiro, gere B-rolls e exporte para o Premiere.
-                  </p>
-                  <div className="flex flex-wrap gap-3">
-                    <button onClick={() => router.push("/storyboard")}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold text-white transition-all hover:opacity-90"
-                      style={{ background: "linear-gradient(135deg,#F0563A,#c44527)" }}>
-                      ✨ Criar Storyboard
-                    </button>
-                    <button onClick={() => router.push("/audio")}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all"
-                      style={{ background: "rgba(167,139,250,0.1)", border: "1px solid rgba(167,139,250,0.2)", color: "#a78bfa" }}>
-                      🎙️ Gerar Voz
-                    </button>
-                    <button onClick={() => router.push("/voiceclone")}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all"
-                      style={{ background: "rgba(52,211,153,0.08)", border: "1px solid rgba(52,211,153,0.2)", color: "#34d399" }}>
-                      🧬 Clonar Voz
-                    </button>
+          {large.map(tool => (
+            <button key={tool.id} onClick={() => { trackEvent("tool_opened", { tool: tool.label, route: tool.route }); router.push(tool.route); }}
+              className="group w-full text-left rounded-xl overflow-hidden relative transition-all hover:ring-1 hover:ring-[#E8512A]/30"
+              style={{ background: "#09090B", border: "1px solid #131313" }}>
+              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+                style={{ background: "radial-gradient(ellipse at 30% 50%, rgba(232,81,42,0.08), transparent 70%)" }} />
+              <div className="relative p-7 flex items-center gap-6">
+                <div className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0"
+                  style={{ background: "rgba(232,81,42,0.08)", border: "1px solid rgba(232,81,42,0.15)" }}>
+                  <ToolIcon name={tool.icon} className="w-7 h-7 text-[#E8512A]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-3 mb-1">
+                    <h3 className="text-xl font-bold text-white tracking-tight">{tool.label}</h3>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider"
+                      style={{ background: `${tool.tagColor}12`, color: tool.tagColor }}>
+                      {tool.tag}
+                    </span>
                   </div>
+                  <p className="text-[13px] text-white/35 leading-relaxed">{tool.desc}</p>
+                </div>
+                <div className="shrink-0 flex items-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-semibold text-white transition-all group-hover:opacity-90"
+                  style={{ background: "#E8512A" }}>
+                  {tool.cta}
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
                 </div>
               </div>
-            </section>
-          )}
+            </button>
+          ))}
+        </section>
 
-          {/* ── Continue your work ─────────────────────────────────────── */}
-          {recentProjects.length > 0 && (
-            <section className="mb-10">
+        {/* ── Tools: Grid ─────────────────────────────────────────────── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-14">
+          {medium.map(tool => (
+            <button key={tool.id}
+              onClick={() => { trackEvent("tool_opened", { tool: tool.label, route: tool.route }); router.push(tool.route); }}
+              className="group text-left rounded-xl p-5 transition-all hover:ring-1"
+              style={{ background: "#09090B", border: "1px solid #131313" }}
+              onMouseEnter={e => e.currentTarget.style.setProperty("--tw-ring-color", `${tool.tagColor}40`)}
+            >
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-[11px] font-mono uppercase tracking-widest text-white/30">
-                  Continuar onde parou
-                </h2>
-                <button onClick={() => router.push("/projects")}
-                  className="text-[11px] font-mono uppercase tracking-widest transition-colors"
-                  style={{ color: "#F0563A" }}>
-                  Ver todos →
-                </button>
+                <div className="w-10 h-10 rounded-lg flex items-center justify-center"
+                  style={{ background: `${tool.tagColor}10`, border: `1px solid ${tool.tagColor}20` }}>
+                  <ToolIcon name={tool.icon} className="w-5 h-5" style={{ color: tool.tagColor } as React.CSSProperties} />
+                </div>
+                <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded"
+                  style={{ color: `${tool.tagColor}`, background: `${tool.tagColor}10` }}>
+                  {tool.tag}
+                </span>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {recentProjects.map(p => {
-                  const meta = TOOL_META[p.tool] ?? { icon: "📁", route: "/projects", color: "#a78bfa" };
-                  const date = new Date(p.created_at);
-                  const ago  = (() => {
-                    const diff = Date.now() - date.getTime();
-                    const h = Math.floor(diff / 3600000);
-                    if (h < 1) return "Agora mesmo";
-                    if (h < 24) return `Há ${h}h`;
-                    const d = Math.floor(h / 24);
-                    return d === 1 ? "Ontem" : `Há ${d} dias`;
-                  })();
-                  return (
-                    <button
-                      key={p.id}
-                      onClick={() => router.push(meta.route)}
-                      className="group relative rounded-xl p-4 text-left transition-all hover:scale-[1.02]"
-                      style={{ background: "#1C1B1B", border: `1px solid ${meta.color}22` }}
-                      onMouseEnter={e => (e.currentTarget.style.borderColor = meta.color + "55")}
-                      onMouseLeave={e => (e.currentTarget.style.borderColor = meta.color + "22")}
-                    >
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className="text-lg">{meta.icon}</span>
-                        <span className="text-[10px] font-mono uppercase tracking-wider" style={{ color: meta.color }}>
-                          {meta.label}
+              <h3 className="text-[15px] font-bold text-white tracking-tight mb-1">{tool.label}</h3>
+              <p className="text-[12px] text-white/30 leading-relaxed mb-4 line-clamp-2">{tool.desc}</p>
+              <div className="flex items-center gap-1.5 text-[12px] font-medium transition-colors group-hover:text-white/70"
+                style={{ color: `${tool.tagColor}` }}>
+                {tool.cta}
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
+              </div>
+            </button>
+          ))}
+        </div>
+
+        {/* ── Empty State (0 projects) ────────────────────────────────── */}
+        {allProjects.length === 0 && projectsLoaded && (
+          <section className="mb-14">
+            <h2 className="text-[11px] uppercase tracking-[0.15em] text-white/20 font-semibold mb-4">Comece aqui</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {[
+                { icon: "📝", title: "Cole um roteiro", desc: "Transforme qualquer texto em um vídeo com B-Rolls cinematográficos.", route: "/storyboard", color: "#E8512A" },
+                { icon: "📁", title: "Suba um vídeo", desc: "Injete B-Rolls premium em filmagens existentes automaticamente.", route: "/enricher", color: "#22d3ee" },
+                { icon: "✨", title: "Use um template", desc: "Escolha um nicho acima e comece com um roteiro pronto.", route: null, color: "#a78bfa" },
+              ].map(card => (
+                <button key={card.title}
+                  onClick={() => {
+                    if (card.route) router.push(card.route);
+                    else textareaRef.current?.focus();
+                  }}
+                  className="group text-left rounded-xl p-6 transition-all hover:ring-1"
+                  style={{ background: "#09090B", border: "1px solid #131313" }}
+                  onMouseEnter={e => e.currentTarget.style.setProperty("--tw-ring-color", `${card.color}40`)}
+                >
+                  <span className="text-2xl mb-3 block">{card.icon}</span>
+                  <h3 className="text-[15px] font-bold text-white mb-1">{card.title}</h3>
+                  <p className="text-[12px] text-white/30 leading-relaxed">{card.desc}</p>
+                </button>
+              ))}
+            </div>
+            <div className="text-center mt-6">
+              <button onClick={() => router.push("/storyboard")}
+                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg text-[13px] font-semibold text-white transition-all hover:opacity-90"
+                style={{ background: "#E8512A" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+                Criar meu primeiro projeto
+              </button>
+            </div>
+          </section>
+        )}
+
+        {/* ── Recent Projects ─────────────────────────────────────────── */}
+        {recentProjects.length > 0 && (
+          <section className="mb-14">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-[11px] uppercase tracking-[0.15em] text-white/20 font-semibold">Projetos recentes</h2>
+              <button onClick={() => router.push("/projects")}
+                className="text-[12px] font-medium text-white/30 hover:text-[#E8512A] transition-colors">
+                Ver todos →
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {recentProjects.map(p => {
+                const meta = TOOL_META[p.tool] ?? { icon: "projects", route: "/projects", color: "#a78bfa", label: "Projeto" };
+                const hasResult = !!p.result_url;
+                return (
+                  <button key={p.id} onClick={() => router.push(meta.route)}
+                    className="group text-left rounded-xl overflow-hidden transition-all hover:ring-1"
+                    style={{ background: "#09090B", border: "1px solid #131313" }}
+                    onMouseEnter={e => e.currentTarget.style.setProperty("--tw-ring-color", `${meta.color}40`)}
+                  >
+                    {/* Thumbnail area */}
+                    <div className="h-28 flex items-center justify-center relative"
+                      style={{ background: "#0c0c0e", borderBottom: "1px solid #131313" }}>
+                      {p.thumb_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={p.thumb_url} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <ToolIcon name={meta.icon} className="w-8 h-8 text-white/10" />
+                      )}
+                      {/* Status badge */}
+                      <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-medium"
+                        style={{ background: "rgba(6,6,6,0.8)", backdropFilter: "blur(8px)" }}>
+                        <div className="w-1.5 h-1.5 rounded-full" style={{ background: hasResult ? "#34d399" : "#eab308" }} />
+                        <span style={{ color: hasResult ? "#34d399" : "#eab308" }}>
+                          {hasResult ? "Concluído" : "Em progresso"}
                         </span>
                       </div>
-                      <p className="text-white text-xs font-semibold leading-snug mb-2 line-clamp-2">
+                    </div>
+                    {/* Info */}
+                    <div className="p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <ToolIcon name={meta.icon} className="w-3.5 h-3.5" style={{ color: meta.color } as React.CSSProperties} />
+                        <span className="text-[10px] font-medium uppercase tracking-wider" style={{ color: meta.color }}>{meta.label}</span>
+                      </div>
+                      <p className="text-[13px] font-medium text-white leading-snug line-clamp-2 mb-2">
                         {p.title.replace(/^[^—]+—\s*/, "")}
                       </p>
-                      <p className="text-[10px] text-white/30 font-mono">{ago}</p>
-                      <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity text-xs"
-                        style={{ color: meta.color }}>
-                        Abrir →
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-          )}
-
-          {/* ── Bento Grid ────────────────────────────────────────────────── */}
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-5 pb-24">
-
-            {/* LARGE card — Storyboarder */}
-            {large.map(tool => (
-              <section
-                key={tool.id}
-                onClick={() => router.push(tool.route)}
-                className="md:col-span-8 group relative overflow-hidden rounded-xl cursor-pointer"
-                style={{ background: "#1C1B1B", border: "1px solid rgba(92,64,55,0.15)", aspectRatio: "16/7" }}>
-                <div className="absolute inset-0 z-0">
-                  <div className="absolute inset-0 opacity-25 group-hover:opacity-40 transition-opacity duration-700"
-                    style={{ background: tool.gradient }} />
-                  <div className="absolute inset-0" style={{ background: "linear-gradient(to top, #131313 0%, transparent 60%)" }} />
-                  <div className="absolute inset-0 opacity-[0.04]"
-                    style={{ backgroundImage: "linear-gradient(#F0563A 1px, transparent 1px), linear-gradient(90deg, #F0563A 1px, transparent 1px)", backgroundSize: "40px 40px" }} />
-                </div>
-                <div className="relative z-10 p-8 h-full flex flex-col justify-end">
-                  <div className="flex items-center gap-3 mb-4">
-                    <span className="px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-widest font-mono"
-                      style={{ background: `${tool.tagColor}22`, color: tool.tagColor }}>
-                      {tool.tag}
-                    </span>
-                  </div>
-                  <h2 className="text-4xl font-black tracking-tighter text-white mb-3">{tool.label}</h2>
-                  <p className="text-white/50 text-sm max-w-md mb-6 leading-relaxed">{tool.desc}</p>
-                  <button className="w-fit flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-bold text-white"
-                    style={{ background: tool.ctaBg }}>
-                    {tool.cta}
-                  </button>
-                </div>
-              </section>
-            ))}
-
-            {/* MEDIUM cards row */}
-            {medium.map(tool => (
-              <section
-                key={tool.id}
-                onClick={() => router.push(tool.route)}
-                className="md:col-span-4 group relative overflow-hidden rounded-xl h-64 cursor-pointer"
-                style={{ background: "#1C1B1B", border: "1px solid rgba(92,64,55,0.15)" }}>
-                <div className="absolute inset-0 z-0">
-                  <div className="absolute inset-0 opacity-100 group-hover:opacity-150 transition-opacity duration-500"
-                    style={{ background: tool.gradient }} />
-                </div>
-                <div className="relative z-10 p-7 flex flex-col h-full">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="w-11 h-11 rounded-lg flex items-center justify-center text-xl"
-                      style={{ background: `${tool.tagColor}18`, border: `1px solid ${tool.tagColor}30` }}>
-                      {tool.icon}
+                      <p className="text-[11px] text-white/20 font-mono">{timeAgo(p.created_at)}</p>
                     </div>
-                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded"
-                      style={{ background: `${tool.tagColor}15`, color: tool.tagColor }}>
-                      {tool.tag}
-                    </span>
-                  </div>
-                  <div className="mt-auto">
-                    <h3 className="text-xl font-black tracking-tighter mb-2"
-                      style={{ color: tool.tagColor }}>{tool.label}</h3>
-                    <p className="text-white/40 text-xs mb-4 leading-relaxed line-clamp-2">{tool.desc}</p>
-                    <button
-                      className="w-full py-2.5 rounded-lg text-xs font-bold transition-all"
-                      style={{ background: tool.ctaBg, border: `1px solid ${tool.ctaBorder ?? tool.tagColor + "30"}`, color: tool.ctaColor }}
-                      onMouseEnter={e => (e.currentTarget.style.opacity = "0.8")}
-                      onMouseLeave={e => (e.currentTarget.style.opacity = "1")}>
-                      {tool.cta}
-                    </button>
-                  </div>
-                </div>
-              </section>
-            ))}
-
-          </div>
-        </div>
-      </main>
-
-      {/* ── Floating status panel ───────────────────────────────────────────── */}
-      <div className="fixed bottom-6 right-6 z-50 p-4 rounded-xl max-w-[230px] shadow-2xl"
-        style={{ background: "rgba(28,27,27,0.92)", backdropFilter: "blur(20px)", border: "1px solid rgba(92,64,55,0.2)" }}>
-        <div className="flex items-center gap-3 mb-3">
-          <div className="p-2 rounded-lg text-purple-300" style={{ background: "rgba(99,5,239,0.12)" }}>✨</div>
-          <div>
-            <h4 className="text-sm font-black text-white tracking-tight">Minha Conta</h4>
-            <p className="text-[10px] uppercase tracking-widest font-mono" style={{ color: planInfo.color }}>
-              {planInfo.label}
-            </p>
-          </div>
-        </div>
-        {/* Credits progress */}
-        <div className="mb-3">
-          <div className="flex justify-between text-[10px] mb-1.5">
-            <span className="text-white/40 font-mono uppercase tracking-wider">Créditos</span>
-            <span className="font-mono" style={{ color: creditsPct < 20 ? "#F0563A" : "#34d399" }}>
-              {credits.toLocaleString("pt-BR")} / {maxCredits.toLocaleString("pt-BR")}
-            </span>
-          </div>
-          <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
-            <div className="h-full rounded-full transition-all"
-              style={{
-                width: `${creditsPct}%`,
-                background: creditsPct < 20
-                  ? "linear-gradient(90deg,#F0563A,#ff4444)"
-                  : "linear-gradient(90deg,#34d399,#059669)",
-              }} />
-          </div>
-          {creditsPct < 20 && (
-            <p className="text-[10px] mt-1.5 font-mono" style={{ color: "#F0563A" }}>
-              ⚠ Créditos baixos
-            </p>
-          )}
-        </div>
-        <div className="space-y-1.5 mb-3">
-          <div className="flex justify-between text-[11px]">
-            <span className="text-white/40">Projetos salvos</span>
-            <span className="text-white font-mono">{totalCreated > 0 ? totalCreated : "0"}</span>
-          </div>
-          <div className="flex justify-between text-[11px]">
-            <span className="text-white/40">Ferramentas ativas</span>
-            <span className="text-cyan-400 font-mono">7 / 7</span>
-          </div>
-        </div>
-        {plan === "free" ? (
-          <button onClick={() => router.push("/pricing")}
-            className="w-full py-2 rounded-lg text-[11px] font-bold uppercase tracking-widest transition-all"
-            style={{ background: "linear-gradient(135deg,rgba(240,86,58,0.15),rgba(99,5,239,0.1))", border: "1px solid rgba(240,86,58,0.3)", color: "#F0563A" }}
-            onMouseEnter={e => (e.currentTarget.style.opacity = "0.8")}
-            onMouseLeave={e => (e.currentTarget.style.opacity = "1")}>
-            ⚡ Upgrade para Pro
-          </button>
-        ) : (
-          <button onClick={() => router.push("/settings")}
-            className="w-full py-2 rounded-lg text-[11px] font-bold uppercase tracking-widest transition-all"
-            style={{ background: "rgba(52,211,153,0.08)", border: "1px solid rgba(52,211,153,0.2)", color: "#34d399" }}>
-            ✓ Plano Ativo
-          </button>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
         )}
-      </div>
+
+        {/* ── Credits low warning ─────────────────────────────────────── */}
+        {creditsPct < 20 && plan === "free" && (
+          <section className="rounded-xl p-5 flex items-center justify-between" style={{ background: "#09090B", border: "1px solid rgba(232,81,42,0.15)" }}>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: "rgba(232,81,42,0.08)" }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E8512A" strokeWidth="1.5" strokeLinecap="round">
+                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-[13px] font-semibold text-white">Créditos acabando</p>
+                <p className="text-[12px] text-white/30">Faça upgrade para continuar criando sem limites.</p>
+              </div>
+            </div>
+            <button onClick={() => router.push("/pricing")}
+              className="px-5 py-2 rounded-lg text-[13px] font-semibold text-white hover:opacity-90 transition-all shrink-0"
+              style={{ background: "#E8512A" }}>
+              Ver planos
+            </button>
+          </section>
+        )}
+
+      </main>
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
@@ -660,8 +628,8 @@ function DashboardContent() {
 export default function DashboardPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-[#131313]">
-        <div className="w-8 h-8 border-2 border-[#353534] border-t-[#F0563A] rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "#060606" }}>
+        <div className="w-8 h-8 border-2 border-[#131313] border-t-[#E8512A] rounded-full animate-spin" />
       </div>
     }>
       <DashboardContent />
