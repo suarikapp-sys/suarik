@@ -120,6 +120,7 @@ function DashboardContent() {
   const { toasts, remove: removeToast, toast } = useToast();
 
   const [profile,        setProfile]        = useState<Profile | null>(null);
+  const [authName,       setAuthName]       = useState<string | null>(null);
   const [loading,        setLoading]        = useState(true);
   const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
   const [allProjects,    setAllProjects]    = useState<RecentProject[]>([]);
@@ -141,6 +142,12 @@ function DashboardContent() {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/login"); return; }
+      // Capture real name from OAuth metadata (Google/GitHub supply this even when profiles.full_name is null)
+      const metaName =
+        (user.user_metadata?.full_name as string | undefined) ??
+        (user.user_metadata?.name     as string | undefined) ??
+        null;
+      if (metaName) setAuthName(metaName);
       const { data: prof } = await supabase.from("profiles").select("*").eq("id", user.id).single();
       setProfile(prof as Profile ?? {
         id: user.id, email: user.email ?? "", full_name: null,
@@ -196,8 +203,9 @@ function DashboardContent() {
   const maxCredits  = PLAN_CREDITS[plan] ?? 10;
   const creditsPct  = Math.min((credits / maxCredits) * 100, 100);
   const planInfo    = PLAN_LABELS[plan] ?? PLAN_LABELS.free;
-  const initials    = getInitials(profile?.full_name ?? null, profile?.email ?? "?");
-  const displayName = profile?.full_name ?? profile?.email?.split("@")[0] ?? "Usuário";
+  const initials    = getInitials(profile?.full_name ?? authName ?? null, profile?.email ?? "?");
+  // Priority: profiles.full_name → OAuth metadata name → email local-part
+  const displayName = profile?.full_name ?? authName ?? profile?.email?.split("@")[0] ?? "Usuário";
   const firstName   = displayName.split(" ")[0];
 
   const hour     = new Date().getHours();
@@ -231,7 +239,7 @@ function DashboardContent() {
 
         {/* Brand */}
         <div style={{ width: 224, flexShrink: 0, borderRight: "1px solid #141414", padding: "0 16px", height: "100%", display: "flex", alignItems: "center", gap: 9 }}>
-          <svg width="22" height="22" viewBox="0 0 64 64" fill="none">
+          <svg width="20" height="20" viewBox="0 0 64 64" fill="none">
             <rect width="64" height="64" rx="8" fill="#111"/>
             <rect x="12" y="10" width="40" height="11" rx="4" fill="#E8E8E8"/>
             <rect x="41" y="10" width="11" height="24" rx="4" fill="#E8E8E8"/>
