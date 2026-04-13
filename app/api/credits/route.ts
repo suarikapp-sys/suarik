@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient }  from "@/lib/supabase/server";
 import { createClient as createAdmin } from "@supabase/supabase-js";
 import { computeCost, CostMeta } from "@/app/lib/creditCost";
+import { sendWelcomeEmail } from "@/app/lib/emails";
 
 // Admin client para RPC (bypassa RLS)
 const supabaseAdmin = createAdmin(
@@ -42,6 +43,10 @@ export async function GET() {
 
     if (insertErr || !newProfile) {
       return NextResponse.json({ credits: FREE_INITIAL_CREDITS, plan: "free", status: "inactive" });
+    }
+    // Fire welcome email — non-blocking
+    if (user.email) {
+      sendWelcomeEmail(user.email, user.user_metadata?.full_name);
     }
     return NextResponse.json({
       credits: newProfile.credits ?? FREE_INITIAL_CREDITS,

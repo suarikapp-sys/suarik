@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { rateLimit } from "@/app/lib/rateLimit";
 
 interface ArchiveFile {
   name: string;
@@ -19,6 +20,10 @@ export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+
+  if (!await rateLimit(`music-library:${user.id}`, 20, 60_000)) {
+    return NextResponse.json({ error: "Muitas buscas. Aguarde 1 minuto." }, { status: 429 });
+  }
 
   const { searchParams } = new URL(req.url);
   const q = searchParams.get("q") || "ambient";

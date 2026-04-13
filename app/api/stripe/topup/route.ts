@@ -1,3 +1,4 @@
+import { APP_URL } from "@/app/lib/config";
 import { NextResponse } from "next/server";
 import { stripe, CREDIT_PACKAGES, type PackageKey } from "@/lib/stripe";
 import { createClient } from "@/lib/supabase/server";
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
     }
 
     const pkg = CREDIT_PACKAGES[pack];
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://suarik.com.br";
+    const appUrl = APP_URL;
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,

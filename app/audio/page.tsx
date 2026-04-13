@@ -8,6 +8,7 @@ import { CreditsBar, InsufficientCreditsModal } from "@/components/CreditsBar";
 import { useToast, ToastContainer } from "@/components/Toast";
 import { AUDIO_VAULT } from "../lib/audioVault";
 import { trackEvent } from "@/components/PostHogProvider";
+import { TTS_VOICES } from "@/app/lib/ttsVoices";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 async function uploadToR2(blob: Blob, filename: string, contentType: string): Promise<string> {
@@ -40,20 +41,8 @@ type AudioEntry = {
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const VOICES = [
-  // English Voices
-  { id: "English_expressive_narrator", label: "English — Expressive Narrator", lang: "EN", gender: "M" },
-  { id: "English_Graceful_Lady", label: "English — Graceful Lady", lang: "EN", gender: "F" },
-  { id: "English_Insightful_Speaker", label: "English — Insightful Speaker", lang: "EN", gender: "M" },
-  { id: "English_radiant_girl", label: "English — Radiant Girl", lang: "EN", gender: "F" },
-  { id: "English_Persuasive_Man", label: "English — Persuasive Man", lang: "EN", gender: "M" },
-  { id: "English_Lucky_Robot", label: "English — Lucky Robot", lang: "EN", gender: "M" },
-  // Chinese Voices
-  { id: "Chinese (Mandarin)_Lyrical_Voice", label: "Chinese (Mandarin) — Lyrical Voice", lang: "ZH", gender: "F" },
-  { id: "Chinese (Mandarin)_HK_Flight_Attendant", label: "Chinese (Mandarin) — HK Flight Attendant", lang: "ZH", gender: "F" },
-  // Japanese Voices
-  { id: "Japanese_Whisper_Belle", label: "Japanese — Whisper Belle", lang: "JA", gender: "F" },
-];
+// Importado de @/app/lib/ttsVoices — fonte única de verdade
+const VOICES = TTS_VOICES as unknown as { id: string; label: string; lang: string; gender: string }[];
 
 const EMOTIONS = [
   { id: "neutral",   label: "Neutro",   icon: "😐" },
@@ -313,6 +302,7 @@ export default function AudioPage() {
   // ── TTS Form state ──
   const [text,      setText]      = useState("");
   const [voiceId,   setVoiceId]   = useState(VOICES[0].id);
+  const [voiceLang, setVoiceLang] = useState("PT");  // filtro por idioma no grid de vozes
   const [emotion,   setEmotion]   = useState("neutral");
   const [speed,     setSpeed]     = useState(1.0);
   const [vol,       setVol]       = useState(1.0);
@@ -951,8 +941,36 @@ export default function AudioPage() {
                 <label style={{ fontSize: 12, color: "#aaa", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 10 }}>
                   Voz
                 </label>
+                {/* Language filter tabs */}
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+                  {[
+                    { code: "PT", flag: "🇧🇷", name: "PT" },
+                    { code: "EN", flag: "🇺🇸", name: "EN" },
+                    { code: "ES", flag: "🇪🇸", name: "ES" },
+                    { code: "FR", flag: "🇫🇷", name: "FR" },
+                    { code: "DE", flag: "🇩🇪", name: "DE" },
+                    { code: "JA", flag: "🇯🇵", name: "JA" },
+                    { code: "KO", flag: "🇰🇷", name: "KO" },
+                    { code: "ZH", flag: "🇨🇳", name: "ZH" },
+                    { code: "AR", flag: "🇸🇦", name: "AR" },
+                  ].map(({ code, flag, name }) => (
+                    <button
+                      key={code}
+                      onClick={() => setVoiceLang(code)}
+                      style={{
+                        padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600,
+                        border: voiceLang === code ? "1.5px solid #F0563A" : "1px solid #2a2a2a",
+                        background: voiceLang === code ? "#F0563A18" : "#1a1a1a",
+                        color: voiceLang === code ? "#F0563A" : "#666",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {flag} {name}
+                    </button>
+                  ))}
+                </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
-                  {VOICES.map(v => (
+                  {VOICES.filter(v => v.lang === voiceLang).map(v => (
                     <div
                       key={v.id}
                       style={{
@@ -969,7 +987,7 @@ export default function AudioPage() {
                       </div>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <div style={{ fontSize: 10, color: "#555" }}>
-                          {v.lang} · {v.gender === "M" ? "Masculino" : "Feminino"}
+                          {v.gender === "M" ? "♂ Masculino" : "♀ Feminino"}
                         </div>
                         <button
                           onClick={e => { e.stopPropagation(); loadVoicePreview(v.id); }}
@@ -1460,7 +1478,7 @@ export default function AudioPage() {
               {/* Pixabay Free Library */}
               <div>
                 <h2 style={{ fontSize: 14, fontWeight: 600, color: "#88cc88", textTransform: "uppercase", letterSpacing: 1, marginBottom: 16 }}>
-                  🎵 Biblioteca Gratuita — Jamendo Music
+                  🎵 Biblioteca Gratuita — Internet Archive
                 </h2>
                 <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
                   <input

@@ -72,7 +72,6 @@ export async function POST(req: NextRequest) {
         }
       } catch { /* ignore, will try full download */ }
 
-      console.log(`[transcribe] File size from HEAD: ${(fileSize / 1024 / 1024).toFixed(1)}MB`);
 
       let buf: ArrayBuffer;
 
@@ -88,7 +87,6 @@ export async function POST(req: NextRequest) {
         buf = await videoRes.arrayBuffer();
       } else if (fileSize > WHISPER_LIMIT) {
         // ── Too large: download only first 24MB using Range header ──
-        console.log(`[transcribe] Video too large (${(fileSize/1024/1024).toFixed(1)}MB), using Range: bytes=0-${SAFE_LIMIT - 1}`);
         const videoRes = await fetch(publicUrl, {
           headers: { Range: `bytes=0-${SAFE_LIMIT - 1}` },
         });
@@ -99,7 +97,6 @@ export async function POST(req: NextRequest) {
           );
         }
         buf = await videoRes.arrayBuffer();
-        console.log(`[transcribe] Partial download: ${(buf.byteLength/1024/1024).toFixed(1)}MB`);
       } else {
         // ── Unknown size: try full download, truncate if needed ──
         const videoRes = await fetch(publicUrl);
@@ -113,7 +110,6 @@ export async function POST(req: NextRequest) {
         buf = fullBuf.byteLength > WHISPER_LIMIT
           ? fullBuf.slice(0, SAFE_LIMIT)
           : fullBuf;
-        console.log(`[transcribe] Downloaded ${(fullBuf.byteLength/1024/1024).toFixed(1)}MB, using ${(buf.byteLength/1024/1024).toFixed(1)}MB`);
       }
 
       audioBlob = new Blob([buf], { type: "video/mp4" });
@@ -127,7 +123,6 @@ export async function POST(req: NextRequest) {
     whisperForm.append("response_format", "verbose_json");
     whisperForm.append("timestamp_granularities[]", "word");
 
-    console.log(`[transcribe] Sending ${(audioBlob.size/1024/1024).toFixed(1)}MB to Whisper...`);
 
     const whisperRes = await fetch(
       "https://api.openai.com/v1/audio/transcriptions",
@@ -149,7 +144,6 @@ export async function POST(req: NextRequest) {
 
     const result = await whisperRes.json();
 
-    console.log(`[transcribe] Whisper OK — ${(result.words ?? []).length} words`);
 
     return NextResponse.json({
       text: result.text ?? "",

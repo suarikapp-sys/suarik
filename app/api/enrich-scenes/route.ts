@@ -11,10 +11,15 @@ import OpenAI from "openai";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdmin } from "@supabase/supabase-js";
 import { computeCost } from "@/app/lib/creditCost";
+import { findMusicTracks } from "@/app/lib/musicSearch";
+import { getVaultVideos } from "@/app/lib/videoVault";
 
 export const maxDuration = 60;
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+const log = (event: string, data: Record<string, unknown> = {}) =>
+  console.log(JSON.stringify({ ts: new Date().toISOString(), route: "enrich-scenes", event, ...data }));
 
 const supabaseAdmin = createAdmin(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -140,6 +145,20 @@ const EMOTION_TO_MOOD: Record<string, string> = {
   Oportunidade:"triumphant", Vantagem:"triumphant", CTA:"urgent_pulse", "Prova Social":"emotional_hope",
 };
 
+const EMOTION_TO_VAULT: Record<string, string> = {
+  "Dor":         "dr_nutra_dores",
+  "Choque":      "hook_dr_choque",
+  "Urgência":    "hook_financas_hype",
+  "Oportunidade":"dr_financas_renda_extra",
+  "Gancho":      "hook_dr_choque",
+  "Revelação":   "hook_dr_choque",
+  "Esperança":   "dr_nutra_dores",
+  "Vantagem":    "dr_financas_renda_extra",
+  "CTA":         "hook_financas_hype",
+  "Prova Social":"dr_nutra_dores",
+  "Mistério":    "hook_dr_choque",
+};
+
 // ─── Media helpers ────────────────────────────────────────────────────────────
 
 async function fetchPexels(query: string, key: string): Promise<VideoOpt[]> {
@@ -177,28 +196,6 @@ async function fetchPixabay(query: string, key: string): Promise<VideoOpt[]> {
   } catch { return []; }
 }
 
-async function fetchPixabayMusic(query: string, key: string): Promise<{ url: string; title: string } | null> {
-  try {
-    const res = await fetch(`https://pixabay.com/api/music/?key=${key}&q=${encodeURIComponent(query)}&per_page=3`);
-    if (!res.ok) return null;
-    const data = await res.json();
-    const hit = ((data?.hits ?? []) as Array<{ audio: string; title: string }>).find(h => h.audio);
-    return hit ? { url: hit.audio, title: hit.title ?? query } : null;
-  } catch { return null; }
-}
-
-async function fetchJamendoMusic(tags: string, speed: string, clientId: string): Promise<{ url: string; title: string } | null> {
-  try {
-    const res = await fetch(
-      `https://api.jamendo.com/v3.0/tracks/?client_id=${clientId}&format=json&limit=3` +
-      `&tags=${encodeURIComponent(tags)}&speed=${speed}&audioformat=mp3`
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    const t = ((data?.results ?? []) as Array<{ audio: string; name: string; artist_name: string }>).find(r => r.audio);
-    return t ? { url: t.audio, title: `${t.name} — ${t.artist_name}` } : null;
-  } catch { return null; }
-}
 
 // ─── POST /api/enrich-scenes ──────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
@@ -298,10 +295,9 @@ export async function POST(req: NextRequest) {
     // ── Deduplicated B-roll fetch ─────────────────────────────────────────────
     // Old: O(scenes × 4 queries × 2 sources) = 80 calls for 10 scenes
     // New: O(unique queries × 2 sources) = ~15 calls for 10 scenes (75% fewer)
-    const PEXELS_KEY    = process.env.PEXELS_API_KEY    ?? "";
-    const PIXABAY_KEY   = process.env.PIXABAY_API_KEY   ?? "";
-    const FREESOUND_KEY = process.env.FREESOUND_KEY     ?? "";
-    const JAMENDO_ID    = process.env.JAMENDO_CLIENT_ID ?? "";
+    const PEXELS_KEY    = process.env.PEXELS_API_KEY  ?? "";
+    const PIXABAY_KEY   = process.env.PIXABAY_API_KEY ?? "";
+    const FREESOUND_KEY = process.env.FREESOUND_KEY   ?? "";
 
     const uniqueQueries = [...new Set(scenes.flatMap(s => s.searchQueries))];
 
@@ -311,6 +307,8 @@ export async function POST(req: NextRequest) {
         PEXELS_KEY  ? fetchPexels(q, PEXELS_KEY)   : Promise.resolve([] as VideoOpt[]),
         PIXABAY_KEY ? fetchPixabay(q, PIXABAY_KEY) : Promise.resolve([] as VideoOpt[]),
       ]);
+      if (!pexels.length && !pixabay.length) log("video_miss", { query: q });
+      else log("video_hit", { query: q, pexels: pexels.length, pixabay: pixabay.length });
       queryResultMap.set(q, { pexels, pixabay });
     }));
 
@@ -338,13 +336,31 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── Vault fallback: cenas sem vídeo recebem um do cofre ──────────────────
+    const videoVaultMap = await getVaultVideos();
+    for (const scene of scenes) {
+      if (scene.videoUrl) continue;
+      const vaultKey = EMOTION_TO_VAULT[scene.emotion] ?? "hook_dr_choque";
+      const vaultVids = (videoVaultMap[vaultKey] ?? []).filter(
+        v => v.url.startsWith("http") && !v.url.includes("placeholder")
+      );
+      if (vaultVids.length) {
+        scene.videoUrl     = vaultVids[0].url;
+        scene.videoOptions = vaultVids.map(v => ({ url: v.url, thumb: "", query: "vault" }));
+        log("video_vault_fallback", { emotion: scene.emotion, vaultKey });
+      } else {
+        log("video_empty", { emotion: scene.emotion, snippet: scene.textSnippet?.slice(0, 40) });
+      }
+    }
+
     // SFX (per-scene, small, no dedup needed)
     await Promise.all(scenes.map(async scene => {
       if (!FREESOUND_KEY || !scene.suggestedSfx) return;
       try {
         const q   = SFX_TO_FREESOUND[scene.suggestedSfx] ?? scene.suggestedSfx;
         const res = await fetch(
-          `https://freesound.org/apiv2/search/text/?query=${encodeURIComponent(q)}&token=${FREESOUND_KEY}&fields=id,name,previews&page_size=3&filter=duration:[0+TO+8]`
+          `https://freesound.org/apiv2/search/text/?query=${encodeURIComponent(q)}&fields=id,name,previews&page_size=3&filter=duration:[0+TO+8]`,
+          { headers: { Authorization: `Token ${FREESOUND_KEY}` } }
         );
         if (!res.ok) return;
         const data = await res.json();
@@ -354,7 +370,7 @@ export async function POST(req: NextRequest) {
       } catch { /* silent */ }
     }));
 
-    // ── Background music — top 3 moods ────────────────────────────────────────
+    // ── Background music — top 3 moods via findMusicTracks ───────────────────
     const moodCount: Record<string, number> = {};
     for (const s of scenes) {
       const m = s.musicMood ?? "dark_tension";
@@ -362,19 +378,26 @@ export async function POST(req: NextRequest) {
     }
     const topMoods = Object.entries(moodCount).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([m]) => m);
 
-    interface MusicTrack { url: string; title: string; is_premium_vault: boolean; }
-    const backgroundTracks: MusicTrack[] = [];
-
-    await Promise.all(topMoods.map(async (mood, idx) => {
-      const cfg = MUSIC_MOOD_MAP[mood] ?? MUSIC_MOOD_MAP["dark_tension"];
-      let track: { url: string; title: string } | null = null;
-      if (JAMENDO_ID)  track = await fetchJamendoMusic(cfg.jamendoTags, cfg.jamendoSpeed, JAMENDO_ID);
-      if (!track && PIXABAY_KEY) {
-        const hits = await Promise.all(cfg.pixabayQueries.map(q => fetchPixabayMusic(q, PIXABAY_KEY)));
-        track = hits.find(Boolean) ?? null;
-      }
-      backgroundTracks[idx] = { url: track?.url ?? cfg.fallbackUrl, title: track?.title ?? cfg.title, is_premium_vault: !track };
-    }));
+    interface MusicResult { url: string; title: string; is_premium_vault: boolean; }
+    const backgroundTracks: MusicResult[] = (
+      await Promise.all(
+        topMoods.map(async (mood, idx) => {
+          const cfg = MUSIC_MOOD_MAP[mood] ?? MUSIC_MOOD_MAP["dark_tension"];
+          try {
+            const tracks = await findMusicTracks(mood, 1);
+            if (tracks.length) {
+              log("music_ok", { mood, title: tracks[0].title, source: tracks[0].source });
+              return { url: tracks[0].url, title: `${tracks[0].title} — ${tracks[0].artist}`, is_premium_vault: false };
+            }
+          } catch (e) {
+            log("music_fail", { mood, error: String(e) });
+          }
+          // fallback R2 apenas no slot 0
+          if (idx === 0) return { url: cfg.fallbackUrl, title: cfg.title, is_premium_vault: true };
+          return null;
+        })
+      )
+    ).filter((t): t is MusicResult => t !== null && !!t.url);
 
     return NextResponse.json({
       scenes,

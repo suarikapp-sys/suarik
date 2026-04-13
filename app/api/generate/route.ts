@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { AUDIO_VAULT } from "@/app/lib/audioVault";
-import { VIDEO_VAULT } from "@/app/lib/videoVault";
+import { getVaultVideos } from "@/app/lib/videoVault";
+import { findMusicTracks } from "@/app/lib/musicSearch";
 import { createClient } from "@/lib/supabase/server";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+const log = (event: string, data: Record<string, unknown> = {}) =>
+  console.log(JSON.stringify({ ts: new Date().toISOString(), route: "generate", event, ...data }));
 
 // ─── Formatos que usam orientação Portrait (9:16) ─────────────────────────────
 const PORTRAIT_FORMATS = ["creative_ad", "social_organic"];
@@ -227,48 +231,43 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ── Cofre Privado → Pixabay ───────────────────────────────────────────────
+    // ── Cofre de Vídeo (DB override + static fallback) ───────────────────────
+    const videoVaultMap = await getVaultVideos();
+
+    // ── Trilhas: Cofre Privado + Jamendo/Freesound sempre em paralelo ────────
     const vaultKey    = String(parsed.music_style ?? "").trim().toLowerCase();
-    // Filter out placeholder/local paths — only use real hosted URLs
+    const style       = String(parsed.music_style ?? "").trim();
+
+    // Vault: só URLs reais hospedadas (sem placeholders locais)
     const vaultTracks = (AUDIO_VAULT[vaultKey] ?? []).filter(
       t => t.url.startsWith("http") && !t.url.includes("placeholder")
     );
 
-    if (vaultTracks.length) {
-      const pick = vaultTracks[Math.floor(Math.random() * vaultTracks.length)];
-      parsed.background_tracks  = [{ title: pick.title, url: pick.url, is_premium_vault: true }];
-      parsed.pixabay_search_url = null;
-    } else {
-      const FALLBACK_TRACKS = [
-        { url: "https://pub-9937ef38e0a744128bd67f59e5476f23.r2.dev/Epic%20Orchestral%20Cinematic%20Documentary%201.mp3", title: "Epic Orchestral Cinematic", is_premium_vault: true },
-        { url: "https://pub-9937ef38e0a744128bd67f59e5476f23.r2.dev/Epic%20Orchestral%20Cinematic%20Documentary%201.mp3", title: "Dark Cinematic",             is_premium_vault: true },
-      ];
+    // Sempre busca Jamendo/Freesound — independente de ter vault ou não
+    const musicTracks = await findMusicTracks(style, 5);
+    log("music_tracks", { style, count: musicTracks.length, sources: musicTracks.map(t => t.source) });
 
-      try {
-        const searchPixabay = async (query: string, perPage = 2) => {
-          const res = await fetch(
-            `https://pixabay.com/api/music/?key=${process.env.PIXABAY_API_KEY}&q=${encodeURIComponent(query)}&per_page=${perPage}`
-          );
-          if (!res.ok) return [];
-          const data = await res.json();
-          return (data?.hits ?? []) as Array<{ audio: string; title: string }>;
-        };
+    // Merge: vault primeiro (marcado como premium), depois curadas por IA
+    const seen = new Set<string>();
+    const merged: { url: string; title: string; is_premium_vault: boolean }[] = [];
 
-        let hits = await searchPixabay(parsed.music_style ?? "");
-        if (!hits.length) hits = await searchPixabay("cinematic suspense");
-        if (!hits.length) hits = await searchPixabay("lo-fi");
-
-        const musicQuery = encodeURIComponent(parsed.music_style ?? "cinematic");
-        parsed.pixabay_search_url = `https://pixabay.com/music/search/${musicQuery}/`;
-        parsed.background_tracks  = hits.length
-          ? hits.filter((h) => h.audio).slice(0, 2).map((h) => ({ url: h.audio, title: h.title ?? parsed.music_style, is_premium_vault: false }))
-          : FALLBACK_TRACKS;
-      } catch {
-        parsed.background_tracks = FALLBACK_TRACKS;
+    for (const t of vaultTracks) {
+      if (!seen.has(t.url)) { seen.add(t.url); merged.push({ url: t.url, title: t.title, is_premium_vault: true }); }
+    }
+    for (const t of musicTracks) {
+      if (!seen.has(t.url) && merged.length < 5) {
+        seen.add(t.url);
+        merged.push({ url: t.url, title: `${t.title} — ${t.artist}`, is_premium_vault: false });
       }
     }
 
-    // ── Pexels + Freesound em paralelo por cena ───────────────────────────────
+    const musicQuery = encodeURIComponent(style || "cinematic");
+    parsed.pixabay_search_url = `https://www.jamendo.com/search?q=${musicQuery}`;
+    parsed.background_tracks  = merged.length
+      ? merged
+      : [{ url: "https://pub-9937ef38e0a744128bd67f59e5476f23.r2.dev/Epic%20Orchestral%20Cinematic%20Documentary%201.mp3", title: "Epic Orchestral Cinematic", is_premium_vault: true }];
+
+    // ── Pexels + Pixabay + Freesound em paralelo por cena ────────────────────
     const orientation = PORTRAIT_FORMATS.includes(videoFormat) ? "portrait" : "landscape";
 
     if (Array.isArray(parsed.scenes)) {
@@ -276,35 +275,64 @@ export async function POST(req: NextRequest) {
         parsed.scenes.map(async (scene: Record<string, unknown>) => {
           await Promise.all([
 
-            // ── Pexels: 2 opções de vídeo HD ─────────────────────────────────
+            // ── Pexels + Pixabay: até 4 opções de vídeo HD ───────────────────
             (async () => {
+              const keyword = String(scene.broll_search_keywords ?? "");
               try {
-                const keyword = String(scene.broll_search_keywords ?? "");
-                const res = await fetch(
-                  `https://api.pexels.com/videos/search?query=${encodeURIComponent(keyword)}&per_page=2&orientation=${orientation}`,
-                  { headers: { Authorization: process.env.PEXELS_API_KEY ?? "" } }
-                );
-                if (!res.ok) return;
-                const data = await res.json();
-                const videos: Array<{ video_files: Array<{ quality: string; width: number; link: string }> }> =
-                  data?.videos ?? [];
+
+                // Busca Pexels e Pixabay em paralelo
+                const [pexelsRes, pixabayRes] = await Promise.all([
+                  fetch(
+                    `https://api.pexels.com/videos/search?query=${encodeURIComponent(keyword)}&per_page=3&orientation=${orientation}`,
+                    { headers: { Authorization: process.env.PEXELS_API_KEY ?? "" } }
+                  ).catch(() => null),
+                  fetch(
+                    `https://pixabay.com/api/videos/?key=${process.env.PIXABAY_API_KEY}&q=${encodeURIComponent(keyword)}&per_page=3&orientation=${orientation === "portrait" ? "vertical" : "horizontal"}&safesearch=true`
+                  ).catch(() => null),
+                ]);
 
                 const options: { url: string; source: string }[] = [];
-                for (const video of videos) {
-                  const files = video.video_files ?? [];
-                  const hd =
-                    files.find((f) => f.quality === "hd" && f.width >= 1280) ??
-                    files.sort((a, b) => b.width - a.width)[0];
-                  if (hd?.link) options.push({ url: hd.link, source: "Pexels" });
+
+                // ── Pexels ───────────────────────────────────────────────────
+                if (pexelsRes?.ok) {
+                  const data = await pexelsRes.json();
+                  const videos: Array<{ video_files: Array<{ quality: string; width: number; link: string }> }> =
+                    data?.videos ?? [];
+                  for (const video of videos) {
+                    const files = video.video_files ?? [];
+                    const hd =
+                      files.find((f) => f.quality === "hd" && f.width >= 1280) ??
+                      files.sort((a: { width: number }, b: { width: number }) => b.width - a.width)[0];
+                    if (hd?.link) options.push({ url: hd.link, source: "Pexels" });
+                  }
+                }
+
+                // ── Pixabay ──────────────────────────────────────────────────
+                if (pixabayRes?.ok) {
+                  const data = await pixabayRes.json();
+                  type PixabayVideo = { videos: Record<string, { url: string; width: number }> };
+                  const hits: PixabayVideo[] = data?.hits ?? [];
+                  for (const hit of hits) {
+                    const videos = hit.videos ?? {};
+                    // Preferência: large (1280p) → medium (960p) → small (640p)
+                    const best =
+                      (videos.large?.url  ? videos.large  : null) ??
+                      (videos.medium?.url ? videos.medium : null) ??
+                      (videos.small?.url  ? videos.small  : null);
+                    if (best?.url) options.push({ url: best.url, source: "Pixabay" });
+                  }
                 }
 
                 if (options.length) {
                   scene.video_options = options;
                   scene.video_url     = options[0].url;
+                  log("video_hit", { keyword, count: options.length });
+                } else {
+                  log("video_miss", { keyword });
                 }
                 scene.pexels_search_url =
                   `https://www.pexels.com/pt-br/procurar/videos/${encodeURIComponent(keyword)}/`;
-              } catch { /* falha silenciosa */ }
+              } catch (e) { log("video_error", { keyword, error: String(e) }); }
             })(),
 
             // ── Freesound: até 2 opções de SFX ────────────────────────────────
@@ -312,7 +340,8 @@ export async function POST(req: NextRequest) {
               try {
                 const query = String(scene.sound_effect ?? "");
                 const res = await fetch(
-                  `https://freesound.org/apiv2/search/text/?query=${encodeURIComponent(query)}&token=${process.env.FREESOUND_KEY}&fields=id,name,previews&page_size=2&filter=duration:[0+TO+15]`
+                  `https://freesound.org/apiv2/search/text/?query=${encodeURIComponent(query)}&fields=id,name,previews&page_size=2&filter=duration:[0+TO+15]`,
+                  { headers: { Authorization: `Token ${process.env.FREESOUND_KEY}` } }
                 );
                 if (!res.ok) return;
                 const data = await res.json();
@@ -336,7 +365,7 @@ export async function POST(req: NextRequest) {
           // ── Acervo Premium de Vídeo: injecta ANTES dos resultados Pexels ──
           const vaultKey    = String(scene.vault_category ?? "").trim().toLowerCase();
           // Filter out placeholder URLs — only inject real hosted videos
-          const vaultVideos = (VIDEO_VAULT[vaultKey] ?? []).filter(
+          const vaultVideos = (videoVaultMap[vaultKey] ?? []).filter(
             v => v.url.startsWith("http") && !v.url.includes("placeholder")
           );
           if (vaultVideos.length) {

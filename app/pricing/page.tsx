@@ -21,15 +21,19 @@ const PLANS = [
     accentBorder: "rgba(59,130,246,0.15)",
     accentGlow: "rgba(37,99,235,0.08)",
     badgeText: null,
+    queue: "1 render · Fila Padrão",
     ctaLabel: "Começar agora",
     ctaStyle: { background: "rgba(37,99,235,0.15)", border: "1px solid rgba(59,130,246,0.3)", color: "#93c5fd" },
     features: [
       "5.000 Moedas / mês",
-      "1 renderização simultânea",
-      "Exportação XML para Premiere",
+      "Geração de storyboard",
+      "Enriquecimento de vídeo",
+      "Voz neural (TTS)",
+      "Exportar SRT + XML (DaVinci)",
       "B-rolls via Pexels + Pixabay",
-      "Voz neural integrada",
-      "Suporte por e-mail",
+    ],
+    locked: [
+      "Avatares e LipSync",
     ],
   },
   {
@@ -45,16 +49,18 @@ const PLANS = [
     accentBorder: "rgba(79,70,229,0.4)",
     accentGlow: "rgba(79,70,229,0.12)",
     badgeText: "Mais Escolhido",
+    queue: "3 renders simultâneos · Fila Padrão",
     ctaLabel: "Assinar Pro",
     ctaStyle: { background: "linear-gradient(135deg,#4f46e5,#7c3aed)", color: "#fff", boxShadow: "0 8px 32px rgba(79,70,229,0.4)" },
     features: [
       "15.000 Moedas / mês",
-      "3 renderizações simultâneas",
-      "Avatar + LipSync desbloqueados",
-      "Acesso ao Cofre Premium de B-Rolls",
-      "Todos os nichos do Acervo",
+      "Avatares + LipSync desbloqueados",
+      "Acervo vault completo",
+      "Biblioteca de anúncios vencedores",
+      "Exportar SRT + XML (DaVinci)",
       "Suporte prioritário",
     ],
+    locked: [] as string[],
   },
   {
     id: "growth",
@@ -69,16 +75,46 @@ const PLANS = [
     accentBorder: "rgba(16,185,129,0.15)",
     accentGlow: "rgba(16,185,129,0.06)",
     badgeText: null,
+    queue: "5 renders simultâneos · Fila Padrão",
     ctaLabel: "Assinar Growth",
     ctaStyle: { background: "rgba(16,185,129,0.12)", border: "1px solid rgba(16,185,129,0.25)", color: "#6ee7b7" },
     features: [
       "45.000 Moedas / mês",
-      "5 renderizações simultâneas",
-      "Acesso Multi-contas",
-      "Avatar + LipSync desbloqueados",
-      "Cofre B-Roll exclusivo",
+      "Tudo do Pro",
+      "Multi-contas",
+      "Acervo vault exclusivo por nicho",
       "Suporte VIP dedicado",
     ],
+    locked: [
+      "Fila VIP exclusiva",
+    ],
+  },
+  {
+    id: "enterprise",
+    name: "Enterprise",
+    price: "R$ 1.997",
+    period: "/mês",
+    description: "Para grandes agências com escala agressiva e zero tolerância a espera.",
+    icon: Star,
+    iconColor: "text-yellow-400",
+    iconBg: "rgba(234,179,8,0.1)",
+    iconBorder: "rgba(234,179,8,0.2)",
+    accentBorder: "rgba(255,215,0,0.25)",
+    accentGlow: "rgba(255,215,0,0.08)",
+    badgeText: "Grandes Agências",
+    queue: "10 renders simultâneos · Fila VIP Exclusiva",
+    ctaLabel: "Falar com vendas",
+    ctaStyle: { background: "rgba(255,215,0,0.1)", border: "1px solid rgba(255,215,0,0.25)", color: "#fde047" },
+    features: [
+      "250.000 Moedas / mês",
+      "Fila VIP — zero tempo de espera",
+      "Tudo do Growth",
+      "Multi-contas ilimitadas",
+      "Gerente de conta dedicado",
+      "SLA garantido",
+      "Onboarding personalizado",
+    ],
+    locked: [] as string[],
   },
 ];
 
@@ -212,7 +248,7 @@ export default function PricingPage() {
 
       {/* ── PLANS ───────────────────────────────────────────────────────────── */}
       <div className="px-6 pb-16">
-        <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {PLANS.map(plan => {
             const Icon = plan.icon;
             const isPro = plan.id === "pro";
@@ -224,10 +260,10 @@ export default function PricingPage() {
                   boxShadow: isPro ? `0 0 40px ${plan.accentGlow}` : `0 0 20px ${plan.accentGlow}`,
                 }}>
 
-                {/* "Mais Escolhido" badge */}
+                {/* Badge */}
                 {plan.badgeText && (
                   <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest"
-                    style={{ background: "linear-gradient(135deg,#4f46e5,#7c3aed)", color: "#fff", boxShadow: "0 4px 16px rgba(79,70,229,0.4)" }}>
+                    style={{ background: isPro ? "linear-gradient(135deg,#4f46e5,#7c3aed)" : "rgba(255,215,0,0.15)", color: isPro ? "#fff" : "#fde047", border: isPro ? "none" : "1px solid rgba(255,215,0,0.3)", boxShadow: isPro ? "0 4px 16px rgba(79,70,229,0.4)" : "none" }}>
                     <Star className="w-2.5 h-2.5 fill-current" />
                     {plan.badgeText}
                   </div>
@@ -245,20 +281,39 @@ export default function PricingPage() {
                   <span className="text-3xl font-black text-white" style={{ letterSpacing: "-0.03em" }}>{plan.price}</span>
                   <span className="text-sm text-gray-600 mb-1">{plan.period}</span>
                 </div>
-                <p className="text-xs text-gray-600 leading-relaxed mb-6">{plan.description}</p>
+                <p className="text-xs text-gray-600 leading-relaxed mb-3">{plan.description}</p>
+
+                {/* Queue pill */}
+                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg mb-5"
+                  style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                  <Zap className={`w-3 h-3 shrink-0 ${plan.iconColor}`} />
+                  <span className="text-[10px] text-gray-500">{plan.queue}</span>
+                </div>
 
                 {/* Features */}
-                <ul className="space-y-2.5 flex-1 mb-6">
+                <ul className="space-y-2 flex-1 mb-4">
                   {plan.features.map(f => (
-                    <li key={f} className="flex items-start gap-2.5 text-sm text-gray-400">
-                      <Check className={`w-4 h-4 mt-0.5 shrink-0 ${plan.iconColor}`} />
+                    <li key={f} className="flex items-start gap-2 text-xs text-gray-400">
+                      <Check className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${plan.iconColor}`} />
                       {f}
                     </li>
                   ))}
                 </ul>
 
+                {/* Locked features */}
+                {plan.locked.length > 0 && (
+                  <ul className="space-y-1.5 mb-5 pt-3 border-t" style={{ borderColor: "rgba(255,255,255,0.05)" }}>
+                    {plan.locked.map(f => (
+                      <li key={f} className="flex items-start gap-2 text-xs text-gray-700">
+                        <span className="mt-0.5 shrink-0">✕</span>
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
                 {/* CTA */}
-                <button className="w-full py-3 rounded-xl text-sm font-black transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+                <button className="w-full py-3 rounded-xl text-sm font-black transition-all flex items-center justify-center gap-2 disabled:opacity-60 mt-auto"
                   style={plan.ctaStyle}
                   onMouseEnter={e => { if (isPro) e.currentTarget.style.boxShadow = "0 12px 40px rgba(79,70,229,0.6)"; }}
                   onMouseLeave={e => { if (isPro) e.currentTarget.style.boxShadow = "0 8px 32px rgba(79,70,229,0.4)"; }}
@@ -274,31 +329,9 @@ export default function PricingPage() {
           })}
         </div>
 
-        {/* Enterprise teaser */}
-        <div className="max-w-5xl mx-auto mt-5 rounded-2xl px-6 py-5 flex flex-col md:flex-row items-center justify-between gap-4"
-          style={{ background: "rgba(255,215,0,0.04)", border: "1px solid rgba(255,215,0,0.12)" }}>
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Star className="w-4 h-4 text-yellow-400 fill-current" />
-              <span className="text-sm font-black text-yellow-300">Enterprise — R$ 1.997/mês</span>
-            </div>
-            <p className="text-xs text-gray-500">
-              250.000 moedas · 10 renders simultâneos · Fila VIP Exclusiva (zero tempo de espera) · Multi-contas · Onboarding dedicado
-            </p>
-          </div>
-          <button
-            onClick={() => handleCheckout("enterprise")}
-            disabled={loadingPlan !== null}
-            className="shrink-0 px-5 py-2.5 rounded-xl text-sm font-black transition-all disabled:opacity-60"
-            style={{ background: "rgba(255,215,0,0.1)", border: "1px solid rgba(255,215,0,0.25)", color: "#fde047" }}
-          >
-            {loadingPlan === "enterprise" ? <Loader2 className="w-4 h-4 animate-spin" /> : "Falar com vendas"}
-          </button>
-        </div>
-
         {/* Guarantee strip */}
         <p className="text-center text-xs text-gray-700 mt-8">
-          ✓ Garantia de 7 dias ou 1.500 moedas &nbsp;·&nbsp; ✓ Sem fidelidade &nbsp;·&nbsp; ✓ Pagamento seguro via Stripe
+          ✓ Garantia de 7 dias ou 1.500 moedas &nbsp;·&nbsp; ✓ Moedas não acumulam entre ciclos &nbsp;·&nbsp; ✓ Pagamento seguro via Stripe
         </p>
       </div>
 

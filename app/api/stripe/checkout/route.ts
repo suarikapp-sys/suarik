@@ -1,3 +1,4 @@
+import { APP_URL } from "@/app/lib/config";
 import { NextResponse } from "next/server";
 import { stripe, PLANS, type PlanKey } from "@/lib/stripe";
 import { createClient } from "@/lib/supabase/server";
@@ -46,8 +47,8 @@ export async function POST(request: Request) {
       payment_method_types: ["card"],
       line_items: [{ price: PLANS[plan].priceId, quantity: 1 }],
       mode: "subscription",
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL ?? "https://suarik.com.br"}/dashboard?checkout=success`,
-      cancel_url:  `${process.env.NEXT_PUBLIC_APP_URL ?? "https://suarik.com.br"}/pricing?checkout=canceled`,
+      success_url: `${APP_URL}/dashboard?checkout=success`,
+      cancel_url:  `${APP_URL}/pricing?checkout=canceled`,
       metadata: { supabase_user_id: user.id, plan },
       subscription_data: { metadata: { supabase_user_id: user.id, plan } },
     });

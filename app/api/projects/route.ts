@@ -4,20 +4,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data, error } = await supabase
+  const page  = Math.max(0, parseInt(req.nextUrl.searchParams.get("page") ?? "0", 10));
+  const limit = Math.min(50, Math.max(1, parseInt(req.nextUrl.searchParams.get("limit") ?? "50", 10)));
+  const tool  = req.nextUrl.searchParams.get("tool") ?? undefined;
+
+  let query = supabase
     .from("projects")
-    .select("*")
+    .select("*", { count: "exact" })
     .eq("user_id", user.id)
     .order("created_at", { ascending: false })
-    .limit(100);
+    .range(page * limit, page * limit + limit - 1);
+
+  if (tool) query = query.eq("tool", tool);
+
+  const { data, error, count } = await query;
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ projects: data });
+  return NextResponse.json({ projects: data, total: count ?? 0, page, limit });
 }
 
 export async function POST(req: NextRequest) {

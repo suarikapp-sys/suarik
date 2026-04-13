@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { rateLimit } from "@/app/lib/rateLimit";
 
 // GET /api/suggest-media?q=keyword&page=2
 // Returns up to 12 HD video clips — Pexels + Pixabay in parallel, interleaved.
@@ -7,6 +8,10 @@ export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+
+  if (!await rateLimit(`suggest-media:${user.id}`, 30, 60_000)) {
+    return NextResponse.json({ error: "Muitas buscas. Aguarde 1 minuto." }, { status: 429 });
+  }
 
   const q       = req.nextUrl.searchParams.get("q") ?? "cinematic broll";
   const page    = Math.max(1, parseInt(req.nextUrl.searchParams.get("page") ?? "1", 10));

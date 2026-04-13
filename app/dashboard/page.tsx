@@ -207,6 +207,7 @@ function DashboardContent() {
   const [projectsLoaded, setProjectsLoaded] = useState(false);
   const [heroText,       setHeroText]       = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
     const checkout = searchParams.get("checkout");
@@ -233,6 +234,11 @@ function DashboardContent() {
           if (d?.projects) {
             setRecentProjects(d.projects.slice(0, 6));
             setAllProjects(d.projects);
+            // Show onboarding for new users (0 projects + never seen)
+            if (d.projects.length === 0) {
+              const seen = typeof window !== "undefined" && localStorage.getItem("suarik_onboarding_seen");
+              if (!seen) setShowOnboarding(true);
+            }
           }
           setProjectsLoaded(true);
         })
@@ -621,6 +627,93 @@ function DashboardContent() {
       </main>
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />
+
+      {/* ── ONBOARDING MODAL ── */}
+      {showOnboarding && (
+        <div style={{
+          position:"fixed",inset:0,zIndex:9999,
+          background:"rgba(0,0,0,0.85)",backdropFilter:"blur(8px)",
+          display:"flex",alignItems:"center",justifyContent:"center",padding:24,
+        }}>
+          <div style={{
+            maxWidth:520,width:"100%",borderRadius:24,overflow:"hidden",
+            background:"#111",border:"1px solid rgba(255,255,255,0.08)",
+            boxShadow:"0 32px 80px rgba(0,0,0,0.8)",
+          }}>
+            {/* Header */}
+            <div style={{
+              padding:"32px 32px 24px",
+              background:"linear-gradient(135deg,rgba(240,86,58,0.12),rgba(99,5,239,0.08))",
+              borderBottom:"1px solid rgba(255,255,255,0.06)",
+            }}>
+              <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+                <div style={{width:40,height:40,borderRadius:10,background:"#F0563A",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,color:"#fff",fontSize:18}}>S</div>
+                <div>
+                  <p style={{fontSize:11,color:"#F0563A",fontWeight:700,textTransform:"uppercase",letterSpacing:1.5,margin:0}}>Bem-vindo ao</p>
+                  <p style={{fontSize:22,fontWeight:900,color:"#fff",margin:0,letterSpacing:-0.5}}>SUARIK</p>
+                </div>
+              </div>
+              <p style={{fontSize:14,color:"rgba(255,255,255,0.6)",margin:0,lineHeight:1.6}}>
+                Motor de IA que transforma sua copy em B-rolls, legendas e timeline em segundos.
+              </p>
+            </div>
+
+            {/* Steps */}
+            <div style={{padding:"24px 32px"}}>
+              <p style={{fontSize:11,color:"#555",textTransform:"uppercase",letterSpacing:1.5,margin:"0 0 16px",fontWeight:700}}>Como funciona</p>
+              <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                {[
+                  { icon:"✍️", step:"1", title:"Cole sua copy ou VSL", desc:"Cole o script, narração ou vídeo de vendas" },
+                  { icon:"🤖", step:"2", title:"IA gera o storyboard", desc:"GPT-4o cria cenas, B-rolls e músicas automaticamente" },
+                  { icon:"🎬", step:"3", title:"Exporte para seu editor", desc:"Premiere Pro, DaVinci Resolve, CapCut — pronto" },
+                ].map(s => (
+                  <div key={s.step} style={{display:"flex",alignItems:"flex-start",gap:12}}>
+                    <div style={{width:32,height:32,borderRadius:8,background:"rgba(240,86,58,0.12)",border:"1px solid rgba(240,86,58,0.2)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>
+                      {s.icon}
+                    </div>
+                    <div>
+                      <p style={{fontSize:13,fontWeight:700,color:"#fff",margin:"0 0 2px"}}>{s.title}</p>
+                      <p style={{fontSize:12,color:"#555",margin:0}}>{s.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* CTA */}
+            <div style={{padding:"0 32px 28px",display:"flex",gap:10}}>
+              <button
+                onClick={() => {
+                  localStorage.setItem("suarik_onboarding_seen", "1");
+                  setShowOnboarding(false);
+                  router.push("/storyboard");
+                }}
+                style={{
+                  flex:1,padding:"13px 0",borderRadius:12,border:"none",cursor:"pointer",
+                  background:"linear-gradient(135deg,#F0563A,#c44527)",
+                  color:"#fff",fontSize:14,fontWeight:800,letterSpacing:-0.3,
+                  boxShadow:"0 8px 24px rgba(240,86,58,0.35)",
+                }}
+              >
+                🚀 Criar primeiro storyboard
+              </button>
+              <button
+                onClick={() => {
+                  localStorage.setItem("suarik_onboarding_seen", "1");
+                  setShowOnboarding(false);
+                }}
+                style={{
+                  padding:"13px 20px",borderRadius:12,background:"transparent",
+                  border:"1px solid rgba(255,255,255,0.08)",color:"#555",
+                  fontSize:13,fontWeight:600,cursor:"pointer",
+                }}
+              >
+                Explorar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

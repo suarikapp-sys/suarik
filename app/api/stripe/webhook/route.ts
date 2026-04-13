@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { stripe, PLANS, type PlanKey } from "@/lib/stripe";
 import { createClient } from "@supabase/supabase-js";
 import type Stripe from "stripe";
+import { sendTopupEmail, sendSubscriptionEmail } from "@/app/lib/emails";
 
 // Service role client para ignorar RLS (só webhook usa isso)
 const supabaseAdmin = createClient(
@@ -41,7 +42,6 @@ export async function POST(request: Request) {
       if (paymentIntentId) {
         const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
         if (pi.metadata?.credits_processed === "true") {
-          console.log(`[webhook] Skipping duplicate topup for PI ${paymentIntentId}`);
           break;
         }
         await stripe.paymentIntents.update(paymentIntentId, {
@@ -50,12 +50,21 @@ export async function POST(request: Request) {
       }
 
       const { data } = await supabaseAdmin
-        .from("profiles").select("credits").eq("id", userId).single();
-      const current = (data as { credits: number } | null)?.credits ?? 0;
+        .from("profiles").select("credits, full_name, email").eq("id", userId).single();
+      const current = (data as { credits: number; full_name?: string; email?: string } | null)?.credits ?? 0;
+      const userName = (data as { full_name?: string } | null)?.full_name;
+      const userEmail = (data as { email?: string } | null)?.email ?? session.customer_details?.email ?? "";
 
       await supabaseAdmin.from("profiles")
         .update({ credits: current + toAdd, updated_at: new Date().toISOString() })
         .eq("id", userId);
+
+      // Send payment confirmation email — fire-and-forget
+      if (userEmail) {
+        const amountTotal = session.amount_total ?? 0;
+        const amountStr = `R$ ${(amountTotal / 100).toFixed(2).replace(".", ",")}`;
+        sendTopupEmail(userEmail, userName, toAdd, amountStr);
+      }
       break;
     }
 
@@ -77,6 +86,15 @@ export async function POST(request: Request) {
         credits:                isActive ? credits : 10,
         updated_at:             new Date().toISOString(),
       }).eq("id", userId);
+
+      // Send subscription confirmation email — fire-and-forget
+      if (isActive && plan) {
+        const { data: profile } = await supabaseAdmin
+          .from("profiles").select("full_name, email").eq("id", userId).single();
+        const pEmail = (profile as { email?: string } | null)?.email;
+        const pName  = (profile as { full_name?: string } | null)?.full_name;
+        if (pEmail) sendSubscriptionEmail(pEmail, pName, plan, credits);
+      }
       break;
     }
 

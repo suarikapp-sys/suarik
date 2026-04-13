@@ -57,7 +57,6 @@ export async function POST(req: NextRequest) {
 
   try {
     // ── Step 1: Download audio from R2 ────────────────────────────────────
-    console.log("[voiceclone] Downloading audio from R2:", audioUrl.slice(0, 100));
     const audioRes = await fetch(audioUrl, { signal: AbortSignal.timeout(20000) });
     if (!audioRes.ok) {
       await guard.refund();
@@ -72,7 +71,6 @@ export async function POST(req: NextRequest) {
               : "mp3";
 
     // ── Step 2: Upload to MiniMax file service ────────────────────────────
-    console.log("[voiceclone] Uploading to MiniMax files — size:", audioBuffer.byteLength, "type:", contentType);
     const uploadForm = new FormData();
     uploadForm.append("file", new Blob([audioBuffer], { type: contentType }), `sample.${ext}`);
     uploadForm.append("purpose", "voice_clone");
@@ -87,7 +85,6 @@ export async function POST(req: NextRequest) {
       file?: { file_id: string };
       base_resp?: { status_code: number; status_msg: string };
     };
-    console.log("[voiceclone] MiniMax file upload response:", JSON.stringify(uploadData));
 
     const fileId = uploadData.file?.file_id;
     if (!fileId) {
@@ -97,7 +94,6 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Step 3: Clone voice using file_id ─────────────────────────────────
-    console.log("[voiceclone] Cloning voice — file_id:", fileId, "voice_id:", voiceName);
     const res = await fetch(`${MINIMAX_BASE}/v1/voice_clone`, {
       method:  "POST",
       headers: {
@@ -117,7 +113,6 @@ export async function POST(req: NextRequest) {
       message?:   string;
     };
 
-    console.log("[voiceclone] MiniMax response:", JSON.stringify(data));
 
     // MiniMax uses base_resp.status_code = 0 for success
     const statusCode = data.base_resp?.status_code ?? data.code ?? -1;
@@ -131,7 +126,6 @@ export async function POST(req: NextRequest) {
 
     // MiniMax success: the voice_id is the one WE sent — no separate field returned
     const voiceId = data.voice_id ?? data.voiceId ?? voiceName;
-    console.log("[voiceclone] Voice cloned successfully — voiceId:", voiceId);
     return NextResponse.json({ voiceId, cost: guard.cost });
 
   } catch (err) {
