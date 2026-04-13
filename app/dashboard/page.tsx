@@ -281,7 +281,7 @@ function DashboardContent() {
         {/* Brand */}
         <div style={{ width: 224, flexShrink: 0, borderRight: T.bd, padding: "0 16px", height: "100%", display: "flex", alignItems: "center", gap: 9 }}>
           <svg width="20" height="20" viewBox="0 0 64 64" fill="none">
-            <rect width="64" height="64" rx="8" fill="#111"/>
+            <rect width="64" height="64" rx="10" fill="#111"/>
             <rect x="12" y="10" width="40" height="11" rx="4" fill="#E8E8E8"/>
             <rect x="41" y="10" width="11" height="24" rx="4" fill="#E8E8E8"/>
             <rect x="12" y="43" width="40" height="11" rx="4" fill="#E8512A"/>
