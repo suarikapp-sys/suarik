@@ -371,7 +371,23 @@ export default function VoiceClonePage() {
 
           <div style={{ flex: 1, overflowY: "auto", padding: 6 }}>
             {savedVoices.length === 0
-              ? <div style={{ color: C.t4, fontSize: 12, textAlign: "center", padding: "24px 8px", lineHeight: 1.6 }}>Nenhuma voz clonada ainda</div>
+              ? (
+                <div style={{ textAlign: "center", padding: "28px 10px", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+                  <div style={{ width: 48, height: 48, borderRadius: "50%", background: `${C.blu}14`, border: `1px solid ${C.blu}30`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.blu} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 1 0 6 0V5a3 3 0 0 0-3-3z"/>
+                      <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                      <line x1="12" y1="19" x2="12" y2="23"/>
+                    </svg>
+                  </div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: C.t2, lineHeight: 1.4 }}>Nenhuma voz clonada</div>
+                  <div style={{ fontSize: 11, color: C.t4, lineHeight: 1.5, maxWidth: 170 }}>Suba 20s de áudio limpo pra criar sua primeira voz personalizada.</div>
+                  <button onClick={() => { setActiveTab("clone"); setStage("setup"); setSampleFile(null); setSampleUrl(null); setSampleObjUrl(null); setVoiceName(""); }}
+                    style={{ marginTop: 4, fontSize: 11, fontWeight: 600, color: C.blu, background: "transparent", border: "none", cursor: "pointer", padding: 0, fontFamily: "inherit" }}>
+                    Clonar primeira voz →
+                  </button>
+                </div>
+              )
               : savedVoices.map(v => {
                   const isActive = activeVoiceId === v.voiceId;
                   const isRen    = renamingId === v.voiceId;
