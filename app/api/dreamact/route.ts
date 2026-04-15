@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient }        from "@supabase/ssr";
 import { cookies }                   from "next/headers";
 import { creditGuard }               from "@/app/lib/creditGuard";
+import { rateLimit }                 from "@/app/lib/rateLimit";
 
 const NEWPORT_BASE = "https://api.newportai.com";
 const API_KEY      = process.env.DREAMFACE_API_KEY!;
@@ -20,6 +21,11 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  // Rate limit: 5 gerações/min/usuário
+  if (!(await rateLimit(`dreamact:${user.id}`, 5, 60_000))) {
+    return NextResponse.json({ error: "Muitas requisições. Aguarde um instante." }, { status: 429 });
+  }
+
   const { imageUrl, prompt, duration = 5 } = await req.json() as {
     imageUrl: string;
     prompt:   string;
@@ -28,6 +34,9 @@ export async function POST(req: NextRequest) {
 
   if (!imageUrl || !prompt) {
     return NextResponse.json({ error: "imageUrl e prompt são obrigatórios" }, { status: 400 });
+  }
+  if (typeof prompt !== "string" || prompt.length > 500) {
+    return NextResponse.json({ error: "prompt inválido" }, { status: 400 });
   }
 
   // ── Credits ────────────────────────────────────────────────────────────────

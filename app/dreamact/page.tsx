@@ -65,13 +65,7 @@ export default function DreamActPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { credits, plan, spend, cost, refresh } = useCredits();
-  const refund = async (action: string) => {
-    try {
-      await fetch("/api/credits/refund", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
-      refresh();
-    } catch { /* non-fatal */ }
-  };
+  const { credits, plan, spend, cost, refresh, refund } = useCredits();
   const { toasts, remove: removeToast, toast } = useToast();
   const [showCreditModal, setShowCreditModal] = useState(false);
 
@@ -107,17 +101,26 @@ export default function DreamActPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const pollResult = useCallback(async (taskId: string) => {
-    let elapsed = 0;
-    while (elapsed < 300_000) {
-      await sleep(4000);
-      elapsed += 4000;
-      setProgress(Math.min(90, 10 + (elapsed / 120_000) * 80));
+  // Poll com exponential backoff — evita hammerar a API e detecta falhas cedo
+  const pollResult = useCallback(async (taskId: string, refundId: string) => {
+    const MAX_ELAPSED = 600_000; // 10 min
+    let   elapsed     = 0;
+    let   delay       = 3000;    // 3s → 4.5s → 6.7s → ... até 15s
+    let   consecutiveFails = 0;
+
+    while (elapsed < MAX_ELAPSED) {
+      await sleep(delay);
+      elapsed += delay;
+      delay    = Math.min(15_000, Math.round(delay * 1.5));
+      setProgress(Math.min(90, 10 + (elapsed / MAX_ELAPSED) * 80));
+
       try {
         const res  = await fetch("/api/dreamact/poll", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body:   JSON.stringify({ taskId }),
         });
+        if (!res.ok) { consecutiveFails++; if (consecutiveFails > 5) break; continue; }
+        consecutiveFails = 0;
         const data = await res.json() as { status: number; videoUrl: string | null };
         if (data.status === 1) setStatusMsg("Na fila...");
         if (data.status === 2) setStatusMsg("Animando...");
@@ -137,19 +140,20 @@ export default function DreamActPage() {
         }
         if (data.status === 4) {
           setStage("error"); setErrorMsg("Geração falhou. Tente com outra imagem ou prompt.");
-          toast.error("Geração falhou."); await refund("dreamact"); return;
+          toast.error("Geração falhou."); await refund("dreamact", refundId); return;
         }
-      } catch { /* retry */ }
+      } catch { consecutiveFails++; if (consecutiveFails > 5) break; }
     }
-    await refund("dreamact");
+    await refund("dreamact", refundId);
     setStage("error"); setErrorMsg("Tempo limite excedido.");
     toast.error("Tempo limite excedido. Tente novamente.");
-  }, [prompt, duration]);
+  }, [prompt, duration, refund, toast]);
 
   const handleGenerate = useCallback(async () => {
     if (!imageUrl || !prompt.trim()) return;
     const cr = await spend("dreamact");
     if (!cr.ok) { setShowCreditModal(true); return; }
+    const { refundId } = cr;
     setStage("processing"); setProgress(5); setStatusMsg("Enviando para Newport AI..."); setErrorMsg("");
     try {
       const res  = await fetch("/api/dreamact", {
@@ -157,14 +161,19 @@ export default function DreamActPage() {
         body:   JSON.stringify({ imageUrl, prompt: prompt.trim(), duration }),
       });
       const data = await res.json() as { taskId?: string; error?: string };
-      if (!data.taskId) { setStage("error"); setErrorMsg(data.error ?? "Erro ao iniciar job"); return; }
+      if (!data.taskId) {
+        setStage("error"); setErrorMsg(data.error ?? "Erro ao iniciar job");
+        await refund("dreamact", refundId);
+        return;
+      }
       setProgress(10); setStatusMsg("Job criado! Processando...");
-      await pollResult(data.taskId);
+      await pollResult(data.taskId, refundId);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Erro desconhecido";
-      setStage("error"); setErrorMsg(msg); toast.error(msg); await refund("dreamact");
+      setStage("error"); setErrorMsg(msg); toast.error(msg);
+      await refund("dreamact", refundId);
     }
-  }, [imageUrl, prompt, duration, spend, pollResult, toast]);
+  }, [imageUrl, prompt, duration, spend, pollResult, toast, refund]);
 
   const canGenerate = !!imageUrl && !!prompt.trim() && !uploadingImg;
 

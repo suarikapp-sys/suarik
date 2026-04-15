@@ -9,10 +9,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { createClient } from "@/lib/supabase/server";
-import { createClient as createAdmin } from "@supabase/supabase-js";
-import { computeCost } from "@/app/lib/creditCost";
 import { findMusicTracks } from "@/app/lib/musicSearch";
 import { getVaultVideos } from "@/app/lib/videoVault";
+import { creditGuard } from "@/app/lib/creditGuard";
+import { rateLimit } from "@/app/lib/rateLimit";
 
 export const maxDuration = 60;
 
@@ -20,11 +20,6 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const log = (event: string, data: Record<string, unknown> = {}) =>
   console.log(JSON.stringify({ ts: new Date().toISOString(), route: "enrich-scenes", event, ...data }));
-
-const supabaseAdmin = createAdmin(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
 
 // ─── System prompt ────────────────────────────────────────────────────────────
 // Parity with generate-timeline: niche-specific query examples for all 7 niches.
@@ -203,18 +198,13 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
 
-  // ── Credit check & deduction (admin client, consistent with other routes) ──
-  const cost = computeCost("timeline");
-  const { data: profile } = await supabaseAdmin
-    .from("profiles").select("credits").eq("id", user.id).single();
-  const currentCredits = (profile as { credits: number } | null)?.credits ?? 0;
-  if (currentCredits < cost) {
-    return NextResponse.json(
-      { error: "Créditos insuficientes", code: "INSUFFICIENT_CREDITS", required: cost, credits: currentCredits },
-      { status: 402 }
-    );
+  if (!(await rateLimit(`enrich:${user.id}`, 10, 60_000))) {
+    return NextResponse.json({ error: "Muitas requisições. Aguarde um instante." }, { status: 429 });
   }
-  await supabaseAdmin.from("profiles").update({ credits: currentCredits - cost }).eq("id", user.id);
+
+  // ── Atomic credit debit via creditGuard (auto-refund on failure) ──────────
+  const guard = await creditGuard(user.id, "timeline");
+  if (guard.error) return guard.error;
 
   try {
     const body = await req.json();
@@ -245,7 +235,7 @@ export async function POST(req: NextRequest) {
 
     const raw = completion.choices[0]?.message?.content;
     if (!raw) {
-      await supabaseAdmin.from("profiles").update({ credits: currentCredits }).eq("id", user.id);
+      await guard.refund();
       return NextResponse.json({ error: "A IA não retornou conteúdo." }, { status: 500 });
     }
 
@@ -257,7 +247,7 @@ export async function POST(req: NextRequest) {
       : (Object.values(parsed).find(v => Array.isArray(v)) as unknown[] | undefined) ?? [];
 
     if (!rawScenes.length) {
-      await supabaseAdmin.from("profiles").update({ credits: currentCredits }).eq("id", user.id);
+      await guard.refund();
       return NextResponse.json({ error: "A IA não gerou cenas." }, { status: 500 });
     }
 
@@ -406,7 +396,7 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (err: unknown) {
-    await supabaseAdmin.from("profiles").update({ credits: currentCredits }).eq("id", user.id);
+    await guard.refund();
     console.error("[enrich-scenes]", err);
     if (err instanceof SyntaxError)
       return NextResponse.json({ error: "JSON inválido da IA. Tente novamente." }, { status: 500 });

@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient }        from "@supabase/ssr";
 import { cookies }                   from "next/headers";
 import { creditGuard }               from "@/app/lib/creditGuard";
+import { rateLimit }                 from "@/app/lib/rateLimit";
 
 export const maxDuration = 60;
 
@@ -21,6 +22,10 @@ export async function POST(req: NextRequest) {
   );
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  if (!(await rateLimit(`tts-cloned:${user.id}`, 20, 60_000))) {
+    return NextResponse.json({ error: "Muitas requisições. Aguarde um instante." }, { status: 429 });
+  }
 
   const { text, voiceId, speed = 1.0 } = await req.json() as {
     text:    string;

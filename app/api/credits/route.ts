@@ -1,13 +1,13 @@
 // ─── /api/credits ─────────────────────────────────────────────────────────────
 // GET  → retorna créditos e plano do usuário
-// POST → debita créditos (ação atômica via RPC)
+// POST → debita créditos atomicamente (Supabase RPC com row lock)
 import { NextRequest, NextResponse } from "next/server";
 import { createClient }  from "@/lib/supabase/server";
 import { createClient as createAdmin } from "@supabase/supabase-js";
 import { computeCost, CostMeta } from "@/app/lib/creditCost";
 import { sendWelcomeEmail } from "@/app/lib/emails";
+import { rateLimit } from "@/app/lib/rateLimit";
 
-// Admin client para RPC (bypassa RLS)
 const supabaseAdmin = createAdmin(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -44,10 +44,7 @@ export async function GET() {
     if (insertErr || !newProfile) {
       return NextResponse.json({ credits: FREE_INITIAL_CREDITS, plan: "free", status: "inactive" });
     }
-    // Fire welcome email — non-blocking
-    if (user.email) {
-      sendWelcomeEmail(user.email, user.user_metadata?.full_name);
-    }
+    if (user.email) sendWelcomeEmail(user.email, user.user_metadata?.full_name);
     return NextResponse.json({
       credits: newProfile.credits ?? FREE_INITIAL_CREDITS,
       plan:    newProfile.plan    ?? "free",
@@ -64,70 +61,60 @@ export async function GET() {
   });
 }
 
-// ── POST: verifica e debita créditos ─────────────────────────────────────────
+// ── POST: debita créditos atomicamente via RPC ────────────────────────────────
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  // Rate limit: 60 débitos/min por usuário (generoso, cobre uso legítimo)
+  const ok = await rateLimit(`credits:debit:${user.id}`, 60, 60_000);
+  if (!ok) {
+    return NextResponse.json({ error: "Muitas requisições. Aguarde um instante." }, { status: 429 });
+  }
+
   const { action, chars, duration } = await req.json() as { action: string } & CostMeta;
   if (!action) return NextResponse.json({ error: "Ação inválida" }, { status: 400 });
   const cost = computeCost(action, { chars, duration });
+  if (cost <= 0) return NextResponse.json({ error: "Ação inválida" }, { status: 400 });
 
-  // Busca créditos atuais
-  const { data: profile, error: fetchErr } = await supabaseAdmin
-    .from("profiles")
-    .select("credits")
-    .eq("id", user.id)
-    .single();
-
-  if (fetchErr?.code === "PGRST116" || !profile) {
-    // New user with no profile — auto-create with free credits
+  // Garante que o perfil existe (primeiro uso)
+  const { data: profile } = await supabaseAdmin
+    .from("profiles").select("id").eq("id", user.id).maybeSingle();
+  if (!profile) {
     await supabaseAdmin.from("profiles").upsert(
       { id: user.id, email: user.email, credits: FREE_INITIAL_CREDITS, plan: "free" },
       { onConflict: "id" }
     );
-    // Check if they can afford after creation
-    if (FREE_INITIAL_CREDITS < cost) {
+  }
+
+  // Débito atômico via RPC — retorna null se saldo insuficiente
+  const { data: newBalance, error: rpcErr } = await supabaseAdmin
+    .rpc("debit_credits", { p_user_id: user.id, p_amount: cost });
+
+  if (rpcErr) {
+    // Se a constraint CHECK (credits >= 0) foi violada por corrida residual,
+    // tratamos como saldo insuficiente.
+    const msg = rpcErr.message || "";
+    if (msg.includes("profiles_credits_nonnegative") || msg.includes("check constraint")) {
       return NextResponse.json({
-        error: "Créditos insuficientes", code: "INSUFFICIENT_CREDITS",
-        credits: FREE_INITIAL_CREDITS, required: cost,
+        error: "Créditos insuficientes", code: "INSUFFICIENT_CREDITS", required: cost,
       }, { status: 402 });
     }
-    // Debit immediately
-    await supabaseAdmin.from("profiles")
-      .update({ credits: FREE_INITIAL_CREDITS - cost })
-      .eq("id", user.id);
-    return NextResponse.json({ ok: true, credits: FREE_INITIAL_CREDITS - cost, spent: cost });
-  }
-  if (fetchErr) {
-    return NextResponse.json({ error: (fetchErr as { message: string }).message }, { status: 500 });
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 
-  const current = profile.credits ?? 0;
-
-  if (current < cost) {
+  if (newBalance === null) {
+    // Saldo insuficiente — busca saldo atual pra informar o cliente
+    const { data: cur } = await supabaseAdmin
+      .from("profiles").select("credits").eq("id", user.id).single();
     return NextResponse.json({
       error:    "Créditos insuficientes",
       code:     "INSUFFICIENT_CREDITS",
-      credits:  current,
+      credits:  cur?.credits ?? 0,
       required: cost,
     }, { status: 402 });
   }
 
-  // Debita atomicamente
-  const { error: updateErr } = await supabaseAdmin
-    .from("profiles")
-    .update({ credits: current - cost })
-    .eq("id", user.id);
-
-  if (updateErr) {
-    return NextResponse.json({ error: updateErr.message }, { status: 500 });
-  }
-
-  return NextResponse.json({
-    ok:      true,
-    credits: current - cost,
-    spent:   cost,
-  });
+  return NextResponse.json({ ok: true, credits: newBalance, spent: cost });
 }

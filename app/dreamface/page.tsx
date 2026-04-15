@@ -86,11 +86,7 @@ export default function DreamFacePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { credits, plan, spend, cost, refresh } = useCredits();
-  const refund = async (action: string) => {
-    try { await fetch("/api/credits/refund", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) }); refresh(); }
-    catch { /* non-fatal */ }
-  };
+  const { credits, plan, spend, cost, refresh, refund } = useCredits();
   const { toasts, remove: removeToast, toast } = useToast();
   const [showCreditModal, setShowCreditModal] = useState(false);
 
@@ -137,13 +133,18 @@ export default function DreamFacePage() {
   const [fps,        setFps]        = useState<"25" | "original">("25");
   const [paramsOpen, setParamsOpen] = useState(false);
 
-  // ── Generation (shared) ──
-  const [stage,        setStage]        = useState<Stage>("setup");
-  const [resultVideo,  setResultVideo]  = useState<string | null>(null);
-  const [progress,     setProgress]     = useState(0);
-  const [statusMsg,    setStatusMsg]    = useState("");
-  const [errorMsg,     setErrorMsg]     = useState("");
-  const [resultSource, setResultSource] = useState<ActiveTab>("lipsync");
+  // ── Generation state — isolado por ferramenta (evita cascata de erros) ──
+  type ToolState = { stage: Stage; progress: number; statusMsg: string; errorMsg: string; resultVideo: string | null };
+  const initialToolState: ToolState = { stage: "setup", progress: 0, statusMsg: "", errorMsg: "", resultVideo: null };
+  const [toolStates, setToolStates] = useState<Record<ActiveTab, ToolState>>({
+    lipsync:        { ...initialToolState },
+    talkingphoto:   { ...initialToolState },
+    videotranslate: { ...initialToolState },
+  });
+  const patchTool = useCallback((tool: ActiveTab, patch: Partial<ToolState>) => {
+    setToolStates(s => ({ ...s, [tool]: { ...s[tool], ...patch } }));
+  }, []);
+  const { stage, progress, statusMsg, errorMsg, resultVideo } = toolStates[activeTab];
 
   // ── Upload handlers ──────────────────────────────────────────────────────
   const handleVideoSelect = useCallback(async (file: File) => {
@@ -218,77 +219,109 @@ export default function DreamFacePage() {
     finally { setGenAudio(false); }
   }, [audioPreview]);
 
-  const pollResult = useCallback(async (tid: string, tool: string) => {
+  const pollResult = useCallback(async (tid: string, tool: ActiveTab, refundId: string) => {
+    const MAX_ELAPSED = 600_000; // 10 min
     let elapsed = 0;
-    while (elapsed < 600_000) {
-      await sleep(4000);
-      elapsed += 4000;
-      setProgress(Math.min(95, Math.round(10 + (elapsed / 120_000) * 85)));
+    let delay   = 3000;
+    let consecutiveFails = 0;
+
+    while (elapsed < MAX_ELAPSED) {
+      await sleep(delay);
+      elapsed += delay;
+      delay    = Math.min(15_000, Math.round(delay * 1.5));
+      patchTool(tool, { progress: Math.min(95, Math.round(10 + (elapsed / MAX_ELAPSED) * 85)) });
+
       try {
         const res  = await fetch("/api/dreamface/poll", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ taskId: tid }) });
+        if (!res.ok) { consecutiveFails++; if (consecutiveFails > 5) break; continue; }
+        consecutiveFails = 0;
         const data = await res.json() as { status: number; videoUrl: string | null; error?: string };
-        if (data.error) { setStage("error"); setErrorMsg(data.error); return; }
-        if (data.status === 1) setStatusMsg("⏳ Na fila...");
-        if (data.status === 2) setStatusMsg("🔄 Processando...");
+        if (data.error) { patchTool(tool, { stage: "error", errorMsg: data.error }); await refund(tool, refundId); return; }
+        if (data.status === 1) patchTool(tool, { statusMsg: "⏳ Na fila..." });
+        if (data.status === 2) patchTool(tool, { statusMsg: "🔄 Processando..." });
         if (data.status === 3 && data.videoUrl) {
-          setProgress(100); setResultVideo(data.videoUrl); setStage("done");
+          patchTool(tool, { progress: 100, resultVideo: data.videoUrl, stage: "done" });
           const msgs: Record<string, string> = { lipsync: "LipSync gerado! 🎤", talkingphoto: "Talking Photo criado! 🖼️", videotranslate: "Vídeo traduzido! 🌍" };
           toast.success(msgs[tool] ?? "Vídeo gerado com sucesso!");
           fetch("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tool, title: `${tool} — ${new Date().toLocaleString("pt-BR")}`, result_url: data.videoUrl, meta: { taskId: tid } }) }).catch(() => {});
           return;
         }
-        if (data.status === 4) { setStage("error"); setErrorMsg("Geração falhou. Verifica o vídeo e o áudio e tenta novamente."); toast.error("Geração falhou."); await refund(tool); return; }
-      } catch (e) { console.error("Poll:", e); }
+        if (data.status === 4) { patchTool(tool, { stage: "error", errorMsg: "Geração falhou. Verifica o vídeo e o áudio e tenta novamente." }); toast.error("Geração falhou."); await refund(tool, refundId); return; }
+      } catch (e) { console.error("Poll:", e); consecutiveFails++; if (consecutiveFails > 5) break; }
     }
-    await refund(tool); setStage("error"); setErrorMsg("Timeout — o servidor demorou mais de 10 min.");
+    await refund(tool, refundId);
+    patchTool(tool, { stage: "error", errorMsg: "Timeout — o servidor demorou mais de 10 min." });
     toast.error("Tempo limite excedido. Tente novamente.");
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toast]);
+  }, [toast, refund, patchTool]);
 
   const handleGenerate = useCallback(async () => {
     if (!avatarUrl || !audioUrl) return;
     const cr = await spend("lipsync");
     if (!cr.ok) { setShowCreditModal(true); return; }
-    setResultSource("lipsync"); setStage("processing"); setProgress(5); setStatusMsg("🚀 Enviando para a Newport AI..."); setErrorMsg("");
+    const { refundId } = cr;
+    patchTool("lipsync", { stage: "processing", progress: 5, statusMsg: "🚀 Enviando para a Newport AI...", errorMsg: "", resultVideo: null });
     try {
       const res  = await fetch("/api/dreamface", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ srcVideoUrl: avatarUrl, audioUrl, videoEnhance: enhance ? 1 : 0, fps: fps === "original" ? "original" : undefined }) });
       const data = await res.json() as { taskId?: string; error?: string };
-      if (data.error || !data.taskId) { setStage("error"); setErrorMsg(data.error ?? "Erro ao iniciar job"); return; }
-      setStatusMsg("✅ Job criado! Aguardando processamento..."); setProgress(10);
-      await pollResult(data.taskId, "lipsync");
-    } catch (e) { const msg = e instanceof Error ? e.message : "Erro desconhecido"; setStage("error"); setErrorMsg(msg); toast.error(msg); await refund("lipsync"); }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [avatarUrl, audioUrl, enhance, fps, pollResult, spend, toast]);
+      if (data.error || !data.taskId) {
+        patchTool("lipsync", { stage: "error", errorMsg: data.error ?? "Erro ao iniciar job" });
+        await refund("lipsync", refundId);
+        return;
+      }
+      patchTool("lipsync", { statusMsg: "✅ Job criado! Aguardando processamento...", progress: 10 });
+      await pollResult(data.taskId, "lipsync", refundId);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Erro desconhecido";
+      patchTool("lipsync", { stage: "error", errorMsg: msg });
+      toast.error(msg); await refund("lipsync", refundId);
+    }
+  }, [avatarUrl, audioUrl, enhance, fps, pollResult, spend, toast, refund, patchTool]);
 
   const handleGenerateTalkingPhoto = useCallback(async () => {
     if (!photoUrl || !audioUrl) return;
     const cr = await spend("talkingphoto");
     if (!cr.ok) { setShowCreditModal(true); return; }
-    setResultSource("talkingphoto"); setStage("processing"); setProgress(5); setStatusMsg("🚀 Enviando para a Newport AI..."); setErrorMsg("");
+    const { refundId } = cr;
+    patchTool("talkingphoto", { stage: "processing", progress: 5, statusMsg: "🚀 Enviando para a Newport AI...", errorMsg: "", resultVideo: null });
     try {
       const res  = await fetch("/api/talkingphoto", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageUrl: photoUrl, audioUrl }) });
       const data = await res.json() as { taskId?: string; error?: string };
-      if (data.error || !data.taskId) { setStage("error"); setErrorMsg(data.error ?? "Erro ao iniciar job"); return; }
-      setStatusMsg("✅ Job criado! Aguardando processamento..."); setProgress(10);
-      await pollResult(data.taskId, "talkingphoto");
-    } catch (e) { const msg = e instanceof Error ? e.message : "Erro desconhecido"; setStage("error"); setErrorMsg(msg); toast.error(msg); await refund("talkingphoto"); }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [photoUrl, audioUrl, pollResult, spend, toast]);
+      if (data.error || !data.taskId) {
+        patchTool("talkingphoto", { stage: "error", errorMsg: data.error ?? "Erro ao iniciar job" });
+        await refund("talkingphoto", refundId);
+        return;
+      }
+      patchTool("talkingphoto", { statusMsg: "✅ Job criado! Aguardando processamento...", progress: 10 });
+      await pollResult(data.taskId, "talkingphoto", refundId);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Erro desconhecido";
+      patchTool("talkingphoto", { stage: "error", errorMsg: msg });
+      toast.error(msg); await refund("talkingphoto", refundId);
+    }
+  }, [photoUrl, audioUrl, pollResult, spend, toast, refund, patchTool]);
 
   const handleGenerateTranslate = useCallback(async () => {
     if (!transVideoUrl) return;
     const cr = await spend("videotranslate");
     if (!cr.ok) { setShowCreditModal(true); return; }
-    setResultSource("videotranslate"); setStage("processing"); setProgress(5); setStatusMsg("🚀 Enviando para a Newport AI..."); setErrorMsg("");
+    const { refundId } = cr;
+    patchTool("videotranslate", { stage: "processing", progress: 5, statusMsg: "🚀 Enviando para a Newport AI...", errorMsg: "", resultVideo: null });
     try {
       const res  = await fetch("/api/videotranslate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ videoUrl: transVideoUrl, targetLanguage: targetLang }) });
       const data = await res.json() as { taskId?: string; error?: string };
-      if (data.error || !data.taskId) { setStage("error"); setErrorMsg(data.error ?? "Erro ao iniciar job"); return; }
-      setStatusMsg("✅ Job criado! Aguardando processamento..."); setProgress(10);
-      await pollResult(data.taskId, "videotranslate");
-    } catch (e) { const msg = e instanceof Error ? e.message : "Erro desconhecido"; setStage("error"); setErrorMsg(msg); toast.error(msg); await refund("videotranslate"); }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transVideoUrl, targetLang, pollResult, spend, toast]);
+      if (data.error || !data.taskId) {
+        patchTool("videotranslate", { stage: "error", errorMsg: data.error ?? "Erro ao iniciar job" });
+        await refund("videotranslate", refundId);
+        return;
+      }
+      patchTool("videotranslate", { statusMsg: "✅ Job criado! Aguardando processamento...", progress: 10 });
+      await pollResult(data.taskId, "videotranslate", refundId);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Erro desconhecido";
+      patchTool("videotranslate", { stage: "error", errorMsg: msg });
+      toast.error(msg); await refund("videotranslate", refundId);
+    }
+  }, [transVideoUrl, targetLang, pollResult, spend, toast, refund, patchTool]);
 
   // ── Derived flags ─────────────────────────────────────────────────────────
   const canGenerateLipsync = !!avatarUrl && !!audioUrl && !uploadingVideo && !genAudio;
@@ -319,8 +352,8 @@ export default function DreamFacePage() {
   }
 
   // ── Processing labels ─────────────────────────────────────────────────────
-  const ldTitle = resultSource === "talkingphoto" ? "Gerando Talking Photo" : resultSource === "videotranslate" ? "Traduzindo Vídeo" : "Gerando LipSync";
-  const ldSub   = resultSource === "talkingphoto" ? "Newport AI animando a foto..." : resultSource === "videotranslate" ? "Newport AI traduzindo o áudio..." : "Newport AI processando sincronização labial...";
+  const ldTitle = activeTab === "talkingphoto" ? "Gerando Talking Photo" : activeTab === "videotranslate" ? "Traduzindo Vídeo" : "Gerando LipSync";
+  const ldSub   = activeTab === "talkingphoto" ? "Newport AI animando a foto..." : activeTab === "videotranslate" ? "Newport AI traduzindo o áudio..." : "Newport AI processando sincronização labial...";
 
   // ── Center media ──────────────────────────────────────────────────────────
   const currentFile    = activeTab === "lipsync" ? avatarFile    : activeTab === "talkingphoto" ? photoFile    : transVideoFile;
@@ -774,7 +807,7 @@ export default function DreamFacePage() {
               { lbl: "Enviando arquivos", det: "R2 Storage", state: progress > 5 ? "done" : "active" },
               { lbl: "Job criado na Newport AI", det: "API", state: progress > 10 ? "done" : progress > 5 ? "active" : "idle" },
               { lbl: "Processando sincronização", det: "~2–4 min", state: progress > 50 ? "done" : progress > 10 ? "active" : "idle" },
-              { lbl: resultSource === "videotranslate" ? "Tradução concluída" : "LipSync pronto", det: "", state: progress >= 100 ? "done" : "idle" },
+              { lbl: activeTab === "videotranslate" ? "Tradução concluída" : activeTab === "talkingphoto" ? "Talking Photo pronto" : "LipSync pronto", det: "", state: progress >= 100 ? "done" : "idle" },
             ].map((s, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 9, padding: "10px 13px", borderBottom: i < 3 ? `1px solid ${C.b}` : "none", background: s.state === "done" ? "rgba(62,207,142,.03)" : s.state === "active" ? "rgba(232,81,42,.04)" : "transparent", transition: "background .3s" }}>
                 <div style={{ width: 16, height: 16, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, background: s.state === "done" ? "rgba(62,207,142,.14)" : s.state === "active" ? C.om : C.bg4, color: s.state === "done" ? C.grn : s.state === "active" ? C.o : C.t4 }}>
@@ -800,7 +833,7 @@ export default function DreamFacePage() {
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
               <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.grn, animation: "sync-pulse 1s ease-in-out infinite" }} />
               <span style={{ fontSize: 11, color: C.t3, letterSpacing: ".06em", textTransform: "uppercase" as const }}>
-                {resultSource === "talkingphoto" ? "Talking Photo Concluído" : resultSource === "videotranslate" ? "Tradução Concluída" : "LipSync Concluído"}
+                {activeTab === "talkingphoto" ? "Talking Photo Concluído" : activeTab === "videotranslate" ? "Tradução Concluída" : "LipSync Concluído"}
               </span>
             </div>
             <video src={resultVideo} controls autoPlay style={{ width: "100%", borderRadius: 12, background: "#0e0e0e", maxHeight: "55vh", marginBottom: 20 }} />
@@ -813,7 +846,7 @@ export default function DreamFacePage() {
                 style={{ padding: "14px 20px", borderRadius: 10, fontWeight: 600, fontSize: 13, color: C.t, border: `1px solid ${C.b2}`, background: C.bg3, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, textDecoration: "none" }}>
                 ⬇ Download
               </a>
-              <button onClick={() => { setStage("setup"); setResultVideo(null); setProgress(0); }}
+              <button onClick={() => patchTool(activeTab, { stage: "setup", resultVideo: null, progress: 0 })}
                 style={{ padding: "14px 20px", borderRadius: 10, fontWeight: 600, fontSize: 13, color: C.t, border: `1px solid ${C.b2}`, background: C.bg3, cursor: "pointer", fontFamily: "inherit" }}>
                 ↺ Nova
               </button>
@@ -828,7 +861,7 @@ export default function DreamFacePage() {
           <div style={{ fontSize: 48, marginBottom: 16 }}>⚠️</div>
           <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8, color: C.t }}>Algo correu mal</h2>
           <p style={{ fontSize: 13, color: C.t2, marginBottom: 24, textAlign: "center", maxWidth: 400, lineHeight: 1.6 }}>{errorMsg}</p>
-          <button onClick={() => { setStage("setup"); setProgress(0); }}
+          <button onClick={() => patchTool(activeTab, { stage: "setup", progress: 0, errorMsg: "" })}
             style={{ padding: "12px 32px", borderRadius: 8, fontWeight: 700, fontSize: 13, color: "#fff", border: "none", cursor: "pointer", background: C.o, fontFamily: "inherit" }}>
             Tentar novamente
           </button>

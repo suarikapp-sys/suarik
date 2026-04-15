@@ -1,16 +1,23 @@
 // ─── /api/voiceclone ── Clona uma voz via MiniMax ────────────────────────────
 // POST { audioUrl, voiceName }
-// Downloads the audio from R2, uploads to MiniMax voice clone API,
-// and returns { voiceId } synchronously (no polling needed).
+// Baixa o áudio do R2, faz upload na MiniMax, cria a voz e persiste em
+// cloned_voices. Retorna { voiceId } sincronamente (sem polling).
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient }        from "@supabase/ssr";
 import { cookies }                   from "next/headers";
+import { createClient as createAdmin } from "@supabase/supabase-js";
 import { creditGuard }               from "@/app/lib/creditGuard";
+import { rateLimit }                 from "@/app/lib/rateLimit";
 
 export const maxDuration = 60;
 
 const MINIMAX_API_KEY  = process.env.MINIMAX_API_KEY!;
 const MINIMAX_BASE     = "https://api.minimax.io";
+
+const supabaseAdmin = createAdmin(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 export async function POST(req: NextRequest) {
   // ── Auth ──────────────────────────────────────────────────────────────────
@@ -23,25 +30,36 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  // ── Rate limit: 5 clonagens/min/usuário ───────────────────────────────────
+  if (!(await rateLimit(`voiceclone:${user.id}`, 5, 60_000))) {
+    return NextResponse.json({ error: "Muitas requisições. Aguarde um instante." }, { status: 429 });
+  }
+
   const { audioUrl, voiceName: rawName } = await req.json() as {
     audioUrl:  string;
     voiceName: string;
   };
 
-  if (!audioUrl || !rawName) {
-    return NextResponse.json({ error: "audioUrl e voiceName são obrigatórios" }, { status: 400 });
+  if (!audioUrl || typeof audioUrl !== "string") {
+    return NextResponse.json({ error: "audioUrl obrigatório" }, { status: 400 });
+  }
+  if (!rawName || typeof rawName !== "string") {
+    return NextResponse.json({ error: "voiceName obrigatório" }, { status: 400 });
+  }
+  const trimmedName = rawName.trim();
+  if (trimmedName.length < 1 || trimmedName.length > 80) {
+    return NextResponse.json({ error: "voiceName deve ter entre 1 e 80 caracteres" }, { status: 400 });
   }
 
-  // MiniMax voice IDs: alphanumeric + underscore, max 40 chars
-  // Add short timestamp suffix to guarantee uniqueness across clones
-  const baseId = rawName
+  // MiniMax voice IDs: alfanumérico + underscore, max 40 chars
+  const baseId = trimmedName
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-zA-Z0-9_]/g, "_")
     .replace(/_+/g, "_")
     .replace(/^_|_$/g, "")
     .slice(0, 28) || "voice";
-  const voiceName = `${baseId}_${Date.now().toString(36)}`; // e.g. "Minha_Voz_m5x3k2"
+  const voiceIdSafe = `${baseId}_${Date.now().toString(36)}`;
 
   // ── Validate audioUrl ─────────────────────────────────────────────────────
   try {
@@ -51,7 +69,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `audioUrl inválido` }, { status: 400 });
   }
 
-  // ── Credits ────────────────────────────────────────────────────────────────
+  // ── Credits (débito atômico) ──────────────────────────────────────────────
   const guard = await creditGuard(user.id, "voiceclone");
   if (guard.error) return guard.error;
 
@@ -100,23 +118,19 @@ export async function POST(req: NextRequest) {
         "Authorization": `Bearer ${MINIMAX_API_KEY}`,
         "Content-Type":  "application/json",
       },
-      body:   JSON.stringify({ file_id: fileId, voice_id: voiceName }),
+      body:   JSON.stringify({ file_id: fileId, voice_id: voiceIdSafe }),
       signal: AbortSignal.timeout(55000),
     });
 
     const data = await res.json() as {
       voice_id?: string;
       base_resp?: { status_code: number; status_msg: string };
-      // alternate field names
       voiceId?:   string;
       code?:      number;
       message?:   string;
     };
 
-
-    // MiniMax uses base_resp.status_code = 0 for success
     const statusCode = data.base_resp?.status_code ?? data.code ?? -1;
-
     if (statusCode !== 0) {
       const errMsg = data.base_resp?.status_msg ?? data.message ?? "Erro ao clonar voz";
       console.error("[voiceclone] MiniMax rejected:", data);
@@ -124,9 +138,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: errMsg, debug: data }, { status: 500 });
     }
 
-    // MiniMax success: the voice_id is the one WE sent — no separate field returned
-    const voiceId = data.voice_id ?? data.voiceId ?? voiceName;
-    return NextResponse.json({ voiceId, cost: guard.cost });
+    const voiceId = data.voice_id ?? data.voiceId ?? voiceIdSafe;
+
+    // ── Step 4: Persist voice in DB (server-side source of truth) ─────────
+    const { error: dbErr } = await supabaseAdmin
+      .from("cloned_voices")
+      .insert({
+        voice_id:   voiceId,
+        user_id:    user.id,
+        voice_name: trimmedName,
+        sample_url: audioUrl,
+      });
+
+    if (dbErr && dbErr.code !== "42P01") {
+      // 42P01 = tabela não existe ainda (migration pendente) — não refund, voz já foi criada
+      console.error("[voiceclone] DB insert failed:", dbErr);
+    }
+
+    return NextResponse.json({ voiceId, voiceName: trimmedName, cost: guard.cost });
 
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

@@ -1,8 +1,16 @@
 // ─── Rate limiter ─────────────────────────────────────────────────────────────
-// Uses Upstash Redis when UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN are
-// set — fully distributed across Vercel serverless instances.
-// Falls back to an in-memory Map when those vars are absent (local dev / single
-// instance). To enable Redis: add both vars to Vercel env settings.
+// Usa Upstash Redis em produção (NODE_ENV=production + UPSTASH_* configurado).
+// Em dev local sem Redis, cai para in-memory Map.
+//
+// Comportamento em produção (fail-closed):
+//   • Se UPSTASH_* não configurado → bloqueia a requisição (misconfig é grave)
+//   • Se Redis retornar erro → bloqueia a requisição (prevenir spam)
+//
+// Comportamento em dev (fail-open para não atrapalhar):
+//   • In-memory Map por instância
+
+const isProd = process.env.NODE_ENV === "production";
+const hasRedis = !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
 
 // ── In-memory fallback (single-instance only) ─────────────────────────────────
 const store = new Map<string, { count: number; resetAt: number }>();
@@ -25,38 +33,49 @@ async function redisLimit(key: string, limit: number, windowMs: number): Promise
   const token = process.env.UPSTASH_REDIS_REST_TOKEN!;
   const ttlSec = Math.ceil(windowMs / 1000);
 
-  // INCR atomically increments the counter; first call also sets TTL via EXPIRE
-  const incrRes = await fetch(`${url}/incr/${encodeURIComponent(key)}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    method: "POST",
-  });
-  if (!incrRes.ok) return true; // fail open on Redis error
-
-  const { result: count } = await incrRes.json() as { result: number };
-
-  // Set expiry only on first request (count === 1) to create a sliding window
-  if (count === 1) {
-    await fetch(`${url}/expire/${encodeURIComponent(key)}/${ttlSec}`, {
+  try {
+    const incrRes = await fetch(`${url}/incr/${encodeURIComponent(key)}`, {
       headers: { Authorization: `Bearer ${token}` },
       method: "POST",
     });
-  }
+    if (!incrRes.ok) {
+      console.error(`[rateLimit] Redis INCR failed: ${incrRes.status}`);
+      return false; // fail-closed em produção
+    }
+    const { result: count } = await incrRes.json() as { result: number };
 
-  return count <= limit;
+    if (count === 1) {
+      // Set expiry na primeira requisição para criar janela deslizante
+      await fetch(`${url}/expire/${encodeURIComponent(key)}/${ttlSec}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        method: "POST",
+      }).catch(() => {}); // expire failure é não-crítico (key expira via outro mecanismo)
+    }
+    return count <= limit;
+  } catch (err) {
+    console.error(`[rateLimit] Redis unreachable:`, err);
+    return false; // fail-closed: se Redis cair, rejeita a requisição
+  }
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────────
 /**
- * Returns true if the request is allowed, false if the rate limit is exceeded.
- * Async-safe: always returns a Promise<boolean> (sync in-memory path wraps automatically).
+ * Retorna true se a requisição é permitida, false se excedeu o limite.
  *
- * @param key      Unique identifier, e.g. `tts:${userId}`
- * @param limit    Max requests allowed in the window
- * @param windowMs Time window in milliseconds (default: 60 seconds)
+ * Em produção: se Redis não estiver configurado ou falhar, bloqueia (fail-closed).
+ * Em dev: usa Map in-memory se Redis ausente.
+ *
+ * @param key      Identificador único, ex: `tts:${userId}`
+ * @param limit    Máximo de requisições por janela
+ * @param windowMs Janela em ms (default: 60 segundos)
  */
 export async function rateLimit(key: string, limit: number, windowMs = 60_000): Promise<boolean> {
-  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
-    return redisLimit(key, limit, windowMs);
+  if (hasRedis) return redisLimit(key, limit, windowMs);
+
+  if (isProd) {
+    console.error("[rateLimit] UPSTASH_REDIS_* missing in production — rejecting request");
+    return false; // fail-closed — misconfig em prod é inaceitável
   }
+
   return inMemoryLimit(key, limit, windowMs);
 }

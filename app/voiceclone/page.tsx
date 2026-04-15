@@ -67,11 +67,7 @@ export default function VoiceClonePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { credits, spend, cost, refresh } = useCredits();
-  const refund = async (action: string) => {
-    try { await fetch("/api/credits/refund", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) }); refresh(); }
-    catch { /* non-fatal */ }
-  };
+  const { credits, spend, cost, refresh, refund } = useCredits();
   const { toasts, remove: removeToast, toast } = useToast();
   const [showCreditModal, setShowCreditModal] = useState(false);
   const [creditAction,    setCreditAction]    = useState("voiceclone");
@@ -112,32 +108,64 @@ export default function VoiceClonePage() {
   const [playing, setPlaying]   = useState(false);
   const [playProg,setPlayProg]  = useState(0);
 
-  // load voices
-  useEffect(() => {
-    try { const raw = localStorage.getItem("suarik_cloned_voices"); if (raw) setSavedVoices(JSON.parse(raw) as SavedVoice[]); } catch {}
+  // Carrega vozes do servidor (Supabase) — source of truth
+  const loadVoices = useCallback(async () => {
+    try {
+      const res = await fetch("/api/voices");
+      if (!res.ok) return;
+      const j = await res.json() as { voices: Array<{ voice_id: string; voice_name: string; created_at: string }> };
+      const mapped: SavedVoice[] = (j.voices ?? []).map(v => ({
+        voiceId:   v.voice_id,
+        voiceName: v.voice_name,
+        createdAt: new Date(v.created_at).getTime(),
+      }));
+      setSavedVoices(mapped);
+    } catch { /* offline / non-fatal */ }
   }, []);
+  useEffect(() => { loadVoices(); }, [loadVoices]);
 
-  function persistVoice(v: SavedVoice) {
-    const updated = [v, ...savedVoices.filter(x => x.voiceId !== v.voiceId)].slice(0, 10);
-    setSavedVoices(updated);
-    try { localStorage.setItem("suarik_cloned_voices", JSON.stringify(updated)); } catch {}
+  function addLocalVoice(v: SavedVoice) {
+    setSavedVoices(s => [v, ...s.filter(x => x.voiceId !== v.voiceId)]);
   }
 
-  function deleteVoice(voiceId: string) {
-    const updated = savedVoices.filter(x => x.voiceId !== voiceId);
-    setSavedVoices(updated);
-    try { localStorage.setItem("suarik_cloned_voices", JSON.stringify(updated)); } catch {}
-    if (activeVoiceId === voiceId) { setActiveVoiceId(updated[0]?.voiceId ?? null); if (updated.length === 0) setStage("setup"); }
-    toast.success("Voz removida");
+  async function deleteVoice(voiceId: string) {
+    const prev = savedVoices;
+    setSavedVoices(s => s.filter(x => x.voiceId !== voiceId));
+    if (activeVoiceId === voiceId) {
+      const remaining = prev.filter(x => x.voiceId !== voiceId);
+      setActiveVoiceId(remaining[0]?.voiceId ?? null);
+      if (remaining.length === 0) setStage("setup");
+    }
+    try {
+      const res = await fetch("/api/voices", {
+        method: "DELETE", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ voiceId }),
+      });
+      if (!res.ok) throw new Error("delete failed");
+      toast.success("Voz removida");
+    } catch {
+      setSavedVoices(prev); // rollback
+      toast.error("Falha ao remover voz");
+    }
   }
 
-  function commitRename(voiceId: string) {
+  async function commitRename(voiceId: string) {
     const name = renameValue.trim();
     if (!name) { setRenamingId(null); return; }
-    const updated = savedVoices.map(x => x.voiceId === voiceId ? { ...x, voiceName: name } : x);
-    setSavedVoices(updated);
-    try { localStorage.setItem("suarik_cloned_voices", JSON.stringify(updated)); } catch {}
-    setRenamingId(null); toast.success("Nome actualizado");
+    const prev = savedVoices;
+    setSavedVoices(s => s.map(x => x.voiceId === voiceId ? { ...x, voiceName: name } : x));
+    setRenamingId(null);
+    try {
+      const res = await fetch("/api/voices", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ voiceId, voiceName: name }),
+      });
+      if (!res.ok) throw new Error("rename failed");
+      toast.success("Nome actualizado");
+    } catch {
+      setSavedVoices(prev); // rollback
+      toast.error("Falha ao renomear voz");
+    }
   }
 
   async function handleSampleSelect(file: File) {
@@ -184,9 +212,14 @@ export default function VoiceClonePage() {
       if (res.status === 402) { setStage("setup"); setCreditAction("voiceclone"); setShowCreditModal(true); return; }
       const j = await res.json() as { voiceId?: string; error?: string; debug?: Record<string, unknown> };
       if (j.voiceId) {
+        // Server já persistiu em cloned_voices — só atualizamos UI local
         const cloned: SavedVoice = { voiceId: j.voiceId, voiceName: voiceName.trim(), createdAt: Date.now() };
-        persistVoice(cloned); setActiveVoiceId(j.voiceId); setProgress(100); setStatusMsg("Voz clonada!"); setStage("ready");
-        toast.success(`Voz "${voiceName}" clonada com sucesso! 🧬`); setActiveTab("use"); return;
+        addLocalVoice(cloned); setActiveVoiceId(j.voiceId);
+        setProgress(100); setStatusMsg("Voz clonada!"); setStage("ready");
+        toast.success(`Voz "${voiceName}" clonada com sucesso! 🧬`);
+        setActiveTab("use");
+        refresh(); // refresh credits
+        return;
       }
       if (j.debug) console.error("[voiceclone] Debug:", JSON.stringify(j.debug, null, 2));
       throw new Error(j.error ?? "Erro ao iniciar clonagem");
@@ -199,8 +232,9 @@ export default function VoiceClonePage() {
 
   const generateTTS = useCallback(async () => {
     if (!ttsText.trim() || !activeVoiceId) return;
-    const creditResult = await spend("tts");
+    const creditResult = await spend("tts", { chars: ttsText.trim().length });
     if (!creditResult.ok) { setCreditAction("tts"); setShowCreditModal(true); return; }
+    const { refundId: ttsRefundId } = creditResult;
     setStage("generating"); setProgress(10); setStatusMsg("Gerando áudio com sua voz...");
     try {
       const miniMaxVoices = ["English_expressive_narrator","English_Graceful_Lady","English_Insightful_Speaker","English_radiant_girl","English_Persuasive_Man","English_Lucky_Robot","Chinese (Mandarin)_Lyrical_Voice","Chinese (Mandarin)_HK_Flight_Attendant","Japanese_Whisper_Belle"];
@@ -222,7 +256,8 @@ export default function VoiceClonePage() {
       setAudioResult(persistUrl ?? url); setAudioDur(dur); setStage("done"); toast.success("Áudio gerado com sua voz clonada! 🎙️");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro ao gerar áudio";
-      setErrMsg(msg); setStage("error"); toast.error(msg); await refund("tts");
+      setErrMsg(msg); setStage("error"); toast.error(msg);
+      await refund("tts", ttsRefundId, { chars: ttsText.trim().length });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ttsText, activeVoiceId, ttsSpeed, toast]);
