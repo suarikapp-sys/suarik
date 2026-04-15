@@ -6,8 +6,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { TTS_VOICES } from "@/app/lib/ttsVoices";
+import { requireAdmin } from "@/app/lib/admin";
 
 const MINIMAX_API_KEY  = process.env.MINIMAX_API_KEY!;
 const MINIMAX_ENDPOINT = "https://api.minimax.io/v1/t2a_v2";
@@ -47,15 +47,9 @@ async function testVoice(voiceId: string): Promise<{ valid: boolean; statusCode:
 }
 
 export async function GET(req: NextRequest) {
-  // ── Dev-only guard: apenas em desenvolvimento ─────────────────────────────
-  if (process.env.NODE_ENV === "production") {
-    return NextResponse.json({ error: "Not available in production" }, { status: 403 });
-  }
-
-  // ── Auth check ─────────────────────────────────────────────────────────────
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  // ── Admin auth ─────────────────────────────────────────────────────────────
+  const { error: authErr } = await requireAdmin();
+  if (authErr) return authErr;
 
   if (!MINIMAX_API_KEY) {
     return NextResponse.json({ error: "MINIMAX_API_KEY não configurada" }, { status: 500 });

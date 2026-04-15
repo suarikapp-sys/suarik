@@ -8,20 +8,13 @@
 // ──────────────────────────────────────────────────────────────────────────────
 
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { VIDEO_VAULT, bustVaultCache, type VaultRow } from "@/app/lib/videoVault";
-
-async function requireAuth() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { user: null, supabase };
-  return { user, supabase };
-}
+import { requireAdmin } from "@/app/lib/admin";
 
 // ── GET — retorna vault mesclado (DB + estático) ──────────────────────────────
 export async function GET() {
-  const { user, supabase } = await requireAuth();
-  if (!user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  const { error: authErr, supabase } = await requireAdmin();
+  if (authErr) return authErr;
 
   // Fetch all DB rows (active + inactive) for the admin UI
   const { data: rows, error } = await supabase
@@ -66,8 +59,8 @@ export async function GET() {
 
 // ── PUT — upsert de uma entrada ───────────────────────────────────────────────
 export async function PUT(req: NextRequest) {
-  const { user, supabase } = await requireAuth();
-  if (!user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  const { error: authErr, supabase } = await requireAdmin();
+  if (authErr) return authErr;
 
   const body = await req.json() as Partial<VaultRow>;
   const { category, slot, title, url } = body;
@@ -93,8 +86,8 @@ export async function PUT(req: NextRequest) {
 
 // ── DELETE — desativa (soft-delete) uma entrada ───────────────────────────────
 export async function DELETE(req: NextRequest) {
-  const { user, supabase } = await requireAuth();
-  if (!user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  const { error: authErr, supabase } = await requireAdmin();
+  if (authErr) return authErr;
 
   const { category, slot } = await req.json() as { category: string; slot: number };
   if (!category || !slot) {
