@@ -120,6 +120,53 @@ export default function SettingsPage() {
     } catch { /* ignore */ }
   };
 
+  const handleExportData = async () => {
+    try {
+      const res = await fetch("/api/account/export");
+      if (!res.ok) {
+        alert("Não foi possível exportar seus dados. Tente novamente.");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `suarik-export-${Date.now()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Erro de rede ao exportar. Tente novamente.");
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    const warn = "Esta ação é IRREVERSÍVEL.\n\nSerá apagado:\n• seu perfil e créditos\n• todos os projetos\n• vozes clonadas\n• sua assinatura Stripe será cancelada\n\nPara confirmar, digite EXCLUIR:";
+    const input = window.prompt(warn);
+    if (input !== "EXCLUIR") return;
+
+    try {
+      const res = await fetch("/api/account/delete", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ confirm: "EXCLUIR" }),
+      });
+      const data = await res.json() as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        alert(data.error ?? "Erro ao excluir conta. Contate suporte@suarik.com.");
+        return;
+      }
+      // Sign out locally and redirect
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      await supabase.auth.signOut().catch(() => {});
+      window.location.href = "/?account=deleted";
+    } catch {
+      alert("Erro de rede. Tente novamente ou contate suporte@suarik.com.");
+    }
+  };
+
   const planLabel  = PLAN_LABELS[userPlan] ?? "Starter";
   const planTotal  = PLAN_TOTAL[userPlan] ?? 5000;
   const creditsPct = planTotal > 0 ? Math.min(100, Math.round((credits / planTotal) * 100)) : 0;
@@ -589,8 +636,8 @@ export default function SettingsPage() {
                 {secHd("Conta", "Gerencie ou encerre sua conta Suarik.")}
                 {[
                   { title: "Cancelar assinatura",           desc: "Você mantém o acesso até o fim do período pago. As moedas não utilizadas expiram.",                   btn: "Cancelar assinatura",  severe: false, onClick: handlePortal },
-                  { title: "Exportar meus dados",           desc: "Baixe todos os seus projetos, configurações e histórico em formato JSON.",                             btn: "Exportar dados",       severe: false, onClick: () => {} },
-                  { title: "Excluir conta permanentemente", desc: "Remove todos os seus dados, projetos e histórico. Esta ação não pode ser desfeita.",                   btn: "Excluir conta",        severe: true,  onClick: () => {} },
+                  { title: "Exportar meus dados",           desc: "Baixe todos os seus projetos, configurações e histórico em formato JSON.",                             btn: "Exportar dados",       severe: false, onClick: handleExportData },
+                  { title: "Excluir conta permanentemente", desc: "Remove todos os seus dados, projetos e histórico. Esta ação não pode ser desfeita.",                   btn: "Excluir conta",        severe: true,  onClick: handleDeleteAccount },
                 ].map((item, i) => (
                   <div key={i} style={{ background: "rgba(226,75,74,.07)", border: `1px solid rgba(226,75,74,${item.severe ? ".35" : ".2"})`, borderRadius: "var(--r2)", padding: 16, display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
                     <div style={{ flex: 1 }}>
