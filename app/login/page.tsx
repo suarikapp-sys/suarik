@@ -10,37 +10,38 @@ export default function LoginPage() {
   const router   = useRouter();
   const supabase = createClient();
 
-  const [mode, setMode]         = useState<Mode>("login");
-  const [email, setEmail]       = useState("");
-  const [password, setPassword] = useState("");
-  const [showPass, setShowPass] = useState(false);
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState("");
-  const [success, setSuccess]   = useState("");
+  const [mode,    setMode]    = useState<Mode>("login");
+  const [email,   setEmail]   = useState("");
+  const [password,setPassword]= useState("");
+  const [showPass,setShowPass]= useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState("");
+  const [success, setSuccess] = useState("");
+  const [successOverlay, setSuccessOverlay] = useState(false);
+
+  const switchMode = (m: Mode) => { setMode(m); setError(""); setSuccess(""); };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError("");
-    setSuccess("");
+    setLoading(true); setError(""); setSuccess("");
 
     if (mode === "login") {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) { setError(error.message); setLoading(false); return; }
-      router.push("/dashboard");
-      router.refresh();
+      const { error: err } = await supabase.auth.signInWithPassword({ email, password });
+      if (err) { setError(err.message); setLoading(false); return; }
+      setSuccessOverlay(true);
+      setTimeout(() => { router.push("/dashboard"); router.refresh(); }, 1800);
     } else if (mode === "signup") {
-      const { error } = await supabase.auth.signUp({
+      const { error: err } = await supabase.auth.signUp({
         email, password,
         options: { emailRedirectTo: `${location.origin}/auth/callback` },
       });
-      if (error) { setError(error.message); setLoading(false); return; }
+      if (err) { setError(err.message); setLoading(false); return; }
       setSuccess("Verifique seu e-mail para confirmar o cadastro.");
     } else {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      const { error: err } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${location.origin}/auth/callback?next=/reset-password`,
       });
-      if (error) { setError(error.message); setLoading(false); return; }
+      if (err) { setError(err.message); setLoading(false); return; }
       setSuccess("Link de recuperação enviado para seu e-mail.");
     }
     setLoading(false);
@@ -48,269 +49,573 @@ export default function LoginPage() {
 
   const handleGoogle = async () => {
     setLoading(true);
-    const { error } = await supabase.auth.signInWithOAuth({
+    const { error: err } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: `${location.origin}/auth/callback` },
     });
-    if (error) { setError(error.message); setLoading(false); }
+    if (err) { setError(err.message); setLoading(false); }
   };
 
   return (
     <>
-      {/* ── Keyframes ────────────────────────────────────────────────────────── */}
+      {/* Instrument Serif font */}
+      <link
+        href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap"
+        rel="stylesheet"
+      />
+
       <style>{`
-        @keyframes charging {
-          0% { left: -100%; }
-          20% { left: 100%; }
-          100% { left: 100%; }
+        @keyframes lo-drift {
+          0%   { transform: translate(0,0); }
+          100% { transform: translate(30px,20px); }
         }
-        @keyframes pulse-dot {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.5; transform: scale(0.8); }
+        @keyframes lp-float {
+          0%,100% { transform: translateY(0); }
+          50%     { transform: translateY(-10px); }
         }
-        @keyframes bar-flicker {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.6; }
+        @keyframes lp-wv {
+          0%,100% { height:3px; opacity:.55; }
+          50%     { opacity:1; }
         }
-        .btn-charging::before {
-          content: "";
-          position: absolute;
-          top: 0;
-          left: -100%;
-          width: 100%;
-          height: 100%;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
-          animation: charging 3s infinite;
+        @keyframes btn-spin {
+          to { transform:rotate(360deg); }
         }
-        .pulse-dot { animation: pulse-dot 2s infinite ease-in-out; }
-        .bar-flicker { animation: bar-flicker 2.4s infinite ease-in-out; }
+        @keyframes sov-ring {
+          0%   { inset:0;     opacity:1; }
+          100% { inset:-16px; opacity:0; }
+        }
+        @keyframes shimmer-slide {
+          0%   { left:-100%; }
+          100% { left:100%; }
+        }
+        @keyframes sov-fadein {
+          from { opacity:0; }
+          to   { opacity:1; }
+        }
+
+        /* ── root reset for login page ── */
+        .lp-root *, .lp-root *::before, .lp-root *::after {
+          box-sizing: border-box; margin: 0; padding: 0;
+        }
+        .lp-root {
+          height: 100vh; overflow: hidden;
+          display: grid; grid-template-columns: 1fr 1fr;
+          font-family: 'Geist', system-ui, sans-serif;
+          -webkit-font-smoothing: antialiased;
+          color: #EAEAEA;
+        }
+
+        /* ── left orbs ── */
+        .lo-1 {
+          position:absolute; width:500px; height:500px; border-radius:50%;
+          filter:blur(90px);
+          background:radial-gradient(circle,rgba(232,81,42,.14),transparent);
+          top:-100px; left:-100px;
+          animation: lo-drift 14s ease-in-out infinite alternate;
+        }
+        .lo-2 {
+          position:absolute; width:350px; height:350px; border-radius:50%;
+          filter:blur(90px);
+          background:radial-gradient(circle,rgba(74,158,255,.07),transparent);
+          bottom:-60px; right:-60px;
+          animation: lo-drift 18s ease-in-out infinite alternate-reverse;
+        }
+
+        /* ── product card float ── */
+        .lp-card  { animation: lp-float 6s ease-in-out infinite; }
+        .lp-badge { animation: lp-float 8s 1s ease-in-out infinite; }
+
+        /* ── waveform bars ── */
+        .wvb { width:2.5px; border-radius:1.5px; background:#3ECF8E; }
+        .wvb-1  { animation:lp-wv 1.4s ease-in-out infinite 0s;    }
+        .wvb-2  { animation:lp-wv 1.4s ease-in-out infinite .08s;  }
+        .wvb-3  { animation:lp-wv 1.4s ease-in-out infinite .16s;  }
+        .wvb-4  { animation:lp-wv 1.4s ease-in-out infinite .04s;  }
+        .wvb-5  { animation:lp-wv 1.4s ease-in-out infinite .12s;  }
+        .wvb-6  { animation:lp-wv 1.4s ease-in-out infinite .20s;  }
+        .wvb-7  { animation:lp-wv 1.4s ease-in-out infinite .06s;  }
+        .wvb-8  { animation:lp-wv 1.4s ease-in-out infinite .14s;  }
+        .wvb-9  { animation:lp-wv 1.4s ease-in-out infinite .10s;  }
+        .wvb-10 { animation:lp-wv 1.4s ease-in-out infinite .18s;  }
+
+        /* ── google button ── */
+        .btn-google {
+          width:100%; display:flex; align-items:center; justify-content:center; gap:10px;
+          padding:13px; border-radius:8px;
+          background:#09090B; border:1px solid #1A1A1A;
+          color:#EAEAEA; font-size:14px; font-weight:600;
+          cursor:pointer; font-family:inherit; letter-spacing:-.01em;
+          margin-bottom:20px; position:relative; overflow:hidden;
+          transition: all .2s;
+        }
+        .btn-google::before {
+          content:''; position:absolute; top:0; left:-100%;
+          width:100%; height:100%;
+          background:linear-gradient(90deg,transparent,rgba(255,255,255,.04),transparent);
+          transition:left .4s;
+        }
+        .btn-google:hover::before { left:100%; }
+        .btn-google:hover {
+          border-color:#222; background:#0F0F0F;
+          transform:translateY(-1px); box-shadow:0 6px 20px rgba(0,0,0,.4);
+        }
+        .btn-google:disabled { opacity:.5; cursor:not-allowed; pointer-events:none; }
+
+        /* ── field input ── */
+        .field-input {
+          width:100%; background:#0F0F0F; border:1px solid #131313;
+          border-radius:8px; padding:11px 14px;
+          color:#EAEAEA; font-family:'Geist',system-ui,sans-serif;
+          font-size:13px; outline:none; transition:all .2s;
+          caret-color:#E8512A;
+        }
+        .field-input::placeholder { color:#252525; }
+        .field-input:focus {
+          border-color:rgba(232,81,42,.35); background:#09090B;
+          box-shadow:0 0 0 3px rgba(232,81,42,.05);
+        }
+        .field-input.has-eye { padding-right:40px; }
+
+        /* ── submit button ── */
+        .btn-submit {
+          width:100%; padding:13px; border:none; border-radius:8px;
+          font-size:14px; font-weight:700; font-family:inherit;
+          letter-spacing:-.01em; cursor:pointer;
+          display:flex; align-items:center; justify-content:center; gap:7px;
+          position:relative; overflow:hidden; transition:all .25s;
+        }
+        .btn-submit::before {
+          content:''; position:absolute; top:0; left:-100%;
+          width:100%; height:100%;
+          background:linear-gradient(90deg,transparent,rgba(255,255,255,.12),transparent);
+          transition:left .4s;
+        }
+        .btn-submit:hover::before { left:100%; }
+        .btn-submit:hover:not(:disabled) {
+          background:#FF6B3D !important;
+          transform:translateY(-1px);
+          box-shadow:0 10px 28px rgba(232,81,42,.35);
+        }
+        .btn-submit:disabled { cursor:not-allowed; }
+
+        /* ── eye btn hover ── */
+        .eye-btn { color:#252525; transition:color .15s; }
+        .eye-btn:hover { color:#444; }
+
+        /* ── forgot / back btn hover ── */
+        .link-btn { color:#444; transition:color .2s; }
+        .link-btn:hover { color:#7A7A7A; }
+
+        /* ── success overlay ── */
+        .sov-ring {
+          position:absolute; inset:0; border-radius:50%;
+          border:2px solid #3ECF8E;
+          animation: sov-ring 1s ease-out forwards;
+        }
+        .sov-overlay {
+          animation: sov-fadein .4s ease forwards;
+        }
+
+        /* ── scrollbar hide on right panel ── */
+        .right-panel::-webkit-scrollbar { width:0; }
       `}</style>
 
-      <div className="min-h-screen overflow-hidden bg-black text-white font-sans select-none">
+      <div className="lp-root">
 
-        {/* ── Atmospheric background ───────────────────────────────────────── */}
-        <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
-          <div style={{ background: "radial-gradient(circle at 50% 50%, #0d0d0d 0%, #000000 100%)", position: "absolute", inset: 0 }} />
-          <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse 60% 55% at 15% 25%, rgba(240,86,58,0.14), transparent)" }} />
-          <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse 50% 50% at 85% 75%, rgba(99,5,239,0.08), transparent)" }} />
-          <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse 30% 40% at 50% 50%, rgba(240,86,58,0.04), transparent)" }} />
-          {/* Noise grain */}
-          <div className="absolute inset-0 opacity-[0.025] mix-blend-overlay"
-            style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")", backgroundSize: "200px 200px" }} />
-        </div>
-
-        {/* ── Terminal logs (top right, desktop) ───────────────────────────── */}
-        <div className="fixed top-8 right-8 z-20 hidden lg:block">
-          <div style={{ background: "rgba(10,10,10,0.7)", backdropFilter: "blur(25px)", border: "1px solid rgba(255,255,255,0.06)", borderLeft: "1px solid rgba(240,86,58,0.25)", boxShadow: "0 25px 50px rgba(0,0,0,0.5)" }}
-            className="p-4 rounded-xl">
-            <div className="flex items-center gap-2 mb-3 pb-2 border-b border-white/5">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#F0563A] pulse-dot" />
-              <span className="text-[9px] tracking-[0.2em] text-white/40 uppercase font-mono">System Logs</span>
-            </div>
-            <div className="space-y-1 font-mono text-[10px] text-[rgba(240,86,58,0.6)]">
-              <p>&gt; Neural Core: <span className="text-[#F0563A]">Active</span></p>
-              <p>&gt; Syncing Assets: <span className="text-[#F0563A]">100%</span></p>
-              <p>&gt; Workspace: <span className="text-[#F0563A]">Initialized</span></p>
-              <p>&gt; Kernel: <span className="text-[#F0563A]">Kinetic_4.2</span></p>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Main ─────────────────────────────────────────────────────────── */}
-        <main className="relative z-10 min-h-screen flex items-center justify-center p-6">
-
-          {/* Branding top-left */}
-          <div className="absolute top-10 left-10">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center font-black text-white text-sm"
-                style={{ background: "#F0563A", boxShadow: "0 0 20px rgba(240,86,58,0.4)" }}>S</div>
-              <h1 className="text-2xl font-black text-white" style={{ letterSpacing: "-0.04em" }}>SUARIK</h1>
-            </div>
-            <p className="text-[10px] tracking-[0.25em] text-white/25 uppercase mt-1 ml-10">AI Cinematic Engine</p>
+        {/* ════════════════ LEFT: visual ════════════════ */}
+        <div style={{
+          position:"relative", overflow:"hidden",
+          background:"#060606", display:"flex", flexDirection:"column",
+        }}>
+          {/* Atmospheric orbs */}
+          <div style={{ position:"absolute", inset:0, zIndex:0 }}>
+            <div className="lo-1" />
+            <div className="lo-2" />
           </div>
 
-          {/* ── Glass card ───────────────────────────────────────────────── */}
-          <div className="w-full max-w-[440px]"
-            style={{ background: "rgba(10,10,10,0.65)", backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", border: "1px solid rgba(255,255,255,0.05)", borderLeft: "1px solid rgba(240,86,58,0.3)", borderRadius: "1rem", boxShadow: "0 25px 60px rgba(0,0,0,0.6)", padding: "2.5rem 3rem" }}>
+          {/* Grid overlay */}
+          <div style={{
+            position:"absolute", inset:0, zIndex:0,
+            backgroundImage:
+              "linear-gradient(rgba(255,255,255,.02) 1px,transparent 1px)," +
+              "linear-gradient(90deg,rgba(255,255,255,.02) 1px,transparent 1px)",
+            backgroundSize:"52px 52px",
+            WebkitMaskImage:"radial-gradient(ellipse at 40% 50%,black 20%,transparent 70%)",
+            maskImage:"radial-gradient(ellipse at 40% 50%,black 20%,transparent 70%)",
+          }} />
 
-            <div className="space-y-8">
+          {/* Content */}
+          <div style={{
+            position:"relative", zIndex:1, flex:1,
+            display:"flex", flexDirection:"column", padding:40,
+          }}>
 
-              {/* Tabs */}
-              {mode !== "reset" && (
-                <div className="flex items-center gap-6 border-b border-white/5">
-                  {(["login", "signup"] as Mode[]).map(m => (
-                    <button key={m} onClick={() => { setMode(m); setError(""); setSuccess(""); }}
-                      className="pb-4 text-[11px] font-bold tracking-[0.2em] uppercase transition-all duration-200"
-                      style={{
-                        color: mode === m ? "#F0563A" : "rgba(255,255,255,0.2)",
-                        borderBottom: mode === m ? "2px solid #F0563A" : "2px solid transparent",
-                      }}>
-                      {m === "login" ? "Login" : "Criar Conta"}
-                    </button>
-                  ))}
-                </div>
-              )}
+            {/* Logo */}
+            <div style={{ display:"flex", alignItems:"center", gap:9, marginBottom:"auto" }}>
+              <svg width="20" height="20" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" style={{ display:"block", flexShrink:0 }}>
+                <rect width="64" height="64" rx="10" style={{ fill:"#111111" }}/>
+                <rect x="12" y="10" width="40" height="11" rx="4" style={{ fill:"#E8E8E8" }}/>
+                <rect x="41" y="10" width="11" height="24" rx="4" style={{ fill:"#E8E8E8" }}/>
+                <rect x="12" y="43" width="40" height="11" rx="4" style={{ fill:"#E8512A" }}/>
+                <rect x="12" y="30" width="11" height="24" rx="4" style={{ fill:"#E8512A" }}/>
+              </svg>
+              <span style={{ fontSize:15, fontWeight:700, color:"#EAEAEA", letterSpacing:"-.03em" }}>
+                Suarik
+              </span>
+            </div>
 
-              {/* Heading */}
-              <div>
-                {mode === "reset" ? (
-                  <>
-                    <h2 className="text-3xl font-black text-white" style={{ letterSpacing: "-0.04em" }}>Recuperar senha.</h2>
-                    <p className="text-white/35 text-sm mt-1">Enviaremos um link para seu e-mail.</p>
-                  </>
-                ) : mode === "login" ? (
-                  <>
-                    <h2 className="text-3xl font-black text-white" style={{ letterSpacing: "-0.04em" }}>Bem-vindo de volta.</h2>
-                    <p className="text-white/35 text-sm mt-1">Autorize acesso ao estúdio neural.</p>
-                  </>
-                ) : (
-                  <>
-                    <h2 className="text-3xl font-black text-white" style={{ letterSpacing: "-0.04em" }}>Criar sua conta.</h2>
-                    <p className="text-white/35 text-sm mt-1">Comece grátis. Sem cartão de crédito.</p>
-                  </>
-                )}
-              </div>
+            {/* Hero */}
+            <div style={{ flex:1, display:"flex", flexDirection:"column", justifyContent:"center", paddingBottom:40 }}>
+              <h1 style={{
+                fontFamily:"'Instrument Serif',serif",
+                fontSize:"clamp(36px,4vw,56px)",
+                lineHeight:.93, letterSpacing:"-.02em",
+                marginBottom:16, color:"#EAEAEA",
+              }}>
+                Edite na<br/>velocidade do<br/>
+                <em style={{ fontStyle:"italic", color:"#E8512A" }}>pensamento.</em>
+              </h1>
+              <p style={{ fontSize:14, color:"#7A7A7A", lineHeight:1.65, fontWeight:300, maxWidth:340 }}>
+                Do roteiro ao vídeo final em horas. B-roll, voz, LipSync e avatar — tudo numa IA.
+              </p>
 
-              {/* Form */}
-              <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Mini product card */}
+              <div style={{ marginTop:32, position:"relative" }}>
+                <div className="lp-card" style={{
+                  background:"#141414",
+                  border:"1px solid rgba(255,255,255,.08)",
+                  borderRadius:12, overflow:"hidden",
+                  boxShadow:"0 24px 60px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.04)",
+                }}>
+                  {/* macOS titlebar */}
+                  <div style={{
+                    height:26, background:"#1A1A1A",
+                    borderBottom:"1px solid rgba(255,255,255,.07)",
+                    display:"flex", alignItems:"center", padding:"0 10px", gap:4,
+                  }}>
+                    {[["#E24B4A"],["#F5A623"],["#3ECF8E"]].map(([c], i) => (
+                      <div key={i} style={{ width:6, height:6, borderRadius:"50%", background:c }} />
+                    ))}
+                    <span style={{ fontSize:8, color:"#666", marginLeft:5, letterSpacing:".04em" }}>
+                      Storyboard DR
+                    </span>
+                    <span style={{
+                      fontSize:7, fontWeight:700, padding:"2px 6px", borderRadius:8,
+                      background:"rgba(232,81,42,.12)", color:"#E8512A",
+                      marginLeft:"auto", letterSpacing:".06em", textTransform:"uppercase",
+                    }}>
+                      IA ativa
+                    </span>
+                  </div>
 
-                {/* Email */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] uppercase tracking-[0.2em] text-white/30 font-mono">
-                    {mode === "login" ? "Identity Tag" : "E-mail"}
-                  </label>
-                  <input
-                    type="email" value={email} onChange={e => setEmail(e.target.value)}
-                    placeholder={mode === "login" ? "voce@suarik.com" : "voce@exemplo.com"}
-                    required
-                    className="w-full py-3.5 px-4 rounded-xl text-sm text-white placeholder-white/15 outline-none transition-all"
-                    style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}
-                    onFocus={e => { e.currentTarget.style.border = "1px solid rgba(240,86,58,0.4)"; e.currentTarget.style.background = "rgba(255,255,255,0.07)"; }}
-                    onBlur={e => { e.currentTarget.style.border = "1px solid rgba(255,255,255,0.06)"; e.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}
-                  />
-                </div>
-
-                {/* Password */}
-                {mode !== "reset" && (
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[10px] uppercase tracking-[0.2em] text-white/30 font-mono">Access Key</label>
-                      {mode === "login" && (
-                        <button type="button" onClick={() => { setMode("reset"); setError(""); setSuccess(""); }}
-                          className="text-[9px] uppercase tracking-[0.15em] text-[#F0563A]/60 hover:text-[#F0563A] transition-colors font-mono">
-                          Recovery
-                        </button>
-                      )}
+                  {/* Body */}
+                  <div style={{ padding:12 }}>
+                    {/* Scene tags */}
+                    <div style={{ display:"flex", gap:3, marginBottom:8 }}>
+                      {[
+                        { l:"Choque",    bg:"rgba(232,81,42,.14)",  bd:"rgba(232,81,42,.35)",  c:"rgba(232,81,42,.95)"  },
+                        { l:"Urgência",  bg:"rgba(245,166,35,.12)", bd:"rgba(245,166,35,.3)",  c:"rgba(245,166,35,.9)"  },
+                        { l:"Esperança", bg:"rgba(62,207,142,.12)", bd:"rgba(62,207,142,.3)",  c:"rgba(62,207,142,.9)"  },
+                      ].map(s => (
+                        <div key={s.l} style={{
+                          flex:1, height:22, borderRadius:4,
+                          display:"flex", alignItems:"center", justifyContent:"center",
+                          fontSize:7, fontWeight:700, letterSpacing:".06em",
+                          textTransform:"uppercase",
+                          background:s.bg, border:`1px solid ${s.bd}`, color:s.c,
+                        }}>
+                          {s.l}
+                        </div>
+                      ))}
                     </div>
-                    <div className="relative">
-                      <input
-                        type={showPass ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)}
-                        placeholder="••••••••" required
-                        className="w-full py-3.5 px-4 pr-10 rounded-xl text-sm text-white placeholder-white/15 outline-none transition-all"
-                        style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}
-                        onFocus={e => { e.currentTarget.style.border = "1px solid rgba(240,86,58,0.4)"; e.currentTarget.style.background = "rgba(255,255,255,0.07)"; }}
-                        onBlur={e => { e.currentTarget.style.border = "1px solid rgba(255,255,255,0.06)"; e.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}
-                      />
-                      <button type="button" onClick={() => setShowPass(p => !p)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-white/25 hover:text-white/60 transition-colors text-xs font-mono">
-                        {showPass ? "HIDE" : "SHOW"}
-                      </button>
+
+                    {/* Waveform */}
+                    <div style={{ display:"flex", alignItems:"center", gap:1.5, height:18, marginBottom:8 }}>
+                      {[1,2,3,4,5,6,7,8,9,10].map(n => (
+                        <div key={n} className={`wvb wvb-${n}`} />
+                      ))}
+                    </div>
+
+                    {/* Generate btn mock */}
+                    <div style={{
+                      height:26, background:"#E8512A", borderRadius:5,
+                      display:"flex", alignItems:"center", justifyContent:"center",
+                      fontSize:9, fontWeight:700, color:"#fff", gap:4,
+                      boxShadow:"0 4px 12px rgba(232,81,42,.3)",
+                    }}>
+                      <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
+                        <path d="M5 1L3.5 4H1l2.5 2L2.5 9 5 7l2.5 2-1-3L9 4H6.5L5 1z" fill="currentColor" opacity=".9"/>
+                      </svg>
+                      Gerar Sequência Completa →
                     </div>
                   </div>
-                )}
+                </div>
 
-                {/* Feedback */}
-                {error && (
-                  <p className="text-xs text-red-400 bg-red-500/8 border border-red-500/20 px-3 py-2 rounded-lg font-mono">{error}</p>
-                )}
-                {success && (
-                  <p className="text-xs text-emerald-400 bg-emerald-500/8 border border-emerald-500/20 px-3 py-2 rounded-lg font-mono">{success}</p>
-                )}
+                {/* Floating badge */}
+                <div className="lp-badge" style={{
+                  position:"absolute", bottom:-10, right:-20,
+                  background:"#1A1A1A", border:"1px solid rgba(255,255,255,.1)",
+                  borderRadius:8, padding:"8px 12px",
+                  boxShadow:"0 12px 32px rgba(0,0,0,.5)",
+                }}>
+                  <div style={{ fontSize:9, fontWeight:700, color:"#3ECF8E", marginBottom:3, letterSpacing:".04em", textTransform:"uppercase" }}>
+                    VSL gerada
+                  </div>
+                  <div style={{ fontSize:14, fontWeight:800, color:"#EAEAEA", letterSpacing:"-.03em" }}>3h 48m</div>
+                  <div style={{ fontSize:9, color:"#666" }}>antes: 2 dias</div>
+                </div>
+              </div>
+            </div>
 
-                {/* Submit */}
-                <button type="submit" disabled={loading}
-                  className="btn-charging relative w-full overflow-hidden py-4 rounded-xl text-sm font-black uppercase tracking-tighter text-white transition-all hover:scale-[1.01] active:scale-95 disabled:opacity-50 mt-2"
-                  style={{ background: "linear-gradient(135deg, #F0563A 0%, #c44527 100%)", boxShadow: "0 0 24px rgba(240,86,58,0.25)" }}>
-                  {loading
-                    ? <span className="flex items-center justify-center gap-2">
-                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        Aguardando...
-                      </span>
-                    : mode === "login" ? "Entrar no Estúdio"
-                    : mode === "signup" ? "Criar Conta"
-                    : "Enviar Link"}
-                </button>
-              </form>
+            {/* Testimonial */}
+            <div style={{ borderTop:"1px solid rgba(255,255,255,.04)", paddingTop:20 }}>
+              <p style={{
+                fontFamily:"'Instrument Serif',serif",
+                fontSize:14, fontStyle:"italic",
+                color:"#7A7A7A", lineHeight:1.6, marginBottom:12,
+              }}>
+                &ldquo;Uma VSL que levava 2 dias agora leva{" "}
+                <strong style={{ fontStyle:"normal", color:"#EAEAEA" }}>4 horas.</strong>{" "}
+                Mudou meu negócio.&rdquo;
+              </p>
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <div style={{
+                  width:28, height:28, borderRadius:"50%",
+                  background:"#1A0A05", color:"#E8512A",
+                  display:"flex", alignItems:"center", justifyContent:"center",
+                  fontSize:10, fontWeight:700, flexShrink:0,
+                }}>
+                  MR
+                </div>
+                <div>
+                  <div style={{ fontSize:12, fontWeight:600, color:"#7A7A7A" }}>Marcos R.</div>
+                  <div style={{ fontSize:11, color:"#444" }}>Editor DR · São Paulo</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
-              {/* OAuth */}
+        {/* ════════════════ RIGHT: form ════════════════ */}
+        <div className="right-panel" style={{
+          background:"#09090B", borderLeft:"1px solid #131313",
+          display:"flex", flexDirection:"column",
+          alignItems:"center", justifyContent:"center",
+          padding:48, overflowY:"auto",
+        }}>
+          <div style={{ width:"100%", maxWidth:380 }}>
+
+            {/* ── Form header ── */}
+            <div style={{ marginBottom:32 }}>
+              {mode === "reset" ? (
+                <>
+                  <div style={{ fontFamily:"'Instrument Serif',serif", fontSize:28, letterSpacing:"-.02em", color:"#EAEAEA", marginBottom:6, lineHeight:1 }}>
+                    Recuperar senha
+                  </div>
+                  <div style={{ fontSize:13, color:"#7A7A7A", fontWeight:300 }}>
+                    Enviaremos um link para seu e-mail.
+                  </div>
+                </>
+              ) : mode === "login" ? (
+                <>
+                  <div style={{ fontFamily:"'Instrument Serif',serif", fontSize:28, letterSpacing:"-.02em", color:"#EAEAEA", marginBottom:6, lineHeight:1 }}>
+                    Entrar
+                  </div>
+                  <div style={{ fontSize:13, color:"#7A7A7A", fontWeight:300 }}>
+                    Não tem conta?{" "}
+                    <button onClick={() => switchMode("signup")}
+                      style={{ color:"#E8512A", background:"none", border:"none", cursor:"pointer", fontSize:13, fontFamily:"inherit", padding:0, transition:"color .2s" }}>
+                      Criar conta grátis →
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontFamily:"'Instrument Serif',serif", fontSize:28, letterSpacing:"-.02em", color:"#EAEAEA", marginBottom:6, lineHeight:1 }}>
+                    Criar conta
+                  </div>
+                  <div style={{ fontSize:13, color:"#7A7A7A", fontWeight:300 }}>
+                    Já tem conta?{" "}
+                    <button onClick={() => switchMode("login")}
+                      style={{ color:"#E8512A", background:"none", border:"none", cursor:"pointer", fontSize:13, fontFamily:"inherit", padding:0, transition:"color .2s" }}>
+                      Entrar →
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <form onSubmit={handleSubmit}>
+
+              {/* ── Google button ── */}
               {mode !== "reset" && (
                 <>
-                  <div className="relative flex items-center">
-                    <div className="flex-grow border-t border-white/5" />
-                    <span className="mx-4 text-[9px] text-white/20 tracking-[0.2em] uppercase font-mono">CONTINUE WITH</span>
-                    <div className="flex-grow border-t border-white/5" />
-                  </div>
-
-                  <button onClick={handleGoogle} disabled={loading}
-                    className="w-full flex items-center justify-center gap-3 py-3.5 rounded-xl transition-all group"
-                    style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.08)")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}>
+                  <button type="button" onClick={handleGoogle} disabled={loading} className="btn-google">
                     <GoogleIcon />
-                    <span className="text-[11px] font-bold tracking-[0.15em] text-white/40 group-hover:text-white transition-colors uppercase font-mono">Google</span>
+                    {mode === "login" ? "Continuar com Google" : "Cadastrar com Google"}
                   </button>
+
+                  {/* Divider */}
+                  <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20 }}>
+                    <div style={{ flex:1, height:1, background:"#131313" }} />
+                    <span style={{ fontSize:11, color:"#252525", whiteSpace:"nowrap", letterSpacing:".04em" }}>
+                      ou entre com email
+                    </span>
+                    <div style={{ flex:1, height:1, background:"#131313" }} />
+                  </div>
                 </>
               )}
 
-              {/* Back link */}
+              {/* ── Email ── */}
+              <div style={{ marginBottom:14 }}>
+                <label style={{ display:"block", fontSize:12, fontWeight:500, color:"#7A7A7A", marginBottom:6 }}>
+                  Email
+                </label>
+                <input
+                  type="email" value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="seu@email.com" required
+                  className="field-input"
+                />
+              </div>
+
+              {/* ── Password ── */}
+              {mode !== "reset" && (
+                <div style={{ marginBottom:0 }}>
+                  <label style={{ display:"block", fontSize:12, fontWeight:500, color:"#7A7A7A", marginBottom:6 }}>
+                    Senha
+                  </label>
+                  <div style={{ position:"relative" }}>
+                    <input
+                      type={showPass ? "text" : "password"} value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      placeholder="••••••••" required
+                      className="field-input has-eye"
+                    />
+                    <button type="button" onClick={() => setShowPass(p => !p)}
+                      className="eye-btn"
+                      style={{ position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", padding:0, cursor:"pointer", display:"flex" }}>
+                      {showPass ? (
+                        <svg width="16" height="16" viewBox="0 0 18 18" fill="none">
+                          <path d="M1 9s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6z" stroke="currentColor" strokeWidth="1.2"/>
+                          <line x1="2" y1="2" x2="16" y2="16" stroke="currentColor" strokeWidth="1.2"/>
+                        </svg>
+                      ) : (
+                        <svg width="16" height="16" viewBox="0 0 18 18" fill="none">
+                          <path d="M1 9s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6z" stroke="currentColor" strokeWidth="1.2"/>
+                          <circle cx="9" cy="9" r="2.5" stroke="currentColor" strokeWidth="1.2"/>
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Forgot password ── */}
+              {mode === "login" && (
+                <div style={{ display:"flex", justifyContent:"flex-end", marginTop:8, marginBottom:14 }}>
+                  <button type="button" onClick={() => switchMode("reset")}
+                    className="link-btn"
+                    style={{ fontSize:11, background:"none", border:"none", cursor:"pointer", fontFamily:"inherit", padding:0 }}>
+                    Esqueci minha senha
+                  </button>
+                </div>
+              )}
+              {mode === "signup" && <div style={{ marginBottom:14 }} />}
+
+              {/* ── Error / Success feedback ── */}
+              {error && (
+                <div style={{ fontSize:12, color:"#E24B4A", background:"rgba(226,75,74,.07)", border:"1px solid rgba(226,75,74,.2)", borderRadius:6, padding:"8px 12px", marginBottom:14, fontFamily:"monospace" }}>
+                  {error}
+                </div>
+              )}
+              {success && (
+                <div style={{ fontSize:12, color:"#3ECF8E", background:"rgba(62,207,142,.07)", border:"1px solid rgba(62,207,142,.18)", borderRadius:6, padding:"8px 12px", marginBottom:14, fontFamily:"monospace" }}>
+                  {success}
+                </div>
+              )}
+
+              {/* ── Submit button ── */}
+              <button type="submit" disabled={loading} className="btn-submit"
+                style={{ background: loading ? "#0F0F0F" : "#E8512A", color: loading ? "#444" : "#fff" }}>
+                {loading ? (
+                  <>
+                    <span style={{ width:16, height:16, borderRadius:"50%", border:"2px solid rgba(255,255,255,.2)", borderTopColor:"#fff", animation:"btn-spin .7s linear infinite", flexShrink:0 }} />
+                    {mode === "login" ? "Entrando..." : mode === "signup" ? "Criando conta..." : "Enviando..."}
+                  </>
+                ) : (
+                  <>
+                    {mode === "login" ? "Entrar" : mode === "signup" ? "Criar conta grátis" : "Enviar Link"}
+                    <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                      <path d="M2.5 7h9M8 3.5l3.5 3.5L8 10.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                    </svg>
+                  </>
+                )}
+              </button>
+
+              {/* ── Back to login (reset mode) ── */}
               {mode === "reset" && (
-                <button onClick={() => { setMode("login"); setError(""); setSuccess(""); }}
-                  className="text-xs text-[#F0563A]/60 hover:text-[#F0563A] transition-colors font-mono">
+                <button type="button" onClick={() => switchMode("login")}
+                  className="link-btn"
+                  style={{ display:"block", marginTop:16, fontSize:12, background:"none", border:"none", cursor:"pointer", fontFamily:"inherit", padding:0 }}>
                   ← Voltar ao login
                 </button>
               )}
-            </div>
-          </div>
-        </main>
+            </form>
 
-        {/* ── System status bar (bottom) ───────────────────────────────────── */}
-        <div className="fixed bottom-0 left-0 w-full px-8 py-3 flex flex-col md:flex-row justify-between items-center z-20 border-t border-white/5"
-          style={{ background: "rgba(10,10,10,0.8)", backdropFilter: "blur(20px)" }}>
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" style={{ boxShadow: "0 0 8px rgba(52,211,153,0.6)" }} />
-              <span className="text-[10px] tracking-[0.2em] text-white/50 font-mono uppercase">Engine: Online</span>
-            </div>
-            <div className="hidden md:block w-px h-4 bg-white/10" />
-            <span className="hidden md:block text-[10px] tracking-[0.15em] text-white/25 font-mono uppercase">v2.4.0 · KINETIC</span>
-          </div>
-          <div className="flex items-center gap-6 mt-2 md:mt-0">
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] tracking-[0.2em] text-white/25 font-mono uppercase">Latency</span>
-              <div className="flex items-end gap-0.5 h-3">
-                {[40, 60, 30, 80, 55].map((h, i) => (
-                  <div key={i} className="w-1 rounded-sm bar-flicker"
-                    style={{ height: `${h}%`, background: i === 3 ? "#F0563A" : "rgba(240,86,58,0.3)", animationDelay: `${i * 0.2}s` }} />
-                ))}
+            {/* ── Terms ── */}
+            {mode !== "reset" && (
+              <div style={{ fontSize:11, color:"#252525", textAlign:"center", marginTop:16, lineHeight:1.6 }}>
+                Ao entrar, você concorda com os<br/>
+                <span style={{ color:"#444" }}>Termos de Uso</span>
+                {" "}e{" "}
+                <span style={{ color:"#444" }}>Política de Privacidade</span>
               </div>
-              <span className="text-[10px] text-[#F0563A]/80 font-mono">24MS</span>
-            </div>
-            <div className="hidden md:block w-px h-4 bg-white/10" />
-            <p className="hidden md:block text-[10px] text-white/20 font-mono uppercase tracking-widest">© 2025 Kraft Mídia</p>
+            )}
           </div>
         </div>
       </div>
+
+      {/* ════════════════ SUCCESS OVERLAY ════════════════ */}
+      {successOverlay && (
+        <div className="sov-overlay" style={{
+          position:"fixed", inset:0, zIndex:100,
+          background:"rgba(6,6,6,.96)", backdropFilter:"blur(20px)",
+          display:"flex", flexDirection:"column",
+          alignItems:"center", justifyContent:"center", gap:14,
+        }}>
+          <div style={{ position:"relative", width:72, height:72, display:"flex", alignItems:"center", justifyContent:"center" }}>
+            <div className="sov-ring" />
+            <div style={{
+              width:64, height:64, borderRadius:"50%",
+              background:"rgba(62,207,142,.07)",
+              border:"2px solid rgba(62,207,142,.18)",
+              display:"flex", alignItems:"center", justifyContent:"center",
+            }}>
+              <svg width="26" height="26" viewBox="0 0 28 28" fill="none">
+                <path d="M6 14l5.5 5.5L22 8" stroke="#3ECF8E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+          </div>
+          <div style={{ fontFamily:"'Instrument Serif',serif", fontSize:24, color:"#EAEAEA" }}>
+            Bem-vindo de volta.
+          </div>
+          <div style={{ fontSize:13, color:"#7A7A7A" }}>
+            Redirecionando para o dashboard...
+          </div>
+        </div>
+      )}
     </>
   );
 }
 
 function GoogleIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24">
-      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style={{ flexShrink:0 }}>
+      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
     </svg>
   );
 }

@@ -27,7 +27,7 @@ import {
 import {
   CLIP_COLS, GALLERY_CARDS, BROLL_IMAGES, POWER_WORDS,
 } from "../constants";
-import { PaywallModal } from "./PaywallModal";
+import { UpsellModal } from "@/components/UpsellModal";
 import { WinningAdsDrawer } from "./WinningAdsDrawer";
 
 // B-roll pool used by buildDrsFromWhisper for initial video placeholders
@@ -1288,18 +1288,71 @@ ${clipEls.join("\n")}
       .v1clip:hover .v1clip-overlay{opacity:1!important}
       .v1clip-overlay{opacity:0;transition:opacity .15s ease}
     `}</style>
-    <div className="flex h-screen overflow-hidden ws-in"
-      style={{background:"#060606",color:"#F5F3F0",fontFamily:"'DM Sans',sans-serif"}}>
+    <div className="ws-in"
+      style={{background:"#060606",color:"#F5F3F0",fontFamily:"'DM Sans',sans-serif",display:"grid",gridTemplateRows:"42px 1fr",height:"100vh",overflow:"hidden"}}>
+
+      {/* ══ TOPBAR (42px) ══════════════════════════════════════════════════ */}
+      <div style={{display:"flex",alignItems:"center",gap:"10px",padding:"0 14px",background:"#0d0d0d",borderBottom:"1px solid rgba(255,255,255,.08)",flexShrink:0,overflow:"hidden",zIndex:20}}>
+        <button onClick={onBack}
+          style={{padding:"5px",borderRadius:"8px",color:"#6b7280",background:"transparent",border:"1px solid rgba(255,255,255,0.07)",cursor:"pointer",display:"flex",alignItems:"center",flexShrink:0,transition:"border-color .15s"}}
+          title="Voltar ao início">
+          <ArrowLeft style={{width:"15px",height:"15px"}}/>
+        </button>
+        <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"17px",color:"#E8593C",letterSpacing:"1px",flexShrink:0}}>SUARIK</span>
+        <span style={{fontSize:"11px",color:"#374151",flexShrink:0}}>›</span>
+        <span style={{fontSize:"12px",fontWeight:600,color:"#9ca3af",flexShrink:0,maxWidth:"160px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+          {result.music_style||"Storyboard"}
+        </span>
+        <div style={{width:"6px",height:"6px",borderRadius:"50%",background:"#22c55e",flexShrink:0}}/>
+        <div style={{flex:1}}/>
+        <span style={{fontSize:"11px",fontWeight:700,color:"#FF7A5C",background:"rgba(232,89,60,0.1)",border:"1px solid rgba(232,89,60,0.25)",padding:"2px 9px",borderRadius:"20px",flexShrink:0}}>
+          Cena {activeScene+1}/{localDrScenes.length||localScenes.length}
+        </span>
+        <span style={{fontFamily:"monospace",fontSize:"11px",fontWeight:700,color:"#F0563A",flexShrink:0,letterSpacing:"0.02em"}}>
+          {fmtTime(currentTime)}<span style={{color:"#374151",margin:"0 3px"}}>/</span>{fmtTime(totalDur)}
+        </span>
+        <div style={{flex:1}}/>
+        <div style={{position:"relative"}}>
+          <button onClick={()=>setExportOpen(v=>!v)}
+            style={{display:"flex",alignItems:"center",gap:"5px",padding:"5px 10px",borderRadius:"8px",fontSize:"11px",fontWeight:700,color:"#9ca3af",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",cursor:"pointer"}}>
+            <Download style={{width:"12px",height:"12px"}}/>Exportar<ChevronUp style={{width:"11px",height:"11px",transform:exportOpen?"":"rotate(180deg)",transition:"transform .2s"}}/>
+          </button>
+          {exportOpen&&(
+            <div style={{position:"absolute",top:"calc(100% + 4px)",right:0,width:"220px",background:"#111",border:"1px solid rgba(255,255,255,0.08)",borderRadius:"12px",overflow:"hidden",zIndex:50,boxShadow:"0 20px 40px rgba(0,0,0,0.7)"}}>
+              {([
+                {label:"Premiere Pro / CapCut (.fcpxml)",icon:"🎬",paywall:false,action:downloadXML},
+                {label:"DaVinci Resolve (.xml)",icon:"🎞",paywall:false,action:downloadDaVinci},
+                {label:"EDL Universal (.edl)",icon:"📋",paywall:false,action:downloadEDL},
+                {label:"Legendas (.srt)",icon:"💬",paywall:false,action:downloadSRT},
+                {label:"Trilha de Fundo (.mp3)",icon:"🎵",paywall:false,action:downloadMusic},
+                {label:"Pack de Mídias",icon:"📦",paywall:true},
+              ] as {label:string;icon:string;paywall:boolean;action?:()=>void}[]).map(opt=>(
+                <button key={opt.label} onClick={()=>{setExportOpen(false);if(opt.paywall)setPaywallOpen(true);else opt.action?.();}}
+                  style={{width:"100%",display:"flex",alignItems:"center",gap:"10px",padding:"9px 14px",fontSize:"11px",textAlign:"left" as const,background:"none",border:"none",borderBottom:"1px solid rgba(255,255,255,0.05)",color:"#d1d5db",cursor:"pointer"}}>
+                  <span>{opt.icon}</span><span style={{flex:1}}>{opt.label}</span>
+                  {opt.paywall&&<Lock style={{width:"11px",height:"11px",color:"#f59e0b"}}/>}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <button onClick={downloadXML}
+          style={{display:"flex",alignItems:"center",gap:"6px",padding:"6px 12px",borderRadius:"8px",fontSize:"11px",fontWeight:800,color:"#fff",background:"#E8593C",border:"1px solid rgba(255,255,255,0.15)",cursor:"pointer",boxShadow:"0 3px 12px rgba(232,89,60,0.4)",flexShrink:0}}>
+          <FileCode2 style={{width:"13px",height:"13px"}}/>Premiere XML
+        </button>
+      </div>
+
+      {/* ══ MAIN: 3 colunas ═════════════════════════════════════════════════ */}
+      <div style={{display:"flex",overflow:"hidden",minHeight:0}}>
 
       {/* ══ COL 1: Roteiro (24%) ══════════════════════════════════════════ */}
       {/* ══ COL 1: Roteiro / Inspector ════════════════════════════════════ */}
       <div className="w-[24%] shrink-0 flex flex-col border-r overflow-hidden"
         style={{background:"#0a0a0a",borderColor:"rgba(255,255,255,0.05)"}}>
 
-        {/* Header com botão voltar + tabs */}
+        {/* Header: tabs (botão voltar movido para o topbar) */}
         <div className="shrink-0 border-b" style={{borderColor:"rgba(255,255,255,0.05)"}}>
           <div className="flex items-center gap-2 px-3 pt-3 pb-0">
-            <button onClick={onBack} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-100 hover:bg-white/6 transition-colors shrink-0"><ArrowLeft className="w-4 h-4"/></button>
             {/* Tabs */}
             <div className="flex flex-1 gap-1">
               <button
@@ -2705,8 +2758,9 @@ ${clipEls.join("\n")}
           </div>
         </div>
       </div>
+      </div>{/* end MAIN: 3 colunas */}
 
-      {paywallOpen&&<PaywallModal onClose={()=>setPaywallOpen(false)}/>}
+      {paywallOpen&&<UpsellModal onClose={()=>setPaywallOpen(false)}/>}
 
       {/* ── Winning Ads Library Drawer ── */}
       <WinningAdsDrawer open={showAdLib} onClose={()=>setShowAdLib(false)} onRaioX={handleRaioX}/>

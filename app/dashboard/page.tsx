@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useToast, ToastContainer } from "@/components/Toast";
 import { trackEvent } from "@/components/PostHogProvider";
+import { useTheme } from "@/components/ThemeProvider";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Profile {
@@ -112,6 +113,18 @@ const QUICK_PICKS = [
   { label: "Curso Online",    prompt: "Crie um vídeo promocional para lançamento de curso online. Autoridade, transformação, bônus e escassez." },
 ];
 
+// ─── Navigation screens (page dots) ──────────────────────────────────────────
+const NAV_SCREENS = [
+  { id: "dashboard",  route: "/dashboard",  label: "Dashboard" },
+  { id: "projects",   route: "/projects",   label: "Projetos" },
+  { id: "storyboard", route: "/storyboard", label: "Storyboard" },
+  { id: "audio",      route: "/audio",      label: "Audio Studio" },
+  { id: "enricher",   route: "/enricher",   label: "B-Roll Studio" },
+  { id: "dreamface",  route: "/dreamface",  label: "LipSync Studio" },
+  { id: "dreamact",   route: "/dreamact",   label: "DreamAct" },
+  { id: "voiceclone", route: "/voiceclone", label: "Voice Clone" },
+];
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 function DashboardContent() {
   const router       = useRouter();
@@ -128,21 +141,9 @@ function DashboardContent() {
   const [heroText,       setHeroText]       = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [sideExpanded,   setSideExpanded]   = useState(false);
 
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    if (typeof window !== 'undefined') {
-      return (localStorage.getItem('suarik_theme') as 'dark' | 'light') ?? 'dark';
-    }
-    return 'dark';
-  });
-
-  const toggleTheme = () => {
-    setTheme(t => {
-      const next = t === 'dark' ? 'light' : 'dark';
-      localStorage.setItem('suarik_theme', next);
-      return next;
-    });
-  };
+  const { theme, toggleTheme } = useTheme();
 
   const dark = {
     bg:    '#060606', bg2: '#0A0A0A', bg3: '#0F0F0F', bg4: '#141414', bg5: '#1C1C1C',
@@ -175,7 +176,6 @@ function DashboardContent() {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/login"); return; }
-      // Capture real name from OAuth metadata (Google/GitHub supply this even when profiles.full_name is null)
       const metaName =
         (user.user_metadata?.full_name as string | undefined) ??
         (user.user_metadata?.name     as string | undefined) ??
@@ -208,7 +208,6 @@ function DashboardContent() {
 
   useEffect(() => {
     if (!loading) {
-      // Small delay to ensure DOM is ready
       const t = setTimeout(() => textareaRef.current?.focus(), 150);
       return () => clearTimeout(t);
     }
@@ -243,9 +242,7 @@ function DashboardContent() {
   const credits     = profile?.credits ?? 0;
   const maxCredits  = PLAN_CREDITS[plan] ?? 10;
   const creditsPct  = Math.min((credits / maxCredits) * 100, 100);
-  const planInfo    = PLAN_LABELS[plan] ?? PLAN_LABELS.free;
   const initials    = getInitials(profile?.full_name ?? authName ?? null, profile?.email ?? "?");
-  // Priority: profiles.full_name → OAuth metadata name → email local-part
   const displayName = profile?.full_name ?? authName ?? profile?.email?.split("@")[0] ?? "Usuário";
   const firstName   = displayName.split(" ")[0];
 
@@ -272,50 +269,97 @@ function DashboardContent() {
     "linear-gradient(135deg, #140A20, #080410)",
   ];
 
+  // ── Sidebar nav items ──────────────────────────────────────────────────────
+  const sideItems = [
+    { route: "/storyboard", label: "Storyboard",    color: "#E8512A", icon: <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="12" height="12" rx="2" stroke="#E8512A" strokeWidth="1.1"/><path d="M4 6h8M4 9h5M4 12h6" stroke="#E8512A" strokeWidth="1" strokeLinecap="round"/></svg> },
+    { route: "/audio",      label: "Audio Studio",  color: "#3ECF8E", icon: <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="5" y="2" width="6" height="8" rx="3" stroke="#3ECF8E" strokeWidth="1.2"/><path d="M3 9.5c0 2.8 2.2 5 5 5s5-2.2 5-5" stroke="#3ECF8E" strokeWidth="1.2" strokeLinecap="round"/></svg> },
+    { route: "/enricher",   label: "B-Roll Studio", color: "#4A9EFF", icon: <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="10" height="10" rx="2" stroke="#4A9EFF" strokeWidth="1.1"/><path d="M11 6l4-2v8l-4-2V6z" stroke="#4A9EFF" strokeWidth="1.1" strokeLinejoin="round"/></svg> },
+    { route: "/dreamface",  label: "LipSync",       color: "#E8512A", icon: <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="#E8512A" strokeWidth="1.2"/><path d="M5.5 8.5c0 1.4 1.1 2.5 2.5 2.5s2.5-1.1 2.5-2.5" stroke="#E8512A" strokeWidth="1.1" strokeLinecap="round"/><circle cx="6" cy="6.5" r=".7" fill="#E8512A"/><circle cx="10" cy="6.5" r=".7" fill="#E8512A"/></svg> },
+    { route: "/dreamact",   label: "DreamAct",      color: "#9B8FF8", icon: <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="4" y="1" width="8" height="14" rx="4" stroke="#9B8FF8" strokeWidth="1.2"/><circle cx="6.5" cy="6" r=".7" fill="#9B8FF8"/><circle cx="9.5" cy="6" r=".7" fill="#9B8FF8"/><path d="M6.5 9.5c0 .8.6 1.5 1.5 1.5s1.5-.7 1.5-1.5" stroke="#9B8FF8" strokeWidth="1" strokeLinecap="round"/></svg> },
+    { route: "/voiceclone", label: "Voice Clone",   color: "#4A9EFF", icon: <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="5" y="1" width="6" height="9" rx="3" stroke="#4A9EFF" strokeWidth="1.2"/><path d="M3 10c0 3 2.2 5.5 5 5.5s5-2.5 5-5.5" stroke="#4A9EFF" strokeWidth="1.2" strokeLinecap="round"/></svg> },
+  ];
+
+  const snItemStyle = (active = false): React.CSSProperties => ({
+    width: "calc(100% - 8px)",
+    height: 36,
+    borderRadius: 7,
+    display: "flex",
+    alignItems: "center",
+    cursor: "pointer",
+    background: active ? T.bg3 : "transparent",
+    border: `1px solid ${active ? T.bd2Raw : "transparent"}`,
+    padding: "0 9px",
+    gap: 9,
+    flexShrink: 0,
+    position: "relative",
+    transition: "background 0.15s",
+  });
+
   return (
     <div style={{ height: "100vh", overflow: "hidden", display: "flex", flexDirection: "column", fontFamily: "'Geist', system-ui, sans-serif", background: T.bg, color: T.text, transition: "background 0.2s, color 0.2s" }}>
 
       {/* ═══ TOPBAR ═══════════════════════════════════════════════════════════ */}
-      <div style={{ height: 52, flexShrink: 0, display: "flex", alignItems: "center", background: T.bg, borderBottom: T.bd, zIndex: 100, padding: "0 16px 0 0" }}>
+      <div style={{ height: 38, flexShrink: 0, display: "flex", alignItems: "center", background: T.bg, borderBottom: T.bd, zIndex: 100, padding: "0 12px", gap: 8 }}>
 
-        {/* Brand */}
-        <div style={{ width: 224, flexShrink: 0, borderRight: T.bd, padding: "0 16px", height: "100%", display: "flex", alignItems: "center", gap: 9 }}>
-          <svg width="20" height="20" viewBox="0 0 64 64" fill="none">
-            <rect width="64" height="64" rx="10" fill="#111"/>
-            <rect x="12" y="10" width="40" height="11" rx="4" fill="#E8E8E8"/>
-            <rect x="41" y="10" width="11" height="24" rx="4" fill="#E8E8E8"/>
-            <rect x="12" y="43" width="40" height="11" rx="4" fill="#E8512A"/>
-            <rect x="12" y="30" width="11" height="24" rx="4" fill="#E8512A"/>
-          </svg>
-          <span style={{ fontSize: 14, fontWeight: 700, color: T.text, letterSpacing: "-0.02em" }}>Suarik</span>
+        {/* Breadcrumb */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+          <span
+            style={{ color: T.text4, cursor: "pointer", transition: "color 0.15s" }}
+            onClick={() => router.push("/dashboard")}
+          >Suarik</span>
+          <span style={{ color: T.text4, fontSize: 10 }}>›</span>
+          <span style={{ fontWeight: 600, color: T.text2 }}>Dashboard</span>
         </div>
 
-        {/* Middle: search */}
-        <div style={{ flex: 1, padding: "0 16px" }}>
-          <div style={{ background: T.bg3, border: T.bd, borderRadius: 7, padding: "7px 11px", width: 260, display: "flex", alignItems: "center", gap: 8 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.text3} strokeWidth="1.5" strokeLinecap="round">
-              <circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/>
-            </svg>
-            <span style={{ fontSize: 12, color: T.text3, flex: 1 }}>Buscar projetos e ferramentas...</span>
-            <kbd style={{ fontSize: 10, fontFamily: "monospace", background: T.bg4, border: T.bd2, padding: "2px 5px", borderRadius: 4, color: T.text3 }}>⌘K</kbd>
-          </div>
+        {/* Back / forward */}
+        <div style={{ display: "flex", gap: 3, marginLeft: 8 }}>
+          <button
+            onClick={() => router.back()}
+            title="Voltar"
+            style={{ width: 24, height: 24, borderRadius: 5, background: T.bg3, border: T.bd, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: T.text4 }}
+          >
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M7 2L3 6l4 4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
+          </button>
+          <button
+            onClick={() => router.forward()}
+            title="Avançar"
+            style={{ width: 24, height: 24, borderRadius: 5, background: T.bg3, border: T.bd, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: T.text4 }}
+          >
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M5 2l4 4-4 4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
+          </button>
         </div>
 
-        {/* Right */}
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-          {/* Credits widget */}
-          <div style={{ background: T.bg3, border: T.bd, borderRadius: 7, padding: "6px 12px", display: "flex", alignItems: "center", gap: 9 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="#E8512A" stroke="none">
+        {/* Center: page dots */}
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
+          {NAV_SCREENS.map((s, i) => (
+            <div
+              key={s.id}
+              onClick={() => router.push(s.route)}
+              title={s.label}
+              style={{
+                width: i === 0 ? 16 : 5,
+                height: 5,
+                borderRadius: i === 0 ? 3 : "50%",
+                background: i === 0 ? "#E8512A" : T.bg5,
+                cursor: "pointer",
+                transition: "all 0.2s",
+                flexShrink: 0,
+              }}
+            />
+          ))}
+        </div>
+
+        {/* Right: credits + theme + criar + avatar */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" }}>
+
+          {/* Credits */}
+          <div style={{ background: T.bg3, border: T.bd, borderRadius: 6, padding: "4px 10px", display: "flex", alignItems: "center", gap: 7 }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="#E8512A" stroke="none">
               <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
             </svg>
-            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: T.text }}>{credits.toLocaleString()}</span>
-                <span style={{ fontSize: 11, color: T.text3 }}>/ {maxCredits.toLocaleString()}</span>
-              </div>
-              <div style={{ width: 48, height: 2, background: T.bg5, borderRadius: 1, overflow: "hidden" }}>
-                <div style={{ height: "100%", width: `${creditsPct}%`, background: "linear-gradient(90deg, #E8512A, #FF6534)", borderRadius: 1 }} />
-              </div>
+            <span style={{ fontSize: 11, fontWeight: 600, color: T.text }}>{credits.toLocaleString()}</span>
+            <div style={{ width: 36, height: 2, background: T.bg5, borderRadius: 1 }}>
+              <div style={{ height: "100%", width: `${creditsPct}%`, background: "linear-gradient(90deg,#E8512A,#FF6534)", borderRadius: 1 }} />
             </div>
           </div>
 
@@ -323,36 +367,26 @@ function DashboardContent() {
           <button
             onClick={toggleTheme}
             title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}
-            style={{
-              width: 32, height: 32, borderRadius: 7,
-              background: T.bg3, border: T.bd,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer', color: T.text2, flexShrink: 0,
-            }}
+            style={{ width: 24, height: 24, borderRadius: 5, background: T.bg3, border: T.bd, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: T.text4 }}
           >
             {theme === 'dark' ? (
-              // Sun icon
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
                 <circle cx="8" cy="8" r="3.5" stroke="currentColor" strokeWidth="1.3"/>
-                <path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3.2 3.2l1 1M11.8 11.8l1 1M3.2 12.8l1-1M11.8 4.2l1-1"
-                  stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+                <path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3.2 3.2l1 1M11.8 11.8l1 1M3.2 12.8l1-1M11.8 4.2l1-1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
               </svg>
             ) : (
-              // Moon icon
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                <path d="M13.5 10A6 6 0 016 2.5a6 6 0 100 11 6 6 0 007.5-3.5z"
-                  stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <path d="M13.5 10A6 6 0 016 2.5a6 6 0 100 11 6 6 0 007.5-3.5z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
               </svg>
             )}
           </button>
 
-          {/* Criar button */}
+          {/* Criar */}
           <button
             onClick={() => router.push("/storyboard")}
-            style={{ background: "#E8512A", color: "#fff", borderRadius: 7, height: 32, padding: "0 14px", fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <path d="M12 5v14M5 12h14"/>
-            </svg>
+            style={{ background: "#E8512A", color: "#fff", borderRadius: 6, height: 26, padding: "0 12px", fontSize: 11, fontWeight: 700, border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
             Criar
           </button>
 
@@ -360,7 +394,8 @@ function DashboardContent() {
           <button
             onClick={handleSignOut}
             title={`${displayName} · Sair`}
-            style={{ width: 28, height: 28, borderRadius: "50%", background: "linear-gradient(135deg,#E8512A,#FF6534)", fontSize: 11, fontWeight: 700, color: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            style={{ width: 26, height: 26, borderRadius: "50%", background: "linear-gradient(135deg,#E8512A,#FF6534)", fontSize: 10, fontWeight: 700, color: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+          >
             {initials}
           </button>
         </div>
@@ -370,192 +405,117 @@ function DashboardContent() {
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
 
         {/* ── SIDEBAR ─────────────────────────────────────────────────────── */}
-        <div style={{ width: 224, flexShrink: 0, height: "100%", borderRight: T.bd, display: "flex", flexDirection: "column", overflowY: "auto", background: T.bg }}>
+        <div style={{
+          width: sideExpanded ? 192 : 52,
+          flexShrink: 0,
+          height: "100%",
+          borderRight: T.bd,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          padding: "10px 0",
+          gap: 2,
+          background: T.bg,
+          transition: "width 0.25s cubic-bezier(.16,1,.3,1)",
+          overflow: "hidden",
+          zIndex: 200,
+        }}>
 
-          {/* Section 1: Navigation */}
-          <div style={{ padding: "12px 10px 6px" }}>
-            {/* Início (active) */}
-            <button
-              style={{ width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "7px 10px", borderRadius: 8, background: T.bg3, border: T.bd, cursor: "pointer", marginBottom: 2 }}
-              onClick={() => router.push("/dashboard")}>
-              <div style={{ width: 26, height: 26, borderRadius: 6, background: T.bg5, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.text} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
-                </svg>
-              </div>
-              <span style={{ fontSize: 13, fontWeight: 500, color: T.text }}>Início</span>
-            </button>
+          {/* Logo — click to toggle */}
+          <div
+            onClick={() => setSideExpanded(p => !p)}
+            title={sideExpanded ? undefined : "Expandir menu"}
+            style={{ width: 32, height: 32, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer", marginBottom: 6, transition: "background 0.2s" }}
+          >
+            <svg width="28" height="28" viewBox="0 0 64 64" fill="none">
+              <rect width="64" height="64" rx="10" fill="#111"/>
+              <rect x="12" y="10" width="40" height="11" rx="4" fill="#E8E8E8"/>
+              <rect x="41" y="10" width="11" height="24" rx="4" fill="#E8E8E8"/>
+              <rect x="12" y="43" width="40" height="11" rx="4" fill="#E8512A"/>
+              <rect x="12" y="30" width="11" height="24" rx="4" fill="#E8512A"/>
+            </svg>
+          </div>
 
-            {/* Projetos (inactive) */}
-            <button
-              style={{ width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "7px 10px", borderRadius: 8, background: "transparent", border: "1px solid transparent", cursor: "pointer" }}
-              onClick={() => router.push("/projects")}>
-              <div style={{ width: 26, height: 26, borderRadius: 6, background: T.bg4, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.text3} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-                </svg>
-              </div>
-              <span style={{ fontSize: 13, fontWeight: 400, color: T.text3, flex: 1, textAlign: "left" }}>Projetos</span>
-              <span style={{ fontSize: 9, background: T.bg4, color: T.text3, padding: "2px 6px", borderRadius: 10 }}>{allProjects.length}</span>
-            </button>
+          {/* Dashboard (active) */}
+          <div
+            onClick={() => router.push("/dashboard")}
+            title={sideExpanded ? undefined : "Dashboard"}
+            style={snItemStyle(true)}
+          >
+            <div style={{ width: 18, height: 18, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <rect x="2" y="2" width="5" height="5" rx="1" stroke={T.text} strokeWidth="1.1"/>
+                <rect x="9" y="2" width="5" height="5" rx="1" stroke={T.text} strokeWidth="1.1"/>
+                <rect x="2" y="9" width="5" height="5" rx="1" stroke={T.text} strokeWidth="1.1"/>
+                <rect x="9" y="9" width="5" height="5" rx="1" stroke={T.text} strokeWidth="1.1"/>
+              </svg>
+            </div>
+            {sideExpanded && <span style={{ fontSize: 12, fontWeight: 500, color: T.text, whiteSpace: "nowrap", flex: 1 }}>Dashboard</span>}
+            {sideExpanded && <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#E8512A", flexShrink: 0 }} />}
+          </div>
+
+          {/* Projetos */}
+          <div
+            onClick={() => router.push("/projects")}
+            title={sideExpanded ? undefined : "Projetos"}
+            style={snItemStyle(false)}
+          >
+            <div style={{ width: 18, height: 18, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <rect x="2" y="2" width="12" height="12" rx="2" stroke={T.text3} strokeWidth="1.1"/>
+                <path d="M5 6h6M5 9h4" stroke={T.text3} strokeWidth="1" strokeLinecap="round"/>
+              </svg>
+            </div>
+            {sideExpanded && <span style={{ fontSize: 12, fontWeight: 500, color: T.text3, whiteSpace: "nowrap", flex: 1 }}>Projetos</span>}
+            {sideExpanded && allProjects.length > 0 && (
+              <span style={{ fontSize: 9, background: T.bg4, color: T.text3, padding: "1px 5px", borderRadius: 8, flexShrink: 0 }}>{allProjects.length}</span>
+            )}
           </div>
 
           {/* Divider */}
-          <div style={{ height: 1, background: T.bg4, margin: "6px 10px" }} />
+          <div style={{ width: "calc(100% - 16px)", height: 1, background: T.bdRaw, margin: "4px 0", flexShrink: 0 }} />
 
-          {/* Section 2: Motor Principal */}
-          <div style={{ padding: "0 10px 6px" }}>
-            <p style={{ fontSize: 9, fontWeight: 700, color: T.text4, textTransform: "uppercase", letterSpacing: "0.1em", padding: "4px 10px 6px", margin: 0 }}>Motor Principal</p>
-            <button
-              style={{ width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "7px 10px", borderRadius: 8, background: "transparent", border: "1px solid transparent", cursor: "pointer" }}
-              onClick={() => router.push("/storyboard")}>
-              <div style={{ width: 26, height: 26, borderRadius: 6, background: "rgba(232,81,42,.08)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E8512A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v6M7 13h2M7 17h2M13 13h4M13 17h4"/>
-                </svg>
-              </div>
-              <span style={{ fontSize: 13, fontWeight: 400, color: T.text2, flex: 1, textAlign: "left" }}>Storyboard IA</span>
-              <span style={{ fontSize: 9, fontWeight: 700, background: "rgba(232,81,42,.08)", color: "#E8512A", padding: "2px 6px", borderRadius: 10 }}>DR</span>
-            </button>
-          </div>
-
-          {/* Divider */}
-          <div style={{ height: 1, background: T.bg4, margin: "6px 10px" }} />
-
-          {/* Section 3: Apresentador */}
-          <div style={{ padding: "0 10px 6px" }}>
-            <p style={{ fontSize: 9, fontWeight: 700, color: T.text4, textTransform: "uppercase", letterSpacing: "0.1em", padding: "4px 10px 6px", margin: 0 }}>Apresentador</p>
-
-            {/* LipSync */}
-            <button
-              style={{ width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "7px 10px", borderRadius: 8, background: "transparent", border: "1px solid transparent", cursor: "pointer", marginBottom: 2 }}
-              onClick={() => router.push("/dreamface")}>
-              <div style={{ width: 26, height: 26, borderRadius: 6, background: "rgba(232,81,42,.08)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E8512A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="9"/><path d="M8 14.5s1.5 2 4 2 4-2 4-2"/>
-                  <circle cx="9" cy="9.5" r="1" fill="#E8512A" stroke="none"/><circle cx="15" cy="9.5" r="1" fill="#E8512A" stroke="none"/>
-                </svg>
-              </div>
-              <span style={{ fontSize: 13, fontWeight: 400, color: T.text2 }}>LipSync</span>
-            </button>
-
-            {/* Animador */}
-            <button
-              style={{ width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "7px 10px", borderRadius: 8, background: "transparent", border: "1px solid transparent", cursor: "pointer", marginBottom: 2 }}
-              onClick={() => router.push("/dreamact")}>
-              <div style={{ width: 26, height: 26, borderRadius: 6, background: "rgba(139,127,232,.08)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8B7FE8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="5" r="2.5"/><path d="M12 8v5M9 20l3-7 3 7M7 12l-2 3M17 12l2 3"/>
-                </svg>
-              </div>
-              <span style={{ fontSize: 13, fontWeight: 400, color: T.text2 }}>Animador de Avatar</span>
-            </button>
-
-            {/* Estúdio de Áudio */}
-            <button
-              style={{ width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "7px 10px", borderRadius: 8, background: "transparent", border: "1px solid transparent", cursor: "pointer" }}
-              onClick={() => router.push("/audio")}>
-              <div style={{ width: 26, height: 26, borderRadius: 6, background: "rgba(62,207,142,.08)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3ECF8E" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 3v18M8 7v10M4 10v4M16 7v10M20 10v4"/>
-                </svg>
-              </div>
-              <span style={{ fontSize: 13, fontWeight: 400, color: T.text2 }}>Estúdio de Áudio</span>
-            </button>
-          </div>
-
-          {/* Divider */}
-          <div style={{ height: 1, background: T.bg4, margin: "6px 10px" }} />
-
-          {/* Section 4: Ferramentas */}
-          <div style={{ padding: "0 10px 6px" }}>
-            <p style={{ fontSize: 9, fontWeight: 700, color: T.text4, textTransform: "uppercase", letterSpacing: "0.1em", padding: "4px 10px 6px", margin: 0 }}>Ferramentas</p>
-
-            {/* Enriquecedor */}
-            <button
-              style={{ width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "7px 10px", borderRadius: 8, background: "transparent", border: "1px solid transparent", cursor: "pointer", marginBottom: 2 }}
-              onClick={() => router.push("/enricher")}>
-              <div style={{ width: 26, height: 26, borderRadius: 6, background: "rgba(74,158,255,.08)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4A9EFF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 2 2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-                </svg>
-              </div>
-              <span style={{ fontSize: 13, fontWeight: 400, color: T.text2 }}>Enriquecedor</span>
-            </button>
-
-            {/* Clone de Voz */}
-            <button
-              style={{ width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "7px 10px", borderRadius: 8, background: "transparent", border: "1px solid transparent", cursor: "pointer" }}
-              onClick={() => router.push("/voiceclone")}>
-              <div style={{ width: 26, height: 26, borderRadius: 6, background: "rgba(245,166,35,.08)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F5A623" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M9 3v18M15 3v18M9 7h6M9 12h6M9 17h6"/>
-                  <circle cx="9" cy="3" r="1.5" fill="#F5A623" stroke="none"/>
-                  <circle cx="15" cy="3" r="1.5" fill="#F5A623" stroke="none"/>
-                  <circle cx="9" cy="21" r="1.5" fill="#F5A623" stroke="none"/>
-                  <circle cx="15" cy="21" r="1.5" fill="#F5A623" stroke="none"/>
-                </svg>
-              </div>
-              <span style={{ fontSize: 13, fontWeight: 400, color: T.text2, flex: 1, textAlign: "left" }}>Clone de Voz</span>
-              <span style={{ fontSize: 9, fontWeight: 700, background: "rgba(62,207,142,.08)", color: "#3ECF8E", padding: "2px 6px", borderRadius: 10 }}>Novo</span>
-            </button>
-          </div>
-
-          {/* Divider */}
-          <div style={{ height: 1, background: T.bg4, margin: "6px 10px" }} />
-
-          {/* Section 5: Recentes */}
-          {recentProjects.length > 0 && (
-            <div style={{ padding: "0 10px 6px" }}>
-              <p style={{ fontSize: 9, fontWeight: 700, color: T.text4, textTransform: "uppercase", letterSpacing: "0.1em", padding: "4px 10px 6px", margin: 0 }}>Recentes</p>
-              {recentProjects.slice(0, 4).map((p, i) => {
-                const dotColors = ["#3ECF8E", "#E8512A", T.text4, T.text4];
-                return (
-                  <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 10px" }}>
-                    <div style={{ width: 6, height: 6, borderRadius: "50%", background: dotColors[i] ?? T.text4, flexShrink: 0 }} />
-                    <span style={{ fontSize: 12, color: T.text3, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {p.title.replace(/^[^—]+—\s*/, "")}
-                    </span>
-                    <span style={{ fontSize: 10, color: T.text4, flexShrink: 0 }}>{timeAgo(p.created_at)}</span>
-                  </div>
-                );
-              })}
+          {/* Section label */}
+          {sideExpanded && (
+            <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: T.text4, padding: "0 10px", height: 16, display: "flex", alignItems: "center", width: "100%", flexShrink: 0 }}>
+              Ferramentas
             </div>
           )}
+
+          {/* Tool items */}
+          {sideItems.map(item => (
+            <div
+              key={item.route}
+              onClick={() => router.push(item.route)}
+              title={sideExpanded ? undefined : item.label}
+              style={snItemStyle(false)}
+            >
+              <div style={{ width: 18, height: 18, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                {item.icon}
+              </div>
+              {sideExpanded && <span style={{ fontSize: 12, fontWeight: 500, color: T.text2, whiteSpace: "nowrap", flex: 1 }}>{item.label}</span>}
+              {sideExpanded && <div style={{ width: 6, height: 6, borderRadius: "50%", background: item.color, opacity: 0.6, flexShrink: 0 }} />}
+            </div>
+          ))}
 
           {/* Spacer */}
           <div style={{ flex: 1 }} />
 
-          {/* Plan card */}
-          <div style={{ margin: "auto 10px 10px", padding: 14, background: T.card2, border: T.bd, borderRadius: 12 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(232,81,42,.08)", padding: "3px 8px", borderRadius: 6 }}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="#E8512A" stroke="none">
-                  <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
-                </svg>
-                <span style={{ fontSize: 9, fontWeight: 700, color: "#E8512A", textTransform: "uppercase", letterSpacing: "0.1em" }}>PRO</span>
-              </div>
-              <span style={{ fontSize: 10, color: T.text4 }}>{allProjects.length}/7 ativas</span>
+          {/* Bottom toggle */}
+          <div
+            onClick={() => setSideExpanded(p => !p)}
+            title={sideExpanded ? undefined : "Expandir"}
+            style={{ width: "calc(100% - 8px)", height: 28, borderRadius: 7, display: "flex", alignItems: "center", cursor: "pointer", padding: "0 9px", gap: 9, flexShrink: 0, color: T.text4, transition: "color 0.15s" }}
+          >
+            <div style={{ width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <svg width="12" height="12" viewBox="0 0 13 13" fill="none">
+                {sideExpanded
+                  ? <path d="M9 2L4.5 6.5 9 11" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+                  : <path d="M4 2l4.5 4.5L4 11" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+                }
+              </svg>
             </div>
-            <div style={{ fontSize: 24, fontWeight: 900, color: T.text, lineHeight: 1.1, marginBottom: 2 }}>{credits.toLocaleString()}</div>
-            <div style={{ fontSize: 11, color: T.text3, marginBottom: 8 }}>de {maxCredits.toLocaleString()} créditos</div>
-            <div style={{ height: 3, background: T.bg5, borderRadius: 2, overflow: "hidden", marginBottom: 10 }}>
-              <div style={{ height: "100%", width: `${creditsPct}%`, background: "linear-gradient(90deg,#E8512A,#FF6534)", borderRadius: 2 }} />
-            </div>
-            <div style={{ display: "flex", gap: 6 }}>
-              <button
-                onClick={() => router.push("/pricing")}
-                style={{ flex: 1, padding: "6px 0", borderRadius: 7, border: "1px solid rgba(232,81,42,.3)", background: "rgba(232,81,42,.06)", color: "#E8512A", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
-                Upgrade
-              </button>
-              <button
-                onClick={handleSignOut}
-                style={{ width: 32, height: 32, borderRadius: 7, border: T.bd2, background: T.bg4, color: T.text3, fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                  <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
-                </svg>
-              </button>
-            </div>
+            {sideExpanded && <span style={{ fontSize: 11, whiteSpace: "nowrap", overflow: "hidden" }}>Recolher</span>}
           </div>
         </div>
 
@@ -687,8 +647,6 @@ function DashboardContent() {
               <div style={{ width: 260, background: T.card2, border: T.bd, borderRadius: 10, flexShrink: 0, overflow: "hidden" }}>
                 <div style={{ padding: "10px 12px", borderBottom: T.bd }}>
                   <p style={{ fontSize: 9, color: T.text4, textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 10px" }}>Timeline gerada por IA</p>
-
-                  {/* Track 1 */}
                   <div style={{ height: 13, background: T.bg4, borderRadius: 3, position: "relative", marginBottom: 4, overflow: "hidden" }}>
                     <div style={{ position: "absolute", left: "5%", width: "28%", height: "100%", background: "#0E1828", borderRadius: 2, display: "flex", alignItems: "center", paddingLeft: 4 }}>
                       <span style={{ fontSize: 7, color: "#4A9EFF" }}>Abertura</span>
@@ -697,16 +655,12 @@ function DashboardContent() {
                     <div style={{ position: "absolute", left: "68%", width: "25%", height: "100%", background: "#0E1828", borderRadius: 2 }} />
                     <div style={{ position: "absolute", left: "35%", width: "1.5px", height: "100%", background: "#E8512A" }} />
                   </div>
-
-                  {/* Track 2 */}
                   <div style={{ height: 13, background: T.bg4, borderRadius: 3, position: "relative", marginBottom: 4, overflow: "hidden" }}>
                     <div style={{ position: "absolute", left: "8%", width: "22%", height: "100%", background: "#1A1428", borderRadius: 2 }} />
                     <div style={{ position: "absolute", left: "33%", width: "35%", height: "100%", background: "#1A1428", borderRadius: 2 }} />
                     <div style={{ position: "absolute", left: "71%", width: "20%", height: "100%", background: "#1A1428", borderRadius: 2 }} />
                     <div style={{ position: "absolute", left: "35%", width: "1.5px", height: "100%", background: "#E8512A" }} />
                   </div>
-
-                  {/* Track 3 */}
                   <div style={{ height: 13, background: T.bg4, borderRadius: 3, position: "relative", overflow: "hidden" }}>
                     <div style={{ position: "absolute", left: "5%", right: "5%", height: "100%", background: "#0A1A12", borderRadius: 2, display: "flex", alignItems: "center", paddingLeft: 4 }}>
                       <span style={{ fontSize: 7, color: "#3ECF8E" }}>voz principal</span>
@@ -714,8 +668,6 @@ function DashboardContent() {
                     <div style={{ position: "absolute", left: "35%", width: "1.5px", height: "100%", background: "#E8512A" }} />
                   </div>
                 </div>
-
-                {/* Footer */}
                 <div style={{ padding: "8px 12px", display: "flex", alignItems: "center", gap: 6 }}>
                   <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#3ECF8E", boxShadow: "0 0 5px #3ECF8E" }} />
                   <span style={{ fontSize: 10, color: T.text4 }}>4 cenas · B-roll mapeado</span>
@@ -726,7 +678,6 @@ function DashboardContent() {
 
             {/* ── Tools Level 2: Motor do Apresentador ───────────────────── */}
             <div style={{ background: T.card2, border: T.bd, borderRadius: 12, overflow: "hidden", marginBottom: 6 }}>
-              {/* Header */}
               <div style={{ padding: "10px 14px", borderBottom: T.bd, display: "flex", alignItems: "center", gap: 8 }}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={T.text3} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
@@ -735,7 +686,6 @@ function DashboardContent() {
                 <span style={{ fontSize: 10, color: T.text4, marginLeft: "auto" }}>3 ferramentas integradas</span>
               </div>
 
-              {/* 3-col grid */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr" }}>
 
                 {/* LipSync */}
@@ -755,7 +705,6 @@ function DashboardContent() {
                     </div>
                   </div>
                   <p style={{ fontSize: 12, color: T.text3, marginBottom: 10, lineHeight: 1.5 }}>Sincronize lábios com qualquer áudio. LipSync ultra-preciso.</p>
-                  {/* Waveform preview */}
                   <div style={{ background: T.bg4, borderRadius: 7, padding: "8px 10px", display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
                     <div style={{ width: 28, height: 28, borderRadius: "50%", border: "1.5px solid #E8512A", background: "#1A0A08", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#E8512A" strokeWidth="1.5" strokeLinecap="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -788,7 +737,6 @@ function DashboardContent() {
                     </div>
                   </div>
                   <p style={{ fontSize: 12, color: T.text3, marginBottom: 10, lineHeight: 1.5 }}>Anime qualquer foto com movimentos naturais e expressivos.</p>
-                  {/* Photo → avatar preview */}
                   <div style={{ background: T.bg4, borderRadius: 7, padding: "8px 10px", display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
                     <div style={{ width: 28, height: 28, borderRadius: 6, background: "#1A1428", border: "1px solid rgba(139,127,232,.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8B7FE8" strokeWidth="1.5" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-6-6L5 21"/></svg>
@@ -820,7 +768,6 @@ function DashboardContent() {
                     </div>
                   </div>
                   <p style={{ fontSize: 12, color: T.text3, marginBottom: 10, lineHeight: 1.5 }}>TTS de alta fidelidade com emoções, velocidade e tom ajustáveis.</p>
-                  {/* Waveform bars */}
                   <div style={{ background: T.bg4, borderRadius: 7, padding: "8px 10px", display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
                       {[6, 14, 10, 18, 8, 16, 12, 20, 9, 15].map((h, i) => (
@@ -921,7 +868,6 @@ function DashboardContent() {
                         key={p.id}
                         onClick={() => router.push(meta.route)}
                         style={{ background: T.card, border: T.bd, borderRadius: 12, overflow: "hidden", cursor: "pointer" }}>
-                        {/* Thumbnail */}
                         <div style={{ aspectRatio: "16/9", background: gradients, display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
                           {p.thumb_url ? (
                             // eslint-disable-next-line @next/next/no-img-element
@@ -929,16 +875,13 @@ function DashboardContent() {
                           ) : (
                             <ToolIcon name={meta.icon} style={{ width: 24, height: 24, color: "rgba(255,255,255,0.1)" }} />
                           )}
-                          {/* Play icon */}
                           <div style={{ position: "absolute", width: 28, height: 28, borderRadius: "50%", background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="white"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                           </div>
-                          {/* Progress bar */}
                           <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, background: "rgba(0,0,0,0.3)" }}>
                             <div style={{ height: "100%", width: hasResult ? "100%" : "60%", background: hasResult ? "#3ECF8E" : "#E8512A" }} />
                           </div>
                         </div>
-                        {/* Body */}
                         <div style={{ padding: "10px 12px" }}>
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 5 }}>
                             <p style={{ fontSize: 13, fontWeight: 600, color: T.text, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "65%" }}>
@@ -1017,7 +960,6 @@ function DashboardContent() {
             background: "#111", border: "1px solid rgba(255,255,255,0.08)",
             boxShadow: "0 32px 80px rgba(0,0,0,0.8)",
           }}>
-            {/* Header */}
             <div style={{
               padding: "32px 32px 24px",
               background: "linear-gradient(135deg,rgba(240,86,58,0.12),rgba(99,5,239,0.08))",
@@ -1034,8 +976,6 @@ function DashboardContent() {
                 Motor de IA que transforma sua copy em B-rolls, legendas e timeline em segundos.
               </p>
             </div>
-
-            {/* Steps */}
             <div style={{ padding: "24px 32px" }}>
               <p style={{ fontSize: 11, color: T.text3, textTransform: "uppercase", letterSpacing: 1.5, margin: "0 0 16px", fontWeight: 700 }}>Como funciona</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -1056,8 +996,6 @@ function DashboardContent() {
                 ))}
               </div>
             </div>
-
-            {/* CTA */}
             <div style={{ padding: "0 32px 28px", display: "flex", gap: 10 }}>
               <button
                 onClick={() => {
