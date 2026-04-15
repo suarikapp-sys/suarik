@@ -11,6 +11,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Plano inválido" }, { status: 400 });
     }
 
+    // ── Env validation: priceId must be set and not a placeholder ────────────
+    const priceId = PLANS[plan].priceId;
+    if (!priceId || priceId.includes("REPLACE") || !priceId.startsWith("price_")) {
+      console.error(`[stripe/checkout] Missing/invalid STRIPE_PRICE_${plan.toUpperCase()} env var`);
+      return NextResponse.json(
+        { error: "Assinatura indisponível no momento. Tente novamente em instantes." },
+        { status: 503 }
+      );
+    }
+
     // Pega o usuário logado
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();

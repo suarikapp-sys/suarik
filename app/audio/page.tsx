@@ -1051,7 +1051,9 @@ export default function AudioPage() {
               <div style={{ fontSize: 11, color: C.t3, whiteSpace: "nowrap" }}>
                 <strong style={{ color: C.t2, fontWeight: 600 }}>{computeCost("tts", { chars: text.length })} créditos</strong> por geração
               </div>
-              <button onClick={generate} disabled={!text.trim() || generating} style={{
+              <button onClick={generate} disabled={!text.trim() || generating}
+                title={`Custo: ${computeCost("tts", { chars: text.length })} créditos (≈ 1 crédito a cada 100 caracteres). Reembolso automático em caso de falha.`}
+                style={{
                 flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
                 padding: 11, background: !text.trim() || generating ? C.bg4 : C.o,
                 color: !text.trim() || generating ? C.t3 : "#fff",
@@ -1097,7 +1099,9 @@ export default function AudioPage() {
                   <input type="range" min={5} max={60} step={5} value={musicDuration} onChange={e => setMusicDuration(parseInt(e.target.value))} style={{ width: "100%", accentColor: C.o }} />
                 </div>
                 {musicError && <div style={{ marginBottom: 14, padding: "10px 12px", borderRadius: 7, background: C.os, border: `1px solid ${C.om}`, color: C.o, fontSize: 12 }}>⚠ {musicError}</div>}
-                <button onClick={generateMusic} disabled={!musicPrompt.trim() || generatingMusic} style={{ width: "100%", padding: "11px 0", borderRadius: 7, border: "none", cursor: !musicPrompt.trim() || generatingMusic ? "not-allowed" : "pointer", background: !musicPrompt.trim() || generatingMusic ? C.bg4 : C.o, color: !musicPrompt.trim() || generatingMusic ? C.t3 : "#fff", fontSize: 13, fontWeight: 700, fontFamily: "inherit" }}>
+                <button onClick={generateMusic} disabled={!musicPrompt.trim() || generatingMusic}
+                  title={`Custo: ${computeCost("music", { duration: musicDuration })} créditos (proporcional à duração). Reembolso automático em caso de falha.`}
+                  style={{ width: "100%", padding: "11px 0", borderRadius: 7, border: "none", cursor: !musicPrompt.trim() || generatingMusic ? "not-allowed" : "pointer", background: !musicPrompt.trim() || generatingMusic ? C.bg4 : C.o, color: !musicPrompt.trim() || generatingMusic ? C.t3 : "#fff", fontSize: 13, fontWeight: 700, fontFamily: "inherit" }}>
                   {generatingMusic ? "🎵 A gerar música…" : `🎵 Gerar Música (${computeCost("music", { duration: musicDuration })} cr)`}
                 </button>
                 {musicEntry && <div style={{ marginTop: 20 }}>
@@ -1140,7 +1144,9 @@ export default function AudioPage() {
                   <input type="range" min={2} max={15} step={1} value={sfxDuration} onChange={e => setSfxDuration(parseInt(e.target.value))} style={{ width: "100%", accentColor: C.o }} />
                 </div>
                 {sfxError && <div style={{ marginBottom: 14, padding: "10px 12px", borderRadius: 7, background: C.os, border: `1px solid ${C.om}`, color: C.o, fontSize: 12 }}>⚠ {sfxError}</div>}
-                <button onClick={generateSfx} disabled={!sfxPrompt.trim() || generatingSfx} style={{ width: "100%", padding: "11px 0", borderRadius: 7, border: "none", cursor: !sfxPrompt.trim() || generatingSfx ? "not-allowed" : "pointer", background: !sfxPrompt.trim() || generatingSfx ? C.bg4 : C.o, color: !sfxPrompt.trim() || generatingSfx ? C.t3 : "#fff", fontSize: 13, fontWeight: 700, fontFamily: "inherit" }}>
+                <button onClick={generateSfx} disabled={!sfxPrompt.trim() || generatingSfx}
+                  title={`Custo: ${computeCost("sfx")} créditos por efeito. Reembolso automático em caso de falha.`}
+                  style={{ width: "100%", padding: "11px 0", borderRadius: 7, border: "none", cursor: !sfxPrompt.trim() || generatingSfx ? "not-allowed" : "pointer", background: !sfxPrompt.trim() || generatingSfx ? C.bg4 : C.o, color: !sfxPrompt.trim() || generatingSfx ? C.t3 : "#fff", fontSize: 13, fontWeight: 700, fontFamily: "inherit" }}>
                   {generatingSfx ? "⚡ A gerar SFX…" : `⚡ Gerar SFX (${computeCost("sfx")} cr)`}
                 </button>
               </div>

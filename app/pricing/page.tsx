@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { trackEvent } from "@/components/PostHogProvider";
 import { useTheme } from "@/components/ThemeProvider";
+import { useCredits } from "@/hooks/useCredits";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -121,10 +122,11 @@ interface PlanCardProps {
   annual: boolean;
   loadingPlan: string | null;
   onCheckout: (id: string) => void;
+  isCurrentPlan: boolean;
 }
 
-function PlanCard({ plan, annual, loadingPlan, onCheckout }: PlanCardProps) {
-  const isCurrent = plan.variant === "current";
+function PlanCard({ plan, annual, loadingPlan, onCheckout, isCurrentPlan }: PlanCardProps) {
+  const isCurrent = isCurrentPlan;
   const isHot     = plan.variant === "hot";
   const isEnt     = plan.variant === "ent";
   const isLoading = loadingPlan === plan.id;
@@ -168,9 +170,9 @@ function PlanCard({ plan, annual, loadingPlan, onCheckout }: PlanCardProps) {
     <div style={{ background: cardGrad, border: `1px solid ${cardBorder}`, borderRadius: "var(--r2)", padding: 20, position: "relative", overflow: "hidden", display: "flex", flexDirection: "column", transition: "all .22s" }}>
       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: shimmer }} />
 
-      {plan.badge && (
+      {(isCurrent ? "Plano atual" : plan.badge) && (
         <div style={{ position: "absolute", top: 14, right: 14, fontSize: 9, fontWeight: 700, padding: "3px 8px", borderRadius: 8, letterSpacing: ".07em", textTransform: "uppercase", background: badgeBg, color: badgeColor, border: badgeBorder }}>
-          {plan.badge}
+          {isCurrent ? "Plano atual" : plan.badge}
         </div>
       )}
 
@@ -224,7 +226,7 @@ function PlanCard({ plan, annual, loadingPlan, onCheckout }: PlanCardProps) {
       >
         {isLoading
           ? <><Loader2 className="animate-spin" style={{ width: 14, height: 14 }} /> Aguarde...</>
-          : plan.ctaLabel}
+          : isCurrent ? "Plano atual" : plan.ctaLabel}
       </button>
     </div>
   );
@@ -235,12 +237,23 @@ function PlanCard({ plan, annual, loadingPlan, onCheckout }: PlanCardProps) {
 export default function PricingPage() {
   const router = useRouter();
   const { theme, toggleTheme } = useTheme();
+  const { credits: userCredits, plan: userPlan, loading: creditsLoading } = useCredits();
   const [annual, setAnnual]           = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [loadingPack, setLoadingPack] = useState<string | null>(null);
 
   const isDark = theme === "dark";
+
+  // ── Real plan/credits data ─────────────────────────────────────────────────
+  const normalizedPlan = (userPlan ?? "free").toLowerCase();
+  const currentPlan    = PLANS.find(p => p.id === normalizedPlan) ?? PLANS[0];
+  const planCoinsLimit = Number(currentPlan.coins.replace(/\./g, "")) || 0;
+  const coinsUsed      = Math.max(0, planCoinsLimit - (userCredits ?? 0));
+  const coinsPct       = planCoinsLimit > 0
+    ? Math.min(100, Math.round((coinsUsed / planCoinsLimit) * 1000) / 10)
+    : 0;
+  const fmtCoins = (n: number) => n.toLocaleString("pt-BR");
 
   const themeVars: Record<string, string> = isDark ? {
     "--bg": "#060606", "--bg2": "#09090B", "--bg3": "#0F0F0F", "--bg4": "#141414", "--bg5": "#1C1C1C",
@@ -336,7 +349,7 @@ export default function PricingPage() {
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 10px", background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 11, color: "var(--text2)" }}>
             <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#F5A623", boxShadow: "0 0 6px #F5A623", flexShrink: 0 }} />
-            <span>Starter · 5.000 moedas</span>
+            <span>{currentPlan.name} · {creditsLoading ? "…" : fmtCoins(userCredits)} moedas</span>
           </div>
           <button
             onClick={toggleTheme}
@@ -402,16 +415,16 @@ export default function PricingPage() {
             </svg>
           </div>
           <div style={{ flex: 1, minWidth: 120 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>Plano atual: <strong>Starter</strong></div>
-            <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 2 }}>Renova mensalmente · R$97/mês</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>Plano atual: <strong>{currentPlan.name}</strong></div>
+            <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 2 }}>Renova mensalmente · {currentPlan.price}/mês</div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, flexWrap: "wrap" }}>
-            <span style={{ fontWeight: 700, color: "#F5A623" }}>3.241</span>
-            <span style={{ color: "var(--text3)" }}>/ 5.000 moedas usadas</span>
+            <span style={{ fontWeight: 700, color: "#F5A623" }}>{creditsLoading ? "…" : fmtCoins(coinsUsed)}</span>
+            <span style={{ color: "var(--text3)" }}>/ {fmtCoins(planCoinsLimit)} moedas usadas</span>
             <div style={{ width: 80, height: 4, background: "var(--bg4)", borderRadius: 2, overflow: "hidden" }}>
-              <div style={{ height: "100%", background: "#F5A623", borderRadius: 2, width: "64.8%", transition: "width .4s" }} />
+              <div style={{ height: "100%", background: "#F5A623", borderRadius: 2, width: `${coinsPct}%`, transition: "width .4s" }} />
             </div>
-            <span style={{ fontSize: 10, color: "var(--text3)" }}>64%</span>
+            <span style={{ fontSize: 10, color: "var(--text3)" }}>{Math.round(coinsPct)}%</span>
           </div>
           <button
             onClick={handlePortal}
@@ -424,7 +437,7 @@ export default function PricingPage() {
         {/* ── PLANS GRID ── */}
         <div style={{ maxWidth: 960, margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, alignItems: "start" }}>
           {PLANS.map(plan => (
-            <PlanCard key={plan.id} plan={plan} annual={annual} loadingPlan={loadingPlan} onCheckout={handleCheckout} />
+            <PlanCard key={plan.id} plan={plan} annual={annual} loadingPlan={loadingPlan} onCheckout={handleCheckout} isCurrentPlan={plan.id === normalizedPlan} />
           ))}
         </div>
 

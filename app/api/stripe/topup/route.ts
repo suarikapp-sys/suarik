@@ -17,6 +17,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Pacote inválido" }, { status: 400 });
     }
 
+    // ── Env validation: priceId must be set and not a placeholder ────────────
+    const priceId = CREDIT_PACKAGES[pack].priceId;
+    if (!priceId || priceId.includes("REPLACE") || !priceId.startsWith("price_")) {
+      console.error(`[stripe/topup] Missing/invalid STRIPE_PRICE_TOPUP_${pack.toUpperCase()} env var`);
+      return NextResponse.json(
+        { error: "Compra indisponível no momento. Tente novamente em instantes." },
+        { status: 503 }
+      );
+    }
+
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
