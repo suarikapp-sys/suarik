@@ -671,8 +671,13 @@ export default function SitePage() {
       <footer style={{ padding: "32px 48px", borderTop: "1px solid rgba(255,255,255,.04)", display: "flex", alignItems: "center", justifyContent: "space-between", background: K.k }}>
         <span style={{ fontFamily: "'Geist', sans-serif", fontSize: 15, fontWeight: 700, color: K.w3, letterSpacing: "-.03em" }}>Suarik</span>
         <div style={{ display: "flex", gap: 24 }}>
-          {["Termos", "Privacidade", "Contato", "Blog"].map(l => (
-            <a key={l} href="#" style={{ fontSize: 11, color: K.w3, textDecoration: "none", letterSpacing: ".02em" }}>{l}</a>
+          {([
+            ["Termos", "/terms"],
+            ["Privacidade", "/privacy"],
+            ["Contato", "mailto:contato@suarik.com"],
+            ["Blog", "#"],
+          ] as [string, string][]).map(([label, href]) => (
+            <a key={label} href={href} style={{ fontSize: 11, color: K.w3, textDecoration: "none", letterSpacing: ".02em" }}>{label}</a>
           ))}
         </div>
         <span style={{ fontSize: 11, color: K.w4 }}>© 2025 Suarik. Todos os direitos reservados.</span>

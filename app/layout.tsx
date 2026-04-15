@@ -4,6 +4,7 @@ import "./globals.css";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { PostHogProvider } from "@/components/PostHogProvider";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import CookieBanner from "@/components/CookieBanner";
 
 // ─── Global SEO Metadata ──────────────────────────────────────────────────────
 const OG_IMAGE = `${APP_URL}/og-image.jpg`;
@@ -137,6 +138,7 @@ export default function RootLayout({
         <PostHogProvider>
           <ThemeProvider>
             <ErrorBoundary>{children}</ErrorBoundary>
+            <CookieBanner />
           </ThemeProvider>
         </PostHogProvider>
       </body>

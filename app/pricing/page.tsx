@@ -573,6 +573,13 @@ export default function PricingPage() {
           </div>
         </div>
 
+        {/* ── Footer legal ── */}
+        <div style={{ padding: "24px 0 32px", display: "flex", alignItems: "center", justifyContent: "center", gap: 24, borderTop: "1px solid var(--border)", marginTop: 12 }}>
+          <a href="/terms" style={{ fontSize: 11, color: "var(--text3)", textDecoration: "none" }}>Termos de Uso</a>
+          <a href="/privacy" style={{ fontSize: 11, color: "var(--text3)", textDecoration: "none" }}>Privacidade & LGPD</a>
+          <span style={{ fontSize: 11, color: "var(--text3)" }}>© {new Date().getFullYear()} Suarik</span>
+        </div>
+
       </div>{/* end scrollable */}
     </div>
   );
