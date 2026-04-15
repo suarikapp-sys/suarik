@@ -501,6 +501,23 @@ function DashboardContent() {
           {/* Spacer */}
           <div style={{ flex: 1 }} />
 
+          {/* Settings link */}
+          <div
+            onClick={() => router.push("/settings")}
+            title={sideExpanded ? undefined : "Configurações"}
+            style={{ width: "calc(100% - 8px)", height: 28, borderRadius: 7, display: "flex", alignItems: "center", cursor: "pointer", padding: "0 9px", gap: 9, flexShrink: 0, color: T.text4, transition: "color 0.15s", marginBottom: 2 }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = T.text2; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = T.text4; }}
+          >
+            <div style={{ width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+                <circle cx="7" cy="7" r="2" stroke="currentColor" strokeWidth="1.2"/>
+                <path d="M7 1v1.5M7 11.5V13M1 7h1.5M11.5 7H13M2.8 2.8l1 1M10.2 10.2l1 1M11.2 2.8l-1 1M3.8 10.2l-1 1" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/>
+              </svg>
+            </div>
+            {sideExpanded && <span style={{ fontSize: 11, whiteSpace: "nowrap", overflow: "hidden" }}>Configurações</span>}
+          </div>
+
           {/* Bottom toggle */}
           <div
             onClick={() => setSideExpanded(p => !p)}
