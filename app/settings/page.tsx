@@ -243,6 +243,13 @@ export default function SettingsPage() {
       height: "100vh", display: "flex", flexDirection: "column",
       fontSize: 14, overflow: "hidden",
     } as React.CSSProperties}>
+      {/* ── Custom scrollbar ── */}
+      <style>{`
+        .settings-main::-webkit-scrollbar { width: 4px; }
+        .settings-main::-webkit-scrollbar-thumb { background: var(--border2, #1A1A1A); border-radius: 2px; }
+        .settings-main::-webkit-scrollbar-track { background: transparent; }
+        .sbi-danger:hover { background: var(--rs, rgba(226,75,74,.07)) !important; }
+      `}</style>
 
       {/* ── TOPBAR ─────────────────────────────────────────────────────────── */}
       <div style={{ height: 46, background: "var(--bg)", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", padding: "0 20px", gap: 10, flexShrink: 0 }}>
@@ -303,6 +310,7 @@ export default function SettingsPage() {
                 <div
                   key={item.id}
                   onClick={() => setActiveSection(item.id)}
+                  className={item.danger ? "sbi-danger" : undefined}
                   style={{
                     display: "flex", alignItems: "center", gap: 8, padding: "7px 9px",
                     borderRadius: "var(--r)", cursor: "pointer", transition: "all .15s", marginBottom: 1,
@@ -333,7 +341,7 @@ export default function SettingsPage() {
         </div>
 
         {/* ── MAIN ── */}
-        <div style={{ overflowY: "auto", background: "var(--bg2)" }}>
+        <div className="settings-main" style={{ overflowY: "auto", background: "var(--bg2)" }}>
           <div style={{ padding: "28px 32px", maxWidth: 680 }}>
 
             {/* ── PERFIL ── */}

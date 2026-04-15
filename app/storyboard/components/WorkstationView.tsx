@@ -277,6 +277,8 @@ export function WorkstationView({ result, copy: initialCopy, drScenes: initialDr
   const [clipTransforms, setClipTransforms] = useState<Record<string,{scale:number;x:number;y:number}>>({});
   // ── Left panel tab: "roteiro" | "inspector" ──────────────────────────
   const [leftTab, setLeftTab] = useState<"roteiro"|"inspector">("roteiro");
+  // ── Right panel tab: "broll" | "inspector" | "audio" ─────────────────
+  const [rightTab, setRightTab] = useState<"broll"|"inspector"|"audio">("broll");
   // ── Selected layer: "avatar" | "subtitle" | clipId | null ────────────
   const [selectedLayer, setSelectedLayer] = useState<string|null>(null);
   // ── Per-layer transforms ──────────────────────────────────────────────
@@ -1289,10 +1291,10 @@ ${clipEls.join("\n")}
       .v1clip-overlay{opacity:0;transition:opacity .15s ease}
     `}</style>
     <div className="ws-in"
-      style={{background:"#060606",color:"#F5F3F0",fontFamily:"'DM Sans',sans-serif",display:"grid",gridTemplateRows:"42px 1fr",height:"100vh",overflow:"hidden"}}>
+      style={{background:"#060606",color:"#F5F3F0",fontFamily:"'Geist',sans-serif",display:"grid",gridTemplateRows:"42px 1fr 196px 28px",height:"100vh",overflow:"hidden"}}>
 
       {/* ══ TOPBAR (42px) ══════════════════════════════════════════════════ */}
-      <div style={{display:"flex",alignItems:"center",gap:"10px",padding:"0 14px",background:"#0d0d0d",borderBottom:"1px solid rgba(255,255,255,.08)",flexShrink:0,overflow:"hidden",zIndex:20}}>
+      <div style={{display:"flex",alignItems:"center",gap:"10px",padding:"0 14px",background:"#09090B",borderBottom:"1px solid #131313",flexShrink:0,overflow:"hidden",zIndex:20}}>
         <button onClick={onBack}
           style={{padding:"5px",borderRadius:"8px",color:"#6b7280",background:"transparent",border:"1px solid rgba(255,255,255,0.07)",cursor:"pointer",display:"flex",alignItems:"center",flexShrink:0,transition:"border-color .15s"}}
           title="Voltar ao início">
@@ -1303,15 +1305,29 @@ ${clipEls.join("\n")}
         <span style={{fontSize:"12px",fontWeight:600,color:"#9ca3af",flexShrink:0,maxWidth:"160px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
           {result.music_style||"Storyboard"}
         </span>
-        <div style={{width:"6px",height:"6px",borderRadius:"50%",background:"#22c55e",flexShrink:0}}/>
+        {/* Status dot with glow */}
+        <div style={{display:"flex",alignItems:"center",gap:"5px",flexShrink:0}}>
+          <div style={{width:"6px",height:"6px",borderRadius:"50%",background:"#22c55e",flexShrink:0,boxShadow:"0 0 6px rgba(34,197,94,0.8),0 0 12px rgba(34,197,94,0.4)"}}/>
+          <span style={{fontSize:"9px",fontWeight:700,color:"rgba(34,197,94,0.75)",letterSpacing:"0.06em"}}>IA ativa</span>
+        </div>
         <div style={{flex:1}}/>
-        <span style={{fontSize:"11px",fontWeight:700,color:"#FF7A5C",background:"rgba(232,89,60,0.1)",border:"1px solid rgba(232,89,60,0.25)",padding:"2px 9px",borderRadius:"20px",flexShrink:0}}>
+        {/* Scene chip with star */}
+        <span style={{fontSize:"11px",fontWeight:700,color:"#FF7A5C",background:"rgba(232,89,60,0.1)",border:"1px solid rgba(232,89,60,0.25)",padding:"2px 9px",borderRadius:"20px",flexShrink:0,display:"flex",alignItems:"center",gap:"4px"}}>
+          <svg width="8" height="8" viewBox="0 0 10 10" fill="#FF7A5C"><polygon points="5,0 6.2,3.8 10,3.8 7,6.1 8.1,10 5,7.7 1.9,10 3,6.1 0,3.8 3.8,3.8"/></svg>
           Cena {activeScene+1}/{localDrScenes.length||localScenes.length}
         </span>
         <span style={{fontFamily:"monospace",fontSize:"11px",fontWeight:700,color:"#F0563A",flexShrink:0,letterSpacing:"0.02em"}}>
           {fmtTime(currentTime)}<span style={{color:"#374151",margin:"0 3px"}}>/</span>{fmtTime(totalDur)}
         </span>
         <div style={{flex:1}}/>
+        {/* Credits block */}
+        <div style={{display:"flex",alignItems:"center",gap:"5px",padding:"3px 10px",borderRadius:"20px",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",flexShrink:0}}>
+          <svg width="11" height="11" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" fill="#E8512A" opacity=".2"/><circle cx="7" cy="7" r="3.5" fill="#E8512A"/></svg>
+          <span style={{fontSize:"10px",fontWeight:700,color:"#e4e4e7",fontFamily:"monospace"}}>{(result as {credits_used?:number}).credits_used ?? "—"}</span>
+          <span style={{fontSize:"9px",color:"#444",fontWeight:500}}>/ 15k</span>
+        </div>
+        {/* v3 history button */}
+        <button style={{padding:"3px 8px",borderRadius:"6px",fontSize:"9px",fontWeight:700,color:"#555",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",cursor:"pointer",letterSpacing:"0.04em",flexShrink:0}}>v3</button>
         <div style={{position:"relative"}}>
           <button onClick={()=>setExportOpen(v=>!v)}
             style={{display:"flex",alignItems:"center",gap:"5px",padding:"5px 10px",borderRadius:"8px",fontSize:"11px",fontWeight:700,color:"#9ca3af",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",cursor:"pointer"}}>
@@ -1426,6 +1442,14 @@ ${clipEls.join("\n")}
                   </button>
                 ))
               }
+            </div>
+            {/* + Adicionar cena */}
+            <div className="px-2 pb-3 pt-1">
+              <button className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-[10px] font-bold transition-all hover:bg-white/5"
+                style={{border:"1px dashed rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.25)",background:"none",cursor:"pointer"}}>
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 1v8M1 5h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                Adicionar cena
+              </button>
             </div>
           </div>
         </>)}
@@ -1978,460 +2002,8 @@ ${clipEls.join("\n")}
           </div>
         </div>
 
-        {/* ── Premiere CTA Banner ── */}
-        <div className="mx-3 mt-2 mb-0 flex items-center gap-3 px-4 py-2.5 rounded-xl shrink-0"
-          style={{background:"linear-gradient(135deg,rgba(232,89,60,0.18),rgba(232,89,60,0.12))",border:"1px solid rgba(232,89,60,0.35)",boxShadow:"0 0 24px rgba(232,89,60,0.15)"}}>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-black text-white leading-tight" style={{fontFamily:"'Bebas Neue',sans-serif",letterSpacing:"1px"}}>🎬 Timeline pronta para exportar</p>
-            <p className="text-[10px] text-orange-300/70 mt-0.5">Exporte para Premiere Pro com 1 clique — sequência XML completa com cortes, B-rolls e legendas</p>
-          </div>
-          <button onClick={downloadXML}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[11px] font-black shrink-0 transition-all hover:scale-105 active:scale-95"
-            style={{background:"linear-gradient(135deg,#E8593C,#E8593C)",color:"#fff",boxShadow:"0 4px 20px rgba(232,89,60,0.5)",border:"1px solid rgba(255,255,255,0.15)"}}>
-            <FileCode2 className="w-3.5 h-3.5"/>Exportar para Premiere (XML)
-          </button>
-        </div>
-
-        {/* ── Audio Mixer ── */}
-        <div className="mx-3 mb-0 mt-1 px-4 py-2.5 rounded-xl shrink-0 flex items-center gap-4"
-          style={{background:"rgba(0,0,0,0.55)",border:"1px solid rgba(255,255,255,0.06)"}}>
-          <span className="text-[9px] font-black uppercase tracking-[0.14em] text-gray-500 shrink-0">Mixer</span>
-          {/* 🎙️ Avatar fader */}
-          <div className="flex items-center gap-2 flex-1">
-            <span className="text-[10px] shrink-0">🎙️</span>
-            <span className="text-[9px] font-bold text-gray-500 shrink-0 w-10">Avatar</span>
-            <div className="relative flex-1 h-1.5 rounded-full cursor-pointer" style={{background:"rgba(255,255,255,0.08)"}}>
-              <div className="absolute left-0 top-0 h-full rounded-full pointer-events-none transition-all"
-                style={{width:`${avatarVolume*100}%`,background:"linear-gradient(90deg,#FF7A5C,#E8593C)"}}/>
-              <input type="range" min="0" max="1" step="0.01" value={avatarVolume}
-                onChange={e=>{
-                  const v=+e.target.value; setAvatarVolume(v);
-                  if(avatarVideoRef.current) avatarVideoRef.current.volume=v;
-                  if(v===0) setTrackAVMuted(true); else if(trackAVMuted) setTrackAVMuted(false);
-                }}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"/>
-            </div>
-            <span className="text-[9px] font-mono text-gray-500 w-6 text-right shrink-0">{Math.round(avatarVolume*100)}</span>
-          </div>
-          <div className="w-px h-4 shrink-0" style={{background:"rgba(255,255,255,0.07)"}}/>
-          {/* 🎵 Trilha fader */}
-          <div className="flex items-center gap-2 flex-1">
-            <span className="text-[10px] shrink-0">🎵</span>
-            <span className="text-[9px] font-bold text-gray-500 shrink-0 w-10">Trilha</span>
-            <div className="relative flex-1 h-1.5 rounded-full cursor-pointer" style={{background:"rgba(255,255,255,0.08)"}}>
-              <div className="absolute left-0 top-0 h-full rounded-full pointer-events-none transition-all"
-                style={{width:`${bgVolume*100}%`,background:"linear-gradient(90deg,#FF7A5C,#E8593C)"}}/>
-              <input type="range" min="0" max="1" step="0.01" value={bgVolume}
-                onChange={e=>{
-                  const v=+e.target.value; setBgVolume(v);
-                  if(bgAudioRef.current) bgAudioRef.current.volume=v;
-                }}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"/>
-            </div>
-            <span className="text-[9px] font-mono text-gray-500 w-6 text-right shrink-0">{Math.round(bgVolume*100)}</span>
-          </div>
-        </div>
-
-        {/* ── Timeline ── */}
-        <div className="flex-1 min-h-0 flex flex-col px-3 pb-3 gap-2">
-          <div className="flex-1 min-h-0 rounded-xl overflow-hidden flex flex-col"
-            style={{background:"#080808",border:"1px solid rgba(255,255,255,0.06)"}}>
-
-            {/* ── Timeline Toolbar ── */}
-            <div className="flex items-center gap-3 px-4 py-2.5 border-b shrink-0"
-              style={{borderColor:"rgba(255,255,255,0.08)",background:"rgba(0,0,0,0.4)"}}>
-
-              {/* Label */}
-              <span className="text-[11px] font-black uppercase tracking-widest shrink-0"
-                style={{color:"rgba(240,86,58,0.7)"}}>🔍 ZOOM</span>
-
-              {/* Zoom Out */}
-              <button onClick={()=>setTimelineZoom(z=>Math.max(0.25,z*0.75))}
-                className="w-8 h-8 rounded-lg flex items-center justify-center font-black text-lg transition-all hover:scale-105 active:scale-95"
-                style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.12)",color:"#e4e4e7"}}>
-                −
-              </button>
-
-              {/* Zoom level */}
-              <div className="w-16 h-8 rounded-lg flex items-center justify-center text-[13px] font-black"
-                style={{background:"rgba(240,86,58,0.15)",border:"1px solid rgba(240,86,58,0.35)",color:"#F0563A"}}>
-                {Math.round(timelineZoom*100)}%
-              </div>
-
-              {/* Zoom In */}
-              <button onClick={()=>setTimelineZoom(z=>Math.min(8,z*1.33))}
-                className="w-8 h-8 rounded-lg flex items-center justify-center font-black text-lg transition-all hover:scale-105 active:scale-95"
-                style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.12)",color:"#e4e4e7"}}>
-                +
-              </button>
-
-              {/* FIT */}
-              <button onClick={()=>setTimelineZoom(1)}
-                className="px-3 h-8 rounded-lg text-[11px] font-black transition-all hover:scale-105 active:scale-95"
-                style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",color:"#a1a1aa"}}>
-                FIT
-              </button>
-
-              <div className="flex-1"/>
-              <span className="text-[10px] font-medium" style={{color:"rgba(255,255,255,0.2)"}}>
-                ✦ Ctrl+scroll para zoom &nbsp;·&nbsp; arraste clips para reordenar
-              </span>
-            </div>
-
-            {/* Scrollable outer wrapper */}
-            <div ref={timelineScrollRef}
-              className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden"
-              style={{scrollbarWidth:"thin",scrollbarColor:"rgba(255,255,255,0.1) transparent"}}
-              onWheel={handleTimelineWheel}>
-
-            {/* Fixed-width canvas — grows with video duration + zoom */}
-            <div ref={timelineRef}
-              className="relative select-none h-full"
-              style={{
-                width: `${Math.max(640, totalDur * 28 * timelineZoom)}px`,
-                cursor:isDragging?"col-resize":"crosshair",
-              }}
-              onMouseDown={handleTimelineMouseDown}>
-
-              {/* Ruler */}
-              <div className="flex h-5 border-b sticky top-0 z-10" style={{background:"#080808",borderColor:"rgba(255,255,255,0.05)"}}>
-                <div className="w-20 shrink-0 border-r" style={{borderColor:"rgba(255,255,255,0.05)"}}/>
-                <div className="flex-1 relative">
-                  {Array.from({length:Math.ceil(totalDur/5)+1}).map((_,i)=>(
-                    <div key={i} className="absolute flex flex-col items-center" style={{left:`${(i*5/totalDur)*100}%`}}>
-                      <div className="w-px h-2 mt-0.5" style={{background:"rgba(255,255,255,0.1)"}}/>
-                      <span className="text-[7px] font-mono text-gray-500">{fmtTime(i*5)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* ══ TRILHA AV — Avatar / A-Roll ══ */}
-              <div className="flex border-b" style={{borderColor:"rgba(255,255,255,0.04)"}}>
-                <div className="w-20 shrink-0 flex flex-col items-start justify-center border-r gap-1 px-2 py-1.5"
-                  style={{borderColor:"rgba(255,255,255,0.06)",background:selectedLayer==="avatar"?"rgba(148,163,184,0.07)":"rgba(148,163,184,0.02)"}}>
-                  <span className="text-[8px] font-black tracking-widest"
-                    style={{color:selectedLayer==="avatar"?"rgba(148,163,184,1)":trackAVVisible?"rgba(148,163,184,0.6)":"rgba(148,163,184,0.2)"}}>AVATAR</span>
-                  <div className="flex items-center gap-1">
-                    <button title={trackAVVisible?"Ocultar":"Mostrar"} onClick={e=>{e.stopPropagation();setTrackAVVisible(v=>!v)}}
-                      className="p-0.5 rounded transition-colors hover:bg-white/8">
-                      {trackAVVisible?<Eye className="w-2.5 h-2.5 text-slate-500"/>:<EyeOff className="w-2.5 h-2.5 text-red-500/60"/>}
-                    </button>
-                    <button title={trackAVMuted?"Desmutar":"Mutar"} onClick={e=>{e.stopPropagation();setTrackAVMuted(m=>!m)}}
-                      className="p-0.5 rounded transition-colors hover:bg-white/8">
-                      {trackAVMuted?<VolumeX className="w-2.5 h-2.5 text-red-500/60"/>:<Volume2 className="w-2.5 h-2.5 text-slate-500"/>}
-                    </button>
-                  </div>
-                </div>
-                <div className="flex-1 relative h-11 flex items-center px-1 cursor-pointer"
-                  onClick={()=>{setSelectedLayer(v=>v==="avatar"?null:"avatar");setLeftTab("inspector");}}>
-                  <div className="absolute left-1 right-1 top-1.5 bottom-1.5 rounded-lg overflow-hidden transition-all duration-150"
-                    style={{
-                      background: selectedLayer==="avatar" ? "rgba(148,163,184,0.1)" : "rgba(100,116,139,0.08)",
-                      border: `1px solid rgba(148,163,184,${selectedLayer==="avatar"?0.4:0.15})`,
-                      opacity: trackAVVisible ? 1 : 0.25,
-                      boxShadow: selectedLayer==="avatar" ? "0 0 0 1px rgba(148,163,184,0.2)" : "none",
-                    }}>
-                    <div className="absolute inset-0 flex items-center gap-px px-1">
-                      {Array.from({length:90}).map((_,i)=>(
-                        <div key={i} className="flex-1 rounded-full"
-                          style={{background:"rgba(148,163,184,0.3)",height:`${18+Math.abs(Math.sin(i*1.3)*Math.cos(i*0.4))*64}%`}}/>
-                      ))}
-                    </div>
-                    <div className="absolute inset-0 flex items-center px-3 pointer-events-none">
-                      <span className="text-[7px] font-black select-none text-slate-500/50">
-                        {uploadedVideoUrl?"Avatar UGC":"Avatar / Locutor"} · {Math.round(totalDur)}s
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* ══ TRILHA V2 — B-Roll (clips coloridos sobre o avatar, com gaps) ══ */}
-              <div className="flex border-b" style={{borderColor:"rgba(255,255,255,0.04)"}}>
-                {/* Track Header — V2 */}
-                <div className="w-20 h-20 shrink-0 flex flex-col items-start justify-center border-r gap-1 px-2"
-                  style={{borderColor:"rgba(255,255,255,0.06)",background:"rgba(232,89,60,0.03)"}}>
-                  <span className="text-[10px] font-black tracking-wide" style={{color:trackBrollVisible?"rgba(232,89,60,1)":"rgba(232,89,60,0.25)"}}>🎬 B-ROLL</span>
-                  <button title={trackBrollVisible?"Ocultar B-Rolls":"Mostrar B-Rolls"}
-                    onClick={()=>setTrackBrollVisible(v=>!v)}
-                    className="p-0.5 rounded transition-colors hover:bg-white/8">
-                    {trackBrollVisible
-                      ?<Eye className="w-3 h-3" style={{color:"rgba(232,89,60,0.7)"}}/>
-                      :<EyeOff className="w-3 h-3" style={{color:"rgba(239,68,68,0.7)"}}/>}
-                  </button>
-                </div>
-                <div className="flex-1 relative h-20">
-                  {/* ── Gap indicators — "Avatar respira aqui" ── */}
-                  {localDrScenes.length>0 && effectiveClips.map((clip,ci)=>{
-                    const gapStart = clip.startSec + clip.durSec;
-                    const sceneEnd = gapStart + (localDrScenes[clip.sceneIdx]?.duration??0) - clip.durSec;
-                    const nextClipStart = ci+1<effectiveClips.length ? effectiveClips[ci+1].startSec : totalDur;
-                    const gapDur = Math.max(0, nextClipStart - gapStart);
-                    if(gapDur < 0.5) return null;
-                    const gapLeft=(gapStart/totalDur)*100;
-                    const gapW=(gapDur/totalDur)*100;
-                    return (
-                      <div key={`gap${ci}`}
-                        className="absolute top-3 bottom-3 rounded-lg flex items-center justify-center pointer-events-none"
-                        style={{
-                          left:`calc(${gapLeft}% + 1px)`,width:`calc(${gapW}% - 2px)`,
-                          background:"rgba(100,116,139,0.05)",
-                          border:"1px dashed rgba(100,116,139,0.18)",
-                        }}>
-                        <span className="text-[6px] font-black uppercase tracking-wider"
-                          style={{color:"rgba(100,116,139,0.35)"}}>AV</span>
-                      </div>
-                    );
-                  })}
-                  {effectiveClips.map(clip=>{
-                    const left=(clip.startSec/totalDur)*100;
-                    const width=(clip.durSec/totalDur)*100;
-                    const isAct=currentClip?.id===clip.id;
-                    const isLoad=loadingClipIds.has(clip.id);
-                    const isDT=dragOverClipId===clip.id;
-                    const isDraggingThis=dragClipSceneIdx===clip.sceneIdx;
-                    const isSel=selectedLayer===clip.id;
-                    const isBeingDragged=clipDrag?.clipId===clip.id;
-                    return(
-                      <div key={clip.id}
-                        className={`v1clip group absolute top-1 bottom-1 rounded overflow-hidden
-                          ${isAct?"ring-2 ring-orange-400/90 brightness-110":""}
-                          ${isSel&&!isAct?"ring-2 ring-sky-400/90":""}
-                          ${isDT&&!isDraggingThis?"ring-2 ring-blue-400 brightness-125":""}
-                          ${isDraggingThis?"opacity-40 scale-y-95":""}
-                          ${isBeingDragged?"opacity-80":""}`}
-                        style={{
-                          left:`calc(${left}% + 1px)`,width:`calc(${width}% - 2px)`,
-                          cursor: clipDrag ? "grabbing" : "grab",
-                          background: clip.thumb
-                            ? `url(${clip.thumb}) center/cover no-repeat`
-                            : clip.url ? `${clip.color}28` : `${clip.color}0d`,
-                          border:`1px ${clip.url||clip.thumb?"solid":"dashed"} ${clip.color}${clip.url||clip.thumb?"77":"33"}`,
-                          transition: isBeingDragged ? "none" : "left 0.05s,width 0.05s",
-                        }}
-                        onClick={e=>{e.stopPropagation();setSelectedLayer(isSel?null:clip.id);if(!isSel)setLeftTab("inspector");seekToTime(clip.startSec+0.01);}}
-                        onDragOver={e=>{e.preventDefault();setDragOverClipId(clip.id);}}
-                        onDragLeave={()=>setDragOverClipId(null)}
-                        onDrop={e=>{
-                          e.preventDefault();
-                          setDragOverClipId(null);
-                          if(dragSrcUrl){
-                            handleDropOnClip(clip.id,dragSrcUrl);
-                          } else if(dragClipSceneIdx!==null && dragClipSceneIdx!==clip.sceneIdx){
-                            setLocalDrScenes(prev=>{
-                              const next=[...prev];
-                              [next[dragClipSceneIdx],next[clip.sceneIdx]]=[next[clip.sceneIdx],next[dragClipSceneIdx]];
-                              return next;
-                            });
-                            setDragClipSceneIdx(null);
-                          }
-                        }}>
-                        {/* ── Trim handle LEFT ── */}
-                        <div
-                          className="absolute left-0 top-0 bottom-0 w-2.5 z-20 flex items-center justify-center opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity"
-                          style={{cursor:"ew-resize",background:"rgba(0,0,0,0.4)"}}
-                          onMouseDown={e=>{
-                            e.stopPropagation();e.preventDefault();
-                            setClipDrag({clipId:clip.id,mode:"trim-left",startX:e.clientX,origStartSec:clip.startSec,origDurSec:clip.durSec});
-                            setSelectedLayer(clip.id);setLeftTab("inspector");
-                          }}>
-                          <div className="w-0.5 h-4 rounded-full" style={{background:"rgba(255,255,255,0.7)"}}/>
-                        </div>
-                        {/* ── Move body ── */}
-                        <div className="absolute inset-x-2.5 inset-y-0 z-10"
-                          style={{cursor:clipDrag?"grabbing":"grab"}}
-                          onMouseDown={e=>{
-                            e.stopPropagation();e.preventDefault();
-                            setClipDrag({clipId:clip.id,mode:"move",startX:e.clientX,origStartSec:clip.startSec,origDurSec:clip.durSec});
-                            setSelectedLayer(clip.id);setLeftTab("inspector");
-                          }}/>
-                        {/* ── Trim handle RIGHT ── */}
-                        <div
-                          className="absolute right-0 top-0 bottom-0 w-2.5 z-20 flex items-center justify-center opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity"
-                          style={{cursor:"ew-resize",background:"rgba(0,0,0,0.4)"}}
-                          onMouseDown={e=>{
-                            e.stopPropagation();e.preventDefault();
-                            setClipDrag({clipId:clip.id,mode:"trim-right",startX:e.clientX,origStartSec:clip.startSec,origDurSec:clip.durSec});
-                            setSelectedLayer(clip.id);setLeftTab("inspector");
-                          }}>
-                          <div className="w-0.5 h-4 rounded-full" style={{background:"rgba(255,255,255,0.7)"}}/>
-                        </div>
-                        {clip.thumb&&<div className="absolute inset-0 pointer-events-none" style={{background:"linear-gradient(to top,rgba(0,0,0,0.72) 0%,rgba(0,0,0,0.18) 60%,transparent 100%)"}}/>}
-                        {isLoad?(
-                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{background:"rgba(0,0,0,0.5)"}}>
-                            <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin"
-                              style={{borderColor:`${clip.color}cc`,borderTopColor:"transparent"}}/>
-                          </div>
-                        ):(
-                          <>
-                            <div className="absolute bottom-0 left-0 right-0 flex items-center px-1.5 pb-1 pointer-events-none">
-                              {!clip.url&&!clip.thumb&&<div className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0 mr-0.5" style={{background:clip.color+"88"}}/>}
-                              <span className="text-[7px] font-bold text-white/80 truncate drop-shadow">{clip.label}</span>
-                            </div>
-                            <div className="v1clip-overlay absolute inset-0 flex items-center justify-center"
-                              style={{background:"rgba(0,0,0,0.55)"}}>
-                              <button title="Sugerir outra mídia"
-                                onClick={e=>{e.stopPropagation();setSelectedLayer(clip.id);setLeftTab("inspector");suggestAnother(clip.id);}}
-                                className="flex items-center gap-1.5 hover:scale-110 transition-transform bg-black/60 rounded-full px-2 py-1">
-                                <RefreshCw className="w-3 h-3 text-white"/>
-                                <span className="text-[8px] text-white font-bold">Trocar</span>
-                              </button>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* ── T1: Subtitle ── */}
-              <div className="flex border-b" style={{borderColor:"rgba(255,255,255,0.04)"}}>
-                <div className="w-20 h-8 shrink-0 flex items-center justify-center border-r cursor-pointer transition-colors"
-                  style={{
-                    borderColor:"rgba(255,255,255,0.05)",
-                    background: selectedLayer==="subtitle"?"rgba(234,179,8,0.08)":"transparent",
-                  }}
-                  onClick={()=>{setSelectedLayer(v=>v==="subtitle"?null:"subtitle");setLeftTab("inspector");}}>
-                  <span className="text-[8px] font-black tracking-widest"
-                    style={{color:selectedLayer==="subtitle"?"rgba(234,179,8,0.9)":"rgba(234,179,8,0.45)"}}>SUB</span>
-                </div>
-                <div className="flex-1 relative h-8 cursor-pointer"
-                  onClick={()=>{setSelectedLayer(v=>v==="subtitle"?null:"subtitle");setLeftTab("inspector");}}>
-                  {(localDrScenes.length>0?localDrScenes:localScenes).map((_row,i)=>{
-                    const dur=localDrScenes.length?(localDrScenes[i] as DirectResponseScene).duration:(localScenes[i] as Scene).estimated_duration_seconds??5;
-                    const text=localDrScenes.length?(localDrScenes[i] as DirectResponseScene).textSnippet:((localScenes[i] as Scene).text_chunk??(localScenes[i] as Scene).segment??"");
-                    const left=(sceneStarts[i]/totalDur)*100;
-                    const width=(dur/totalDur)*100;
-                    const isActive=activeScene===i;
-                    const isSel=selectedLayer==="subtitle";
-                    return(
-                      <div key={i} className="absolute top-0.5 bottom-0.5 rounded overflow-hidden flex items-center px-1.5"
-                        style={{
-                          left:`calc(${left}% + 1px)`,width:`calc(${width}% - 2px)`,
-                          background:isSel?"rgba(234,179,8,0.12)":isActive?"rgba(234,179,8,0.1)":"rgba(234,179,8,0.04)",
-                          border:`1px solid rgba(234,179,8,${isSel?0.4:isActive?0.3:0.1})`,
-                        }}>
-                        <span className="text-[6px] font-medium text-yellow-500/60 truncate">{text.slice(0,40)}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* ── SFX ── */}
-              <div className="flex border-b" style={{borderColor:"rgba(255,255,255,0.04)"}}>
-                <div className="w-20 h-9 shrink-0 flex items-center justify-between border-r px-2"
-                  style={{borderColor:"rgba(255,255,255,0.05)"}}>
-                  <span className="text-[8px] font-black tracking-widest text-amber-600/60">SFX</span>
-                  <button title={trackSfxMuted?"Ativar":"Mutar"} onClick={()=>setTrackSfxMuted(m=>!m)}
-                    className="p-0.5 rounded transition-colors hover:bg-white/8">
-                    {trackSfxMuted
-                      ?<VolumeX className="w-2.5 h-2.5 text-red-500/60"/>
-                      :<Volume2 className="w-2.5 h-2.5 text-amber-600/40"/>}
-                  </button>
-                </div>
-                <div className="flex-1 relative h-9 overflow-visible" style={{opacity:trackSfxMuted?0.2:1,transition:"opacity 0.2s"}}>
-                  {sfxMarkers.length===0 && (
-                    <div className="absolute inset-0 flex items-center px-2">
-                      <span className="text-[7px] text-gray-800 italic">Nenhum gatilho detectado</span>
-                    </div>
-                  )}
-                  {sfxMarkers.map(marker=>{
-                    const effTime=marker.timeSec+(sfxOffsets[marker.id]??0);
-                    const left=Math.max(0,Math.min(100,(effTime/totalDur)*100));
-                    const isNear=Math.abs(currentTime-effTime)<0.5;
-                    const isDraggingThis=sfxDrag?.id===marker.id;
-                    return (
-                      <div key={marker.id}
-                        className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-10 group/sfxpin"
-                        style={{
-                          left:`${left}%`,
-                          cursor:sfxDrag?"grabbing":"grab",
-                          transition:isDraggingThis?"none":"left 0.05s",
-                        }}
-                        onMouseDown={e=>{
-                          e.stopPropagation();e.preventDefault();
-                          setSfxDrag({id:marker.id,startX:e.clientX,origOffset:sfxOffsets[marker.id]??0});
-                        }}>
-
-                        {/* Tooltip */}
-                        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 pointer-events-none
-                          opacity-0 group-hover/sfxpin:opacity-100 transition-opacity duration-150 z-50">
-                          <div className="whitespace-nowrap text-[8px] font-bold text-white px-2 py-1 rounded-md shadow-2xl"
-                            style={{background:"#18181b",border:"1px solid rgba(255,255,255,0.13)",boxShadow:"0 8px 24px rgba(0,0,0,0.7)"}}>
-                            {marker.label}
-                            {marker.keyword&&<span className="text-gray-500 ml-1">· "{marker.keyword}"</span>}
-                          </div>
-                          {/* Caret */}
-                          <div className="w-2 h-2 mx-auto rotate-45 -mt-px"
-                            style={{background:"#18181b",borderRight:"1px solid rgba(255,255,255,0.13)",borderBottom:"1px solid rgba(255,255,255,0.13)"}}/>
-                        </div>
-
-                        {/* Icon bubble */}
-                        <button
-                          onClick={e=>{e.stopPropagation();playSFXPreview(marker);seekToTime(marker.timeSec);}}
-                          className="w-5 h-5 rounded-full flex items-center justify-center transition-all duration-200 cursor-pointer hover:scale-110"
-                          style={{
-                            background:"#27272a",
-                            border:`1px solid ${isNear?marker.color:"rgba(232,89,60,0.5)"}`,
-                            boxShadow:isNear?`0 0 8px ${marker.color},0 0 18px ${marker.color}44`:"none",
-                            transform:isNear?"scale(1.45)":"scale(1)",
-                          }}>
-                          {marker.kind==="zap"
-                            ?<Zap      className="w-2.5 h-2.5" style={{color:isNear?marker.color:"#FF7A5C"}} fill={isNear?marker.color:"none"}/>
-                            :<Volume2  className="w-2.5 h-2.5" style={{color:isNear?marker.color:"#FF7A5C"}}/>
-                          }
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* ── A1: Voz ── */}
-              <div className="flex border-b" style={{borderColor:"rgba(255,255,255,0.04)"}}>
-                <div className="w-20 h-10 shrink-0 flex items-center justify-between border-r px-2"
-                  style={{borderColor:"rgba(255,255,255,0.05)"}}>
-                  <span className="text-[8px] font-black tracking-widest text-emerald-600/60">VOZ</span>
-                  <button title={trackA1Muted?"Ativar":"Mutar"} onClick={()=>setTrackA1Muted(m=>!m)}
-                    className="p-0.5 rounded transition-colors hover:bg-white/8">
-                    {trackA1Muted
-                      ?<VolumeX className="w-2.5 h-2.5 text-red-500/60"/>
-                      :<Volume2 className="w-2.5 h-2.5 text-emerald-600/40"/>}
-                  </button>
-                </div>
-                <div className="flex-1 h-10 flex items-end overflow-hidden gap-px px-1"
-                  style={{opacity:trackA1Muted?0.1:1,transition:"opacity 0.2s"}}>
-                  {Array.from({length:120}).map((_,i)=>(
-                    <div key={i} className="flex-1 rounded-sm" style={{background:"#10b981",opacity:0.5,height:`${12+Math.abs(Math.sin(i*1.7)*Math.cos(i*0.5))*88}%`}}/>
-                  ))}
-                </div>
-              </div>
-
-              {/* ── A2: Trilha ── */}
-              <div className="flex">
-                <div className="w-20 h-9 shrink-0 flex items-center justify-center border-r"
-                  style={{borderColor:"rgba(255,255,255,0.05)"}}>
-                  <span className="text-[8px] font-black tracking-widest text-red-600/40">TRILHA</span>
-                </div>
-                <div className="flex-1 h-9 flex items-end overflow-hidden gap-px px-1">
-                  {Array.from({length:120}).map((_,i)=>(
-                    <div key={i} className="flex-1 rounded-sm" style={{background:"#ef4444",opacity:0.25,height:`${8+Math.abs(Math.sin(i*2.3+1)*Math.cos(i*0.7))*92}%`}}/>
-                  ))}
-                </div>
-              </div>
-
-              {/* ── Red Playhead Needle ── */}
-              <div className="absolute top-0 bottom-0 pointer-events-none z-20"
-                style={{left:`calc(80px + (100% - 80px) * ${playheadPct/100})`,transform:"translateX(-50%)"}}>
-                <div className="w-px h-full bg-red-500" style={{boxShadow:"0 0 8px rgba(239,68,68,0.7)"}}/>
-                <div className="w-3 h-3 bg-red-500 rounded-full absolute -top-1 left-1/2 -translate-x-1/2" style={{boxShadow:"0 0 10px rgba(239,68,68,0.9)"}}/>
-              </div>
-            </div>
-            </div>{/* end scroll wrapper */}
-          </div>
+        {/* ── Export bar row ── */}
+        <div className="flex-1 min-h-0 flex flex-col px-3 pb-3 gap-2 justify-end">
 
           {/* Export bar */}
           <div className="flex items-center justify-between shrink-0 gap-2">
@@ -2496,15 +2068,73 @@ ${clipEls.join("\n")}
       <div className="w-[26%] shrink-0 flex flex-col border-l overflow-hidden"
         style={{background:"#0a0a0a",borderColor:"rgba(255,255,255,0.05)"}}>
 
-        <div className="flex items-center justify-between px-4 py-3.5 border-b shrink-0" style={{borderColor:"rgba(255,255,255,0.05)"}}>
-          <p className="text-[13px] font-black text-white uppercase tracking-widest" style={{fontFamily:"'Bebas Neue',sans-serif",letterSpacing:"2px"}}>Mídias Sugeridas</p>
-          <span className="text-[9px] text-orange-400 font-bold flex items-center gap-1">
-            <div className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"/>
-            Cena {activeScene+1}/{localDrScenes.length||localScenes.length}
-          </span>
+        {/* ── Right Panel Tab Bar ── */}
+        <div className="flex items-center gap-0 px-2 border-b shrink-0" style={{borderColor:"#131313",background:"#09090B",height:"36px"}}>
+          {([
+            {id:"broll",label:"B-Roll"},
+            {id:"inspector",label:"Inspector"},
+            {id:"audio",label:"Áudio"},
+          ] as {id:"broll"|"inspector"|"audio";label:string}[]).map(tab=>{
+            const active = rightTab===tab.id;
+            return (
+              <button key={tab.id} onClick={()=>setRightTab(tab.id)}
+                className="relative px-3 h-full text-[11px] font-medium transition-colors"
+                style={{
+                  color: active ? "#EAEAEA" : "#7A7A7A",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                }}>
+                {tab.label}
+                {active && (
+                  <div className="absolute bottom-0 left-2 right-2 h-px" style={{background:"#E8512A"}}/>
+                )}
+              </button>
+            );
+          })}
+          <div className="flex-1"/>
+          {rightTab==="broll" && (
+            <span className="text-[9px] text-orange-400 font-bold flex items-center gap-1 pr-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"/>
+              Cena {activeScene+1}/{localDrScenes.length||localScenes.length}
+            </span>
+          )}
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        {rightTab==="inspector" && (
+          <div className="flex-1 overflow-y-auto p-4 flex flex-col items-center justify-center text-center gap-2" style={{color:"#7A7A7A"}}>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" style={{opacity:0.3}}>
+              <path d="M12 2l9 4.5v11L12 22l-9-4.5v-11L12 2z" stroke="currentColor" strokeWidth="1.2"/>
+              <path d="M12 2v20M3 6.5l18 11M21 6.5l-18 11" stroke="currentColor" strokeWidth="1.2" opacity="0.4"/>
+            </svg>
+            <p className="text-[11px] font-medium">Inspector</p>
+            <p className="text-[10px] leading-relaxed max-w-[200px]" style={{color:"#444"}}>
+              Selecione um clip, avatar ou legenda na timeline para ajustar propriedades.
+            </p>
+          </div>
+        )}
+
+        {rightTab==="audio" && (
+          <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+            <div className="rounded-lg p-3" style={{background:"#0F0F0F",border:"1px solid #131313"}}>
+              <p className="text-[9px] font-bold uppercase tracking-[0.14em] mb-2" style={{color:"#7A7A7A"}}>Trilha de Fundo</p>
+              <p className="text-[11px]" style={{color:"#EAEAEA"}}>{result.music_style || "Sem trilha"}</p>
+            </div>
+            <div className="rounded-lg p-3" style={{background:"#0F0F0F",border:"1px solid #131313"}}>
+              <p className="text-[9px] font-bold uppercase tracking-[0.14em] mb-2" style={{color:"#7A7A7A"}}>Volumes</p>
+              <div className="space-y-1.5 text-[10px]" style={{color:"#7A7A7A"}}>
+                <div className="flex justify-between"><span>🎙️ Avatar</span><span style={{color:"#EAEAEA",fontFamily:"monospace"}}>{Math.round(avatarVolume*100)}%</span></div>
+                <div className="flex justify-between"><span>🎵 Trilha</span><span style={{color:"#EAEAEA",fontFamily:"monospace"}}>{Math.round(bgVolume*100)}%</span></div>
+                <div className="flex justify-between"><span>💥 SFX</span><span style={{color:"#EAEAEA",fontFamily:"monospace"}}>80%</span></div>
+              </div>
+            </div>
+            <p className="text-[10px] leading-relaxed text-center px-2" style={{color:"#444"}}>
+              Ajuste os faders no mixer abaixo da preview.
+            </p>
+          </div>
+        )}
+
+        <div className="flex-1 overflow-y-auto" style={{display:rightTab==="broll"?"block":"none"}}>
 
           {/* Alternatives — draggable to V1 */}
           <div className="p-3 border-b" style={{borderColor:"rgba(255,255,255,0.05)"}}>
@@ -2759,6 +2389,527 @@ ${clipEls.join("\n")}
         </div>
       </div>
       </div>{/* end MAIN: 3 colunas */}
+      {/* ══ BOTTOM PANEL: AI Strip + Mixer + Timeline (196px full-width) ══ */}
+      <div style={{height:"196px",display:"flex",flexDirection:"column",background:"#09090B",borderTop:"1px solid #131313",overflow:"hidden"}}>
+        {/* ── AI Suggestion Strip ── */}
+        <div className="mx-3 mt-2 mb-0 px-4 py-2 rounded-xl shrink-0 flex items-center gap-2.5"
+          style={{background:"rgba(138,43,226,0.07)",border:"1px solid rgba(138,43,226,0.18)"}}>
+          <div style={{width:"6px",height:"6px",borderRadius:"50%",background:"#a855f7",flexShrink:0,boxShadow:"0 0 6px rgba(168,85,247,0.6)"}}/>
+          <span style={{fontSize:"10px",color:"rgba(168,85,247,0.85)",fontWeight:500,flex:1}}>
+            ✦ Sugestão IA: adicione um B-roll de transição na cena {activeScene+1} para aumentar a retenção
+          </span>
+          <button style={{fontSize:"9px",fontWeight:700,color:"rgba(168,85,247,0.7)",background:"rgba(168,85,247,0.1)",border:"1px solid rgba(168,85,247,0.2)",borderRadius:"6px",padding:"2px 8px",cursor:"pointer",flexShrink:0}}>Aplicar</button>
+          <button style={{fontSize:"10px",color:"rgba(255,255,255,0.2)",background:"none",border:"none",cursor:"pointer",flexShrink:0,lineHeight:1}}>✕</button>
+        </div>
+
+        {/* ── Audio Mixer ── */}
+        <div className="mx-3 mb-0 mt-1 px-4 py-2.5 rounded-xl shrink-0 flex items-center gap-4"
+          style={{background:"rgba(0,0,0,0.55)",border:"1px solid rgba(255,255,255,0.06)"}}>
+          <span className="text-[9px] font-black uppercase tracking-[0.14em] text-gray-500 shrink-0">Mixer</span>
+          {/* 🎙️ Avatar fader */}
+          <div className="flex items-center gap-2 flex-1">
+            <span className="text-[10px] shrink-0">🎙️</span>
+            <span className="text-[9px] font-bold text-gray-500 shrink-0 w-10">Avatar</span>
+            <div className="relative flex-1 h-1.5 rounded-full cursor-pointer" style={{background:"rgba(255,255,255,0.08)"}}>
+              <div className="absolute left-0 top-0 h-full rounded-full pointer-events-none transition-all"
+                style={{width:`${avatarVolume*100}%`,background:"linear-gradient(90deg,#FF7A5C,#E8593C)"}}/>
+              <input type="range" min="0" max="1" step="0.01" value={avatarVolume}
+                onChange={e=>{
+                  const v=+e.target.value; setAvatarVolume(v);
+                  if(avatarVideoRef.current) avatarVideoRef.current.volume=v;
+                  if(v===0) setTrackAVMuted(true); else if(trackAVMuted) setTrackAVMuted(false);
+                }}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"/>
+            </div>
+            <span className="text-[9px] font-mono text-gray-500 w-6 text-right shrink-0">{Math.round(avatarVolume*100)}</span>
+          </div>
+          <div className="w-px h-4 shrink-0" style={{background:"rgba(255,255,255,0.07)"}}/>
+          {/* 🎵 Trilha fader */}
+          <div className="flex items-center gap-2 flex-1">
+            <span className="text-[10px] shrink-0">🎵</span>
+            <span className="text-[9px] font-bold text-gray-500 shrink-0 w-10">Trilha</span>
+            <div className="relative flex-1 h-1.5 rounded-full cursor-pointer" style={{background:"rgba(255,255,255,0.08)"}}>
+              <div className="absolute left-0 top-0 h-full rounded-full pointer-events-none transition-all"
+                style={{width:`${bgVolume*100}%`,background:"linear-gradient(90deg,#FF7A5C,#E8593C)"}}/>
+              <input type="range" min="0" max="1" step="0.01" value={bgVolume}
+                onChange={e=>{
+                  const v=+e.target.value; setBgVolume(v);
+                  if(bgAudioRef.current) bgAudioRef.current.volume=v;
+                }}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"/>
+            </div>
+            <span className="text-[9px] font-mono text-gray-500 w-6 text-right shrink-0">{Math.round(bgVolume*100)}</span>
+          </div>
+          <div className="w-px h-4 shrink-0" style={{background:"rgba(255,255,255,0.07)"}}/>
+          {/* 💥 SFX fader */}
+          <div className="flex items-center gap-2 flex-1">
+            <span className="text-[10px] shrink-0">💥</span>
+            <span className="text-[9px] font-bold text-gray-500 shrink-0 w-10">SFX</span>
+            <div className="relative flex-1 h-1.5 rounded-full cursor-pointer" style={{background:"rgba(255,255,255,0.08)"}}>
+              <div className="absolute left-0 top-0 h-full rounded-full pointer-events-none transition-all"
+                style={{width:"80%",background:"linear-gradient(90deg,#a78bfa,#7c3aed)"}}/>
+              <input type="range" min="0" max="1" step="0.01" defaultValue="0.8"
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"/>
+            </div>
+            <span className="text-[9px] font-mono text-gray-500 w-6 text-right shrink-0">80</span>
+          </div>
+        </div>
+
+        {/* ── Timeline (extracted) ── */}
+        <div className="flex-1 min-h-0 flex flex-col px-3 pb-3">
+          <div className="flex-1 min-h-0 rounded-xl overflow-hidden flex flex-col"
+            style={{background:"#080808",border:"1px solid rgba(255,255,255,0.06)"}}>
+
+            {/* ── Timeline Toolbar ── */}
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b shrink-0"
+              style={{borderColor:"rgba(255,255,255,0.08)",background:"rgba(0,0,0,0.4)"}}>
+
+              {/* Tool buttons: Selecionar / Corte / Slip */}
+              <div className="flex items-center gap-1 shrink-0">
+                {([
+                  {id:"select",label:"S",title:"Selecionar (V)"},
+                  {id:"cut",label:"✂",title:"Corte (C)"},
+                  {id:"slip",label:"⇄",title:"Slip (Y)"},
+                ] as {id:string;label:string;title:string}[]).map(tool=>(
+                  <button key={tool.id} title={tool.title}
+                    className="w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-bold transition-all hover:scale-105 active:scale-95"
+                    style={{
+                      background: tool.id==="select" ? "rgba(232,81,42,0.18)" : "rgba(255,255,255,0.05)",
+                      border: tool.id==="select" ? "1px solid rgba(232,81,42,0.4)" : "1px solid rgba(255,255,255,0.1)",
+                      color: tool.id==="select" ? "#F0563A" : "#9ca3af",
+                    }}>
+                    {tool.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="w-px h-4 shrink-0" style={{background:"rgba(255,255,255,0.08)"}}/>
+
+              {/* Snap toggle */}
+              <button title="Snap ao grid (S)"
+                className="flex items-center gap-1 px-2.5 h-7 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all"
+                style={{background:"rgba(34,197,94,0.1)",border:"1px solid rgba(34,197,94,0.25)",color:"rgba(34,197,94,0.8)"}}>
+                <svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M2 5h6M5 2v6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                SNAP
+              </button>
+
+              <div className="w-px h-4 shrink-0" style={{background:"rgba(255,255,255,0.08)"}}/>
+
+              {/* Label */}
+              <span className="text-[11px] font-black uppercase tracking-widest shrink-0"
+                style={{color:"rgba(240,86,58,0.7)"}}>🔍</span>
+
+              {/* Zoom Out */}
+              <button onClick={()=>setTimelineZoom(z=>Math.max(0.25,z*0.75))}
+                className="w-8 h-8 rounded-lg flex items-center justify-center font-black text-lg transition-all hover:scale-105 active:scale-95"
+                style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.12)",color:"#e4e4e7"}}>
+                −
+              </button>
+
+              {/* Zoom level */}
+              <div className="w-16 h-8 rounded-lg flex items-center justify-center text-[13px] font-black"
+                style={{background:"rgba(240,86,58,0.15)",border:"1px solid rgba(240,86,58,0.35)",color:"#F0563A"}}>
+                {Math.round(timelineZoom*100)}%
+              </div>
+
+              {/* Zoom In */}
+              <button onClick={()=>setTimelineZoom(z=>Math.min(8,z*1.33))}
+                className="w-8 h-8 rounded-lg flex items-center justify-center font-black text-lg transition-all hover:scale-105 active:scale-95"
+                style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.12)",color:"#e4e4e7"}}>
+                +
+              </button>
+
+              {/* FIT */}
+              <button onClick={()=>setTimelineZoom(1)}
+                className="px-3 h-8 rounded-lg text-[11px] font-black transition-all hover:scale-105 active:scale-95"
+                style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",color:"#a1a1aa"}}>
+                FIT
+              </button>
+
+              <div className="flex-1"/>
+              <span className="text-[10px] font-medium" style={{color:"rgba(255,255,255,0.2)"}}>
+                ✦ Ctrl+scroll para zoom &nbsp;·&nbsp; arraste clips para reordenar
+              </span>
+            </div>
+
+            {/* Scrollable outer wrapper */}
+            <div ref={timelineScrollRef}
+              className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden"
+              style={{scrollbarWidth:"thin",scrollbarColor:"rgba(255,255,255,0.1) transparent"}}
+              onWheel={handleTimelineWheel}>
+
+            {/* Fixed-width canvas — grows with video duration + zoom */}
+            <div ref={timelineRef}
+              className="relative select-none h-full"
+              style={{
+                width: `${Math.max(640, totalDur * 28 * timelineZoom)}px`,
+                cursor:isDragging?"col-resize":"crosshair",
+              }}
+              onMouseDown={handleTimelineMouseDown}>
+
+              {/* Ruler */}
+              <div className="flex h-5 border-b sticky top-0 z-10" style={{background:"#080808",borderColor:"rgba(255,255,255,0.05)"}}>
+                <div className="w-[72px] shrink-0 border-r" style={{borderColor:"rgba(255,255,255,0.05)"}}/>
+                <div className="flex-1 relative">
+                  {Array.from({length:Math.ceil(totalDur/5)+1}).map((_,i)=>(
+                    <div key={i} className="absolute flex flex-col items-center" style={{left:`${(i*5/totalDur)*100}%`}}>
+                      <div className="w-px h-2 mt-0.5" style={{background:"rgba(255,255,255,0.1)"}}/>
+                      <span className="text-[7px] font-mono text-gray-500">{fmtTime(i*5)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* ══ TRILHA AV — Avatar / A-Roll ══ */}
+              <div className="flex border-b" style={{borderColor:"rgba(255,255,255,0.04)"}}>
+                <div className="w-20 shrink-0 flex flex-col items-start justify-center border-r gap-1 px-2 py-1.5"
+                  style={{borderColor:"rgba(255,255,255,0.06)",background:selectedLayer==="avatar"?"rgba(148,163,184,0.07)":"rgba(148,163,184,0.02)"}}>
+                  <span className="text-[8px] font-black tracking-widest"
+                    style={{color:selectedLayer==="avatar"?"rgba(148,163,184,1)":trackAVVisible?"rgba(148,163,184,0.6)":"rgba(148,163,184,0.2)"}}>AVATAR</span>
+                  <div className="flex items-center gap-1">
+                    <button title={trackAVVisible?"Ocultar":"Mostrar"} onClick={e=>{e.stopPropagation();setTrackAVVisible(v=>!v)}}
+                      className="p-0.5 rounded transition-colors hover:bg-white/8">
+                      {trackAVVisible?<Eye className="w-2.5 h-2.5 text-slate-500"/>:<EyeOff className="w-2.5 h-2.5 text-red-500/60"/>}
+                    </button>
+                    <button title={trackAVMuted?"Desmutar":"Mutar"} onClick={e=>{e.stopPropagation();setTrackAVMuted(m=>!m)}}
+                      className="p-0.5 rounded transition-colors hover:bg-white/8">
+                      {trackAVMuted?<VolumeX className="w-2.5 h-2.5 text-red-500/60"/>:<Volume2 className="w-2.5 h-2.5 text-slate-500"/>}
+                    </button>
+                  </div>
+                </div>
+                <div className="flex-1 relative h-11 flex items-center px-1 cursor-pointer"
+                  onClick={()=>{setSelectedLayer(v=>v==="avatar"?null:"avatar");setLeftTab("inspector");}}>
+                  <div className="absolute left-1 right-1 top-1.5 bottom-1.5 rounded-lg overflow-hidden transition-all duration-150"
+                    style={{
+                      background: selectedLayer==="avatar" ? "rgba(148,163,184,0.1)" : "rgba(100,116,139,0.08)",
+                      border: `1px solid rgba(148,163,184,${selectedLayer==="avatar"?0.4:0.15})`,
+                      opacity: trackAVVisible ? 1 : 0.25,
+                      boxShadow: selectedLayer==="avatar" ? "0 0 0 1px rgba(148,163,184,0.2)" : "none",
+                    }}>
+                    <div className="absolute inset-0 flex items-center gap-px px-1">
+                      {Array.from({length:90}).map((_,i)=>(
+                        <div key={i} className="flex-1 rounded-full"
+                          style={{background:"rgba(148,163,184,0.3)",height:`${18+Math.abs(Math.sin(i*1.3)*Math.cos(i*0.4))*64}%`}}/>
+                      ))}
+                    </div>
+                    <div className="absolute inset-0 flex items-center px-3 pointer-events-none">
+                      <span className="text-[7px] font-black select-none text-slate-500/50">
+                        {uploadedVideoUrl?"Avatar UGC":"Avatar / Locutor"} · {Math.round(totalDur)}s
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* ══ TRILHA V2 — B-Roll (clips coloridos sobre o avatar, com gaps) ══ */}
+              <div className="flex border-b" style={{borderColor:"rgba(255,255,255,0.04)"}}>
+                {/* Track Header — V2 */}
+                <div className="w-[72px] h-20 shrink-0 flex flex-col items-start justify-center border-r gap-1 px-2"
+                  style={{borderColor:"rgba(255,255,255,0.06)",background:"rgba(232,89,60,0.03)"}}>
+                  <span className="text-[10px] font-black tracking-wide" style={{color:trackBrollVisible?"rgba(232,89,60,1)":"rgba(232,89,60,0.25)"}}>🎬 B-ROLL</span>
+                  <button title={trackBrollVisible?"Ocultar B-Rolls":"Mostrar B-Rolls"}
+                    onClick={()=>setTrackBrollVisible(v=>!v)}
+                    className="p-0.5 rounded transition-colors hover:bg-white/8">
+                    {trackBrollVisible
+                      ?<Eye className="w-3 h-3" style={{color:"rgba(232,89,60,0.7)"}}/>
+                      :<EyeOff className="w-3 h-3" style={{color:"rgba(239,68,68,0.7)"}}/>}
+                  </button>
+                </div>
+                <div className="flex-1 relative h-20">
+                  {/* ── Gap indicators — "Avatar respira aqui" ── */}
+                  {localDrScenes.length>0 && effectiveClips.map((clip,ci)=>{
+                    const gapStart = clip.startSec + clip.durSec;
+                    const sceneEnd = gapStart + (localDrScenes[clip.sceneIdx]?.duration??0) - clip.durSec;
+                    const nextClipStart = ci+1<effectiveClips.length ? effectiveClips[ci+1].startSec : totalDur;
+                    const gapDur = Math.max(0, nextClipStart - gapStart);
+                    if(gapDur < 0.5) return null;
+                    const gapLeft=(gapStart/totalDur)*100;
+                    const gapW=(gapDur/totalDur)*100;
+                    return (
+                      <div key={`gap${ci}`}
+                        className="absolute top-3 bottom-3 rounded-lg flex items-center justify-center pointer-events-none"
+                        style={{
+                          left:`calc(${gapLeft}% + 1px)`,width:`calc(${gapW}% - 2px)`,
+                          background:"rgba(100,116,139,0.05)",
+                          border:"1px dashed rgba(100,116,139,0.18)",
+                        }}>
+                        <span className="text-[6px] font-black uppercase tracking-wider"
+                          style={{color:"rgba(100,116,139,0.35)"}}>AV</span>
+                      </div>
+                    );
+                  })}
+                  {effectiveClips.map(clip=>{
+                    const left=(clip.startSec/totalDur)*100;
+                    const width=(clip.durSec/totalDur)*100;
+                    const isAct=currentClip?.id===clip.id;
+                    const isLoad=loadingClipIds.has(clip.id);
+                    const isDT=dragOverClipId===clip.id;
+                    const isDraggingThis=dragClipSceneIdx===clip.sceneIdx;
+                    const isSel=selectedLayer===clip.id;
+                    const isBeingDragged=clipDrag?.clipId===clip.id;
+                    return(
+                      <div key={clip.id}
+                        className={`v1clip group absolute top-1 bottom-1 rounded overflow-hidden
+                          ${isAct?"ring-2 ring-orange-400/90 brightness-110":""}
+                          ${isSel&&!isAct?"ring-2 ring-sky-400/90":""}
+                          ${isDT&&!isDraggingThis?"ring-2 ring-blue-400 brightness-125":""}
+                          ${isDraggingThis?"opacity-40 scale-y-95":""}
+                          ${isBeingDragged?"opacity-80":""}`}
+                        style={{
+                          left:`calc(${left}% + 1px)`,width:`calc(${width}% - 2px)`,
+                          cursor: clipDrag ? "grabbing" : "grab",
+                          background: clip.thumb
+                            ? `url(${clip.thumb}) center/cover no-repeat`
+                            : clip.url ? `${clip.color}28` : `${clip.color}0d`,
+                          border:`1px ${clip.url||clip.thumb?"solid":"dashed"} ${clip.color}${clip.url||clip.thumb?"77":"33"}`,
+                          transition: isBeingDragged ? "none" : "left 0.05s,width 0.05s",
+                        }}
+                        onClick={e=>{e.stopPropagation();setSelectedLayer(isSel?null:clip.id);if(!isSel)setLeftTab("inspector");seekToTime(clip.startSec+0.01);}}
+                        onDragOver={e=>{e.preventDefault();setDragOverClipId(clip.id);}}
+                        onDragLeave={()=>setDragOverClipId(null)}
+                        onDrop={e=>{
+                          e.preventDefault();
+                          setDragOverClipId(null);
+                          if(dragSrcUrl){
+                            handleDropOnClip(clip.id,dragSrcUrl);
+                          } else if(dragClipSceneIdx!==null && dragClipSceneIdx!==clip.sceneIdx){
+                            setLocalDrScenes(prev=>{
+                              const next=[...prev];
+                              [next[dragClipSceneIdx],next[clip.sceneIdx]]=[next[clip.sceneIdx],next[dragClipSceneIdx]];
+                              return next;
+                            });
+                            setDragClipSceneIdx(null);
+                          }
+                        }}>
+                        {/* ── Trim handle LEFT ── */}
+                        <div
+                          className="absolute left-0 top-0 bottom-0 w-2.5 z-20 flex items-center justify-center opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity"
+                          style={{cursor:"ew-resize",background:"rgba(0,0,0,0.4)"}}
+                          onMouseDown={e=>{
+                            e.stopPropagation();e.preventDefault();
+                            setClipDrag({clipId:clip.id,mode:"trim-left",startX:e.clientX,origStartSec:clip.startSec,origDurSec:clip.durSec});
+                            setSelectedLayer(clip.id);setLeftTab("inspector");
+                          }}>
+                          <div className="w-0.5 h-4 rounded-full" style={{background:"rgba(255,255,255,0.7)"}}/>
+                        </div>
+                        {/* ── Move body ── */}
+                        <div className="absolute inset-x-2.5 inset-y-0 z-10"
+                          style={{cursor:clipDrag?"grabbing":"grab"}}
+                          onMouseDown={e=>{
+                            e.stopPropagation();e.preventDefault();
+                            setClipDrag({clipId:clip.id,mode:"move",startX:e.clientX,origStartSec:clip.startSec,origDurSec:clip.durSec});
+                            setSelectedLayer(clip.id);setLeftTab("inspector");
+                          }}/>
+                        {/* ── Trim handle RIGHT ── */}
+                        <div
+                          className="absolute right-0 top-0 bottom-0 w-2.5 z-20 flex items-center justify-center opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity"
+                          style={{cursor:"ew-resize",background:"rgba(0,0,0,0.4)"}}
+                          onMouseDown={e=>{
+                            e.stopPropagation();e.preventDefault();
+                            setClipDrag({clipId:clip.id,mode:"trim-right",startX:e.clientX,origStartSec:clip.startSec,origDurSec:clip.durSec});
+                            setSelectedLayer(clip.id);setLeftTab("inspector");
+                          }}>
+                          <div className="w-0.5 h-4 rounded-full" style={{background:"rgba(255,255,255,0.7)"}}/>
+                        </div>
+                        {clip.thumb&&<div className="absolute inset-0 pointer-events-none" style={{background:"linear-gradient(to top,rgba(0,0,0,0.72) 0%,rgba(0,0,0,0.18) 60%,transparent 100%)"}}/>}
+                        {isLoad?(
+                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{background:"rgba(0,0,0,0.5)"}}>
+                            <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin"
+                              style={{borderColor:`${clip.color}cc`,borderTopColor:"transparent"}}/>
+                          </div>
+                        ):(
+                          <>
+                            <div className="absolute bottom-0 left-0 right-0 flex items-center px-1.5 pb-1 pointer-events-none">
+                              {!clip.url&&!clip.thumb&&<div className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0 mr-0.5" style={{background:clip.color+"88"}}/>}
+                              <span className="text-[7px] font-bold text-white/80 truncate drop-shadow">{clip.label}</span>
+                            </div>
+                            <div className="v1clip-overlay absolute inset-0 flex items-center justify-center"
+                              style={{background:"rgba(0,0,0,0.55)"}}>
+                              <button title="Sugerir outra mídia"
+                                onClick={e=>{e.stopPropagation();setSelectedLayer(clip.id);setLeftTab("inspector");suggestAnother(clip.id);}}
+                                className="flex items-center gap-1.5 hover:scale-110 transition-transform bg-black/60 rounded-full px-2 py-1">
+                                <RefreshCw className="w-3 h-3 text-white"/>
+                                <span className="text-[8px] text-white font-bold">Trocar</span>
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* ── T1: Subtitle ── */}
+              <div className="flex border-b" style={{borderColor:"rgba(255,255,255,0.04)"}}>
+                <div className="w-[72px] h-8 shrink-0 flex items-center justify-center border-r cursor-pointer transition-colors"
+                  style={{
+                    borderColor:"rgba(255,255,255,0.05)",
+                    background: selectedLayer==="subtitle"?"rgba(234,179,8,0.08)":"transparent",
+                  }}
+                  onClick={()=>{setSelectedLayer(v=>v==="subtitle"?null:"subtitle");setLeftTab("inspector");}}>
+                  <span className="text-[8px] font-black tracking-widest"
+                    style={{color:selectedLayer==="subtitle"?"rgba(234,179,8,0.9)":"rgba(234,179,8,0.45)"}}>SUB</span>
+                </div>
+                <div className="flex-1 relative h-8 cursor-pointer"
+                  onClick={()=>{setSelectedLayer(v=>v==="subtitle"?null:"subtitle");setLeftTab("inspector");}}>
+                  {(localDrScenes.length>0?localDrScenes:localScenes).map((_row,i)=>{
+                    const dur=localDrScenes.length?(localDrScenes[i] as DirectResponseScene).duration:(localScenes[i] as Scene).estimated_duration_seconds??5;
+                    const text=localDrScenes.length?(localDrScenes[i] as DirectResponseScene).textSnippet:((localScenes[i] as Scene).text_chunk??(localScenes[i] as Scene).segment??"");
+                    const left=(sceneStarts[i]/totalDur)*100;
+                    const width=(dur/totalDur)*100;
+                    const isActive=activeScene===i;
+                    const isSel=selectedLayer==="subtitle";
+                    return(
+                      <div key={i} className="absolute top-0.5 bottom-0.5 rounded overflow-hidden flex items-center px-1.5"
+                        style={{
+                          left:`calc(${left}% + 1px)`,width:`calc(${width}% - 2px)`,
+                          background:isSel?"rgba(234,179,8,0.12)":isActive?"rgba(234,179,8,0.1)":"rgba(234,179,8,0.04)",
+                          border:`1px solid rgba(234,179,8,${isSel?0.4:isActive?0.3:0.1})`,
+                        }}>
+                        <span className="text-[6px] font-medium text-yellow-500/60 truncate">{text.slice(0,40)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* ── SFX ── */}
+              <div className="flex border-b" style={{borderColor:"rgba(255,255,255,0.04)"}}>
+                <div className="w-[72px] h-9 shrink-0 flex items-center justify-between border-r px-2"
+                  style={{borderColor:"rgba(255,255,255,0.05)"}}>
+                  <span className="text-[8px] font-black tracking-widest text-amber-600/60">SFX</span>
+                  <button title={trackSfxMuted?"Ativar":"Mutar"} onClick={()=>setTrackSfxMuted(m=>!m)}
+                    className="p-0.5 rounded transition-colors hover:bg-white/8">
+                    {trackSfxMuted
+                      ?<VolumeX className="w-2.5 h-2.5 text-red-500/60"/>
+                      :<Volume2 className="w-2.5 h-2.5 text-amber-600/40"/>}
+                  </button>
+                </div>
+                <div className="flex-1 relative h-9 overflow-visible" style={{opacity:trackSfxMuted?0.2:1,transition:"opacity 0.2s"}}>
+                  {sfxMarkers.length===0 && (
+                    <div className="absolute inset-0 flex items-center px-2">
+                      <span className="text-[7px] text-gray-800 italic">Nenhum gatilho detectado</span>
+                    </div>
+                  )}
+                  {sfxMarkers.map(marker=>{
+                    const effTime=marker.timeSec+(sfxOffsets[marker.id]??0);
+                    const left=Math.max(0,Math.min(100,(effTime/totalDur)*100));
+                    const isNear=Math.abs(currentTime-effTime)<0.5;
+                    const isDraggingThis=sfxDrag?.id===marker.id;
+                    return (
+                      <div key={marker.id}
+                        className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-10 group/sfxpin"
+                        style={{
+                          left:`${left}%`,
+                          cursor:sfxDrag?"grabbing":"grab",
+                          transition:isDraggingThis?"none":"left 0.05s",
+                        }}
+                        onMouseDown={e=>{
+                          e.stopPropagation();e.preventDefault();
+                          setSfxDrag({id:marker.id,startX:e.clientX,origOffset:sfxOffsets[marker.id]??0});
+                        }}>
+
+                        {/* Tooltip */}
+                        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 pointer-events-none
+                          opacity-0 group-hover/sfxpin:opacity-100 transition-opacity duration-150 z-50">
+                          <div className="whitespace-nowrap text-[8px] font-bold text-white px-2 py-1 rounded-md shadow-2xl"
+                            style={{background:"#18181b",border:"1px solid rgba(255,255,255,0.13)",boxShadow:"0 8px 24px rgba(0,0,0,0.7)"}}>
+                            {marker.label}
+                            {marker.keyword&&<span className="text-gray-500 ml-1">· "{marker.keyword}"</span>}
+                          </div>
+                          {/* Caret */}
+                          <div className="w-2 h-2 mx-auto rotate-45 -mt-px"
+                            style={{background:"#18181b",borderRight:"1px solid rgba(255,255,255,0.13)",borderBottom:"1px solid rgba(255,255,255,0.13)"}}/>
+                        </div>
+
+                        {/* Icon bubble */}
+                        <button
+                          onClick={e=>{e.stopPropagation();playSFXPreview(marker);seekToTime(marker.timeSec);}}
+                          className="w-5 h-5 rounded-full flex items-center justify-center transition-all duration-200 cursor-pointer hover:scale-110"
+                          style={{
+                            background:"#27272a",
+                            border:`1px solid ${isNear?marker.color:"rgba(232,89,60,0.5)"}`,
+                            boxShadow:isNear?`0 0 8px ${marker.color},0 0 18px ${marker.color}44`:"none",
+                            transform:isNear?"scale(1.45)":"scale(1)",
+                          }}>
+                          {marker.kind==="zap"
+                            ?<Zap      className="w-2.5 h-2.5" style={{color:isNear?marker.color:"#FF7A5C"}} fill={isNear?marker.color:"none"}/>
+                            :<Volume2  className="w-2.5 h-2.5" style={{color:isNear?marker.color:"#FF7A5C"}}/>
+                          }
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* ── A1: Voz ── */}
+              <div className="flex border-b" style={{borderColor:"rgba(255,255,255,0.04)"}}>
+                <div className="w-[72px] h-10 shrink-0 flex items-center justify-between border-r px-2"
+                  style={{borderColor:"rgba(255,255,255,0.05)"}}>
+                  <span className="text-[8px] font-black tracking-widest text-emerald-600/60">VOZ</span>
+                  <button title={trackA1Muted?"Ativar":"Mutar"} onClick={()=>setTrackA1Muted(m=>!m)}
+                    className="p-0.5 rounded transition-colors hover:bg-white/8">
+                    {trackA1Muted
+                      ?<VolumeX className="w-2.5 h-2.5 text-red-500/60"/>
+                      :<Volume2 className="w-2.5 h-2.5 text-emerald-600/40"/>}
+                  </button>
+                </div>
+                <div className="flex-1 h-10 flex items-end overflow-hidden gap-px px-1"
+                  style={{opacity:trackA1Muted?0.1:1,transition:"opacity 0.2s"}}>
+                  {Array.from({length:120}).map((_,i)=>(
+                    <div key={i} className="flex-1 rounded-sm" style={{background:"#10b981",opacity:0.5,height:`${12+Math.abs(Math.sin(i*1.7)*Math.cos(i*0.5))*88}%`}}/>
+                  ))}
+                </div>
+              </div>
+
+              {/* ── A2: Trilha ── */}
+              <div className="flex">
+                <div className="w-[72px] h-9 shrink-0 flex items-center justify-center border-r"
+                  style={{borderColor:"rgba(255,255,255,0.05)"}}>
+                  <span className="text-[8px] font-black tracking-widest text-red-600/40">TRILHA</span>
+                </div>
+                <div className="flex-1 h-9 flex items-end overflow-hidden gap-px px-1">
+                  {Array.from({length:120}).map((_,i)=>(
+                    <div key={i} className="flex-1 rounded-sm" style={{background:"#ef4444",opacity:0.25,height:`${8+Math.abs(Math.sin(i*2.3+1)*Math.cos(i*0.7))*92}%`}}/>
+                  ))}
+                </div>
+              </div>
+
+              {/* ── Playhead Needle ── */}
+              <div className="absolute top-0 bottom-0 pointer-events-none z-20"
+                style={{left:`calc(72px + (100% - 72px) * ${playheadPct/100})`,transform:"translateX(-50%)"}}>
+                <div className="w-px h-full" style={{background:"#E8512A",boxShadow:"0 0 8px rgba(232,81,42,0.7)"}}/>
+                <div className="w-3 h-3 rounded-full absolute -top-1 left-1/2 -translate-x-1/2" style={{background:"#E8512A",boxShadow:"0 0 10px rgba(232,81,42,0.9)"}}/>
+              </div>
+            </div>
+            </div>{/* end scroll wrapper */}
+          </div>
+        </div>
+      </div>
+
+
+      {/* ══ STATUSBAR (28px) ══════════════════════════════════════════════════ */}
+      <div style={{height:"28px",flexShrink:0,display:"flex",alignItems:"center",gap:"16px",padding:"0 14px",background:"#09090B",borderTop:"1px solid #131313",fontSize:"10px",color:"rgba(255,255,255,0.3)",fontFamily:"'Geist',sans-serif",zIndex:10,overflow:"hidden"}}>
+        {/* Project saved */}
+        <div style={{display:"flex",alignItems:"center",gap:"5px",flexShrink:0}}>
+          <div style={{width:"5px",height:"5px",borderRadius:"50%",background:"#22c55e",boxShadow:"0 0 5px rgba(34,197,94,0.6)"}}/>
+          <span style={{fontWeight:500}}>Projeto salvo</span>
+        </div>
+        <span style={{color:"rgba(255,255,255,0.1)"}}>·</span>
+        {/* Duration */}
+        <span style={{flexShrink:0}}>{fmtTime(totalDur)} total</span>
+        <span style={{color:"rgba(255,255,255,0.1)"}}>·</span>
+        {/* Scene count */}
+        <span style={{flexShrink:0}}>{localDrScenes.length||localScenes.length} cenas</span>
+        <span style={{color:"rgba(255,255,255,0.1)"}}>·</span>
+        {/* Resolution / fps */}
+        <span style={{flexShrink:0}}>1920×1080 · 30fps</span>
+        <div style={{flex:1}}/>
+        {/* Playhead */}
+        <span style={{fontFamily:"monospace",color:"#F0563A",fontWeight:700,flexShrink:0}}>{fmtTime(currentTime)}</span>
+      </div>
 
       {paywallOpen&&<UpsellModal onClose={()=>setPaywallOpen(false)}/>}
 
