@@ -1,5 +1,6 @@
 // ─── 404 Not Found ────────────────────────────────────────────────────────────
 import Link from "next/link";
+import SuarikLogo from "@/components/SuarikLogo";
 
 export default function NotFound() {
   return (
@@ -9,14 +10,7 @@ export default function NotFound() {
 
           {/* Logo */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 40 }}>
-            <svg width="32" height="32" viewBox="0 0 64 64" fill="none">
-              <rect width="64" height="64" rx="8" fill="#111"/>
-              <rect x="12" y="10" width="40" height="11" rx="4" fill="#E8E8E8"/>
-              <rect x="41" y="10" width="11" height="24" rx="4" fill="#E8E8E8"/>
-              <rect x="12" y="43" width="40" height="11" rx="4" fill="#E8512A"/>
-              <rect x="12" y="30" width="11" height="24" rx="4" fill="#E8512A"/>
-            </svg>
-            <span style={{ fontSize: 18, fontWeight: 800, color: "#eaeaea", letterSpacing: "-.03em" }}>SUARIK</span>
+            <SuarikLogo size={32} showName />
           </div>
 
           {/* 404 */}

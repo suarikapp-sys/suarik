@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useCredits } from "@/hooks/useCredits";
 import { useToast, ToastContainer } from "@/components/Toast";
 import { UpsellModal } from "@/components/UpsellModal";
+import SuarikLogo from "@/components/SuarikLogo";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Stage     = "setup" | "processing" | "done" | "error";
@@ -452,8 +453,7 @@ export default function DreamFacePage() {
           Voltar
         </button>
         <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "0 10px", borderLeft: `1px solid ${C.b}`, borderRight: `1px solid ${C.b}`, flexShrink: 0 }}>
-          <svg width="18" height="18" viewBox="0 0 64 64"><rect width="64" height="64" rx="8" fill="#111"/><rect x="12" y="10" width="40" height="11" rx="4" fill="#E8E8E8"/><rect x="41" y="10" width="11" height="24" rx="4" fill="#E8E8E8"/><rect x="12" y="43" width="40" height="11" rx="4" fill="#E8512A"/><rect x="12" y="30" width="11" height="24" rx="4" fill="#E8512A"/></svg>
-          <span style={{ fontSize: 13, fontWeight: 700, color: C.t, letterSpacing: "-.025em" }}>Suarik</span>
+          <SuarikLogo size={18} showName />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ fontSize: 12, color: C.t4 }}>·</span>
@@ -794,7 +794,7 @@ export default function DreamFacePage() {
             <div style={{ position: "absolute", inset: 0, borderRadius: "50%", border: "1.5px solid transparent", borderTopColor: C.o, animation: "ring-spin 1.1s linear infinite" }} />
             <div style={{ position: "absolute", inset: 5, borderRadius: "50%", border: "1px solid transparent", borderBottomColor: "rgba(232,81,42,.3)", animation: "ring-spin 1.8s linear infinite reverse" }} />
             <div style={{ width: 64, height: 64, borderRadius: 14, background: C.bg3, border: `1px solid ${C.b2}`, display: "flex", alignItems: "center", justifyContent: "center", animation: "ld-pulse 2s ease-in-out infinite" }}>
-              <svg width="36" height="36" viewBox="0 0 64 64"><rect x="12" y="10" width="40" height="11" rx="4" fill="#E8E8E8" opacity=".9"/><rect x="41" y="10" width="11" height="24" rx="4" fill="#E8E8E8" opacity=".9"/><rect x="12" y="43" width="40" height="11" rx="4" fill="#E8512A"/><rect x="12" y="30" width="11" height="24" rx="4" fill="#E8512A"/></svg>
+              <SuarikLogo size={36} />
             </div>
           </div>
           <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase" as const, color: C.o, marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useToast, ToastContainer } from "@/components/Toast";
 import { trackEvent } from "@/components/PostHogProvider";
+import SuarikLogo from "@/components/SuarikLogo";
 import { TTS_VOICES } from "@/app/lib/ttsVoices";
 import type { DirectResponseScene, GenerateResponse, WhisperWord, BackgroundTrack, WinningAd } from "./types";
 import { analyzeCopyForDirectResponse, extractAudioAsWav } from "./utils";
@@ -588,14 +589,7 @@ export default function SuarikHome() {
 
           {/* Logo */}
           <div style={{ display:"flex", alignItems:"center", gap:7, padding:"0 10px 0 6px", borderRight:`1px solid ${D.border}`, flexShrink:0 }}>
-            <svg width="18" height="18" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" style={{ display:"block", flexShrink:0 }}>
-              <rect width="64" height="64" rx="8" style={{ fill: theme==="dark" ? "#111111" : "#E8E8EA" }}/>
-              <rect x="12" y="10" width="40" height="11" rx="4" style={{ fill: theme==="dark" ? "#E8E8E8" : "#1A1A1A" }}/>
-              <rect x="41" y="10" width="11" height="24" rx="4" style={{ fill: theme==="dark" ? "#E8E8E8" : "#1A1A1A" }}/>
-              <rect x="12" y="43" width="40" height="11" rx="4" style={{ fill:"#E8512A" }}/>
-              <rect x="12" y="30" width="11" height="24" rx="4" style={{ fill:"#E8512A" }}/>
-            </svg>
-            <span style={{ fontSize:13, fontWeight:700, color:D.text, letterSpacing:"-.025em" }}>Suarik</span>
+            <SuarikLogo size={18} showName />
           </div>
 
           <div style={{ width:1, height:14, background:D.border, flexShrink:0 }}/>

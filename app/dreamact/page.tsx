@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useCredits } from "@/hooks/useCredits";
 import { InsufficientCreditsModal } from "@/components/CreditsBar";
 import { useToast, ToastContainer } from "@/components/Toast";
+import SuarikLogo from "@/components/SuarikLogo";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Stage = "setup" | "processing" | "done" | "error";
@@ -297,8 +298,7 @@ export default function DreamActPage() {
           Voltar
         </button>
         <div style={{display:"flex",alignItems:"center",gap:7,padding:"0 10px",borderLeft:`1px solid ${C.b}`,borderRight:`1px solid ${C.b}`,flexShrink:0}}>
-          <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><rect width="20" height="20" rx="6" fill="#E8512A"/><text x="10" y="14" textAnchor="middle" fill="white" fontSize="9" fontWeight="900" fontFamily="sans-serif">S</text></svg>
-          <span style={{fontSize:13,fontWeight:700,color:C.t,letterSpacing:"-.025em"}}>Suarik</span>
+          <SuarikLogo size={18} showName />
         </div>
         <div style={{display:"flex",alignItems:"center",gap:6}}>
           <span style={{fontSize:12,color:C.t4}}>/</span>

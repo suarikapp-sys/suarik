@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useToast, ToastContainer } from "@/components/Toast";
 import { trackEvent } from "@/components/PostHogProvider";
 import { useTheme } from "@/components/ThemeProvider";
+import SuarikLogo from "@/components/SuarikLogo";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Profile {
@@ -437,13 +438,7 @@ function DashboardContent() {
             title={sideExpanded ? undefined : "Expandir menu"}
             style={{ width: 32, height: 32, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer", marginBottom: 6, transition: "background 0.2s" }}
           >
-            <svg width="28" height="28" viewBox="0 0 64 64" fill="none">
-              <rect width="64" height="64" rx="10" fill="#111"/>
-              <rect x="12" y="10" width="40" height="11" rx="4" fill="#E8E8E8"/>
-              <rect x="41" y="10" width="11" height="24" rx="4" fill="#E8E8E8"/>
-              <rect x="12" y="43" width="40" height="11" rx="4" fill="#E8512A"/>
-              <rect x="12" y="30" width="11" height="24" rx="4" fill="#E8512A"/>
-            </svg>
+            <SuarikLogo size={28} />
           </div>
 
           {/* Dashboard (active) */}

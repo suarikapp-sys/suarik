@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import { trackEvent } from "@/components/PostHogProvider";
 import { useTheme } from "@/components/ThemeProvider";
 import { useCredits } from "@/hooks/useCredits";
+import SuarikLogo from "@/components/SuarikLogo";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -89,18 +90,6 @@ const COMPARE_ROWS: Array<{ label: string; vals: string[]; type: "val" | "check"
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function SuarikLogo({ size = 18 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"
-      style={{ display: "block", flexShrink: 0 }}>
-      <rect width="64" height="64" rx="8" style={{ fill: "#111111" }} />
-      <rect x="12" y="10" width="40" height="11" rx="4" style={{ fill: "#E8E8E8" }} />
-      <rect x="41" y="10" width="11" height="24" rx="4" style={{ fill: "#E8E8E8" }} />
-      <rect x="12" y="43" width="40" height="11" rx="4" style={{ fill: "#E8512A" }} />
-      <rect x="12" y="30" width="11" height="24" rx="4" style={{ fill: "#E8512A" }} />
-    </svg>
-  );
-}
 
 function RenderDots({ count, isEnt }: { count: number; isEnt: boolean }) {
   const dots = Math.min(count, 5);
@@ -340,8 +329,7 @@ export default function PricingPage() {
         </button>
 
         <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "0 10px", borderLeft: "1px solid var(--border)", borderRight: "1px solid var(--border)" }}>
-          <SuarikLogo size={18} />
-          <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", letterSpacing: "-.03em" }}>Suarik</span>
+          <SuarikLogo size={18} showName />
         </div>
 
         <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text2)" }}>Planos</span>

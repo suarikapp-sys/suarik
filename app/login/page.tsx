@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import SuarikLogo from "@/components/SuarikLogo";
 
 type Mode = "login" | "signup" | "reset";
 
@@ -252,16 +253,7 @@ export default function LoginPage() {
 
             {/* Logo */}
             <div style={{ display:"flex", alignItems:"center", gap:9, marginBottom:"auto" }}>
-              <svg width="20" height="20" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" style={{ display:"block", flexShrink:0 }}>
-                <rect width="64" height="64" rx="10" style={{ fill:"#111111" }}/>
-                <rect x="12" y="10" width="40" height="11" rx="4" style={{ fill:"#E8E8E8" }}/>
-                <rect x="41" y="10" width="11" height="24" rx="4" style={{ fill:"#E8E8E8" }}/>
-                <rect x="12" y="43" width="40" height="11" rx="4" style={{ fill:"#E8512A" }}/>
-                <rect x="12" y="30" width="11" height="24" rx="4" style={{ fill:"#E8512A" }}/>
-              </svg>
-              <span style={{ fontSize:15, fontWeight:700, color:"#EAEAEA", letterSpacing:"-.03em" }}>
-                Suarik
-              </span>
+              <SuarikLogo size={20} showName />
             </div>
 
             {/* Hero */}

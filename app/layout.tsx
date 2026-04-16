@@ -67,13 +67,6 @@ export const metadata: Metadata = {
     languages: { "pt-BR": APP_URL },
   },
 
-  // ── Icons ────────────────────────────────────────────────────────────────────
-  icons: {
-    icon:        "/favicon.ico",
-    shortcut:    "/favicon.ico",
-    apple:       "/apple-touch-icon.png",
-  },
-
   // ── App manifest ─────────────────────────────────────────────────────────────
   manifest: "/manifest.json",
 

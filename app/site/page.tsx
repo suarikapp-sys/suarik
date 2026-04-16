@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, useInView } from "framer-motion";
+import SuarikLogo from "@/components/SuarikLogo";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const K = {
@@ -201,14 +202,7 @@ export default function SitePage() {
         borderBottom: navOn ? "1px solid rgba(255,255,255,.04)" : "1px solid transparent",
       }}>
         <a href="#" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
-          <svg width="22" height="22" viewBox="0 0 64 64">
-            <rect width="64" height="64" rx="10" fill="#111"/>
-            <rect x="12" y="10" width="40" height="11" rx="4" fill="#E8E8E8"/>
-            <rect x="41" y="10" width="11" height="24" rx="4" fill="#E8E8E8"/>
-            <rect x="12" y="43" width="40" height="11" rx="4" fill={K.o}/>
-            <rect x="12" y="30" width="11" height="24" rx="4" fill={K.o}/>
-          </svg>
-          <span style={{ fontFamily: "'Geist', sans-serif", fontSize: 15, fontWeight: 700, color: K.w, letterSpacing: "-.03em" }}>Suarik</span>
+          <SuarikLogo size={22} showName />
         </a>
         <div style={{ display: "flex", alignItems: "center", gap: 28 }}>
           <a href="#ferramentas" style={{ fontSize: 12, color: K.w3, textDecoration: "none" }}>Ferramentas</a>
