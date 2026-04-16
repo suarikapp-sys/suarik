@@ -12,6 +12,7 @@ import {
   Eye, EyeOff, TrendingUp, Settings,
 } from "lucide-react";
 import { saveAs } from "file-saver";
+import JSZip from "jszip";
 import { trackEvent } from "@/components/PostHogProvider";
 import { TTS_VOICES } from "@/app/lib/ttsVoices";
 import type {
@@ -955,7 +956,7 @@ export function WorkstationView({ result, copy: initialCopy, drScenes: initialDr
           return u;
         });
       } else {
-        const q=sc?.broll_search_keywords??sc?.vault_category??sc?.segment??"cinematic";
+        const q=sc?.broll_search_queries?.[0]??sc?.broll_search_keywords??sc?.vault_category??sc?.segment??"cinematic";
         const page=Math.floor(Math.random()*5)+1;
         const res=await fetch(`/api/suggest-media?q=${encodeURIComponent(q)}&page=${page}`);
         if(res.ok){
@@ -1117,6 +1118,80 @@ export function WorkstationView({ result, copy: initialCopy, drScenes: initialDr
     saveAs(new Blob([generateSRT(srtScenes)],{type:"text/plain;charset=utf-8"}),"suarik-legendas.srt");
   };
   const downloadMusic=()=>{const t=tracks[selectedMusic];if(t?.url)window.open(t.url,"_blank");};
+
+  // ── Pack de Mídias (ZIP download) ───────────────────────────────────────────
+  const downloadMediaPack = async () => {
+    fireToast("📦 Preparando Pack de Mídias…");
+    const zip = new JSZip();
+    const brollFolder = zip.folder("brolls")!;
+    const trilhaFolder = zip.folder("trilha")!;
+    const errors: string[] = [];
+
+    // Collect B-roll clips with URLs
+    const clipsWithUrl = effectiveClips.filter((c): c is TimelineClip & { url: string } => !!c.url);
+
+    // Fetch all B-roll clips
+    await Promise.all(
+      clipsWithUrl.map(async (clip, i) => {
+        const idx = String(i + 1).padStart(2, "0");
+        const filename = `cena-${idx}_broll.mp4`;
+        try {
+          const resp = await fetch(clip.url);
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          const blob = await resp.blob();
+          brollFolder.file(filename, blob);
+        } catch (err) {
+          errors.push(`brolls/${filename} — ${clip.url} (${err instanceof Error ? err.message : "erro desconhecido"})`);
+        }
+      })
+    );
+
+    // Fetch background music
+    if (bgMusicUrl) {
+      try {
+        const resp = await fetch(bgMusicUrl);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const blob = await resp.blob();
+        trilhaFolder.file("trilha.mp3", blob);
+      } catch (err) {
+        errors.push(`trilha/trilha.mp3 — ${bgMusicUrl} (${err instanceof Error ? err.message : "erro desconhecido"})`);
+      }
+    }
+
+    // Generate SRT
+    const srtScenes: Scene[] = localDrScenes.length
+      ? localDrScenes.map(drs => ({ segment: drs.emotion, text_chunk: drs.textSnippet, estimated_duration_seconds: drs.duration }))
+      : localScenes;
+    zip.file("legendas.srt", generateSRT(srtScenes));
+
+    // Add readme with errors if any files failed
+    if (errors.length > 0) {
+      const readmeLines = [
+        "LEIAME — Pack de Mídias",
+        "========================",
+        "",
+        "Os seguintes arquivos não puderam ser baixados:",
+        "",
+        ...errors.map(e => `  • ${e}`),
+        "",
+        "Isso pode ter ocorrido por restrições de CORS ou links expirados.",
+        "Tente baixar esses arquivos manualmente usando os links acima.",
+      ];
+      zip.file("LEIAME.txt", readmeLines.join("\n"));
+    }
+
+    // Generate and download the ZIP
+    fireToast("📦 Compactando arquivos…");
+    try {
+      const content = await zip.generateAsync({ type: "blob" });
+      saveAs(content, "suarik-pack-de-midias.zip");
+      fireToast(errors.length > 0
+        ? `📦 Pack baixado (${errors.length} arquivo(s) com erro — veja LEIAME.txt)`
+        : "📦 Pack de Mídias baixado com sucesso!");
+    } catch {
+      fireToast("❌ Erro ao gerar o ZIP. Tente novamente.");
+    }
+  };
 
   // ── FCPXML export (Premiere Pro / CapCut compatible) ─────────────────────────
   const downloadXML = () => {
@@ -1365,7 +1440,7 @@ ${clipEls.join("\n")}
                   {label:"EDL Universal (.edl)",icon:"📋",paywall:false,action:downloadEDL},
                   {label:"Legendas (.srt)",icon:"💬",paywall:false,action:downloadSRT},
                   {label:"Trilha de Fundo (.mp3)",icon:"🎵",paywall:false,action:downloadMusic},
-                  {label:"Pack de Mídias",icon:"📦",paywall:true},
+                  {label:"Pack de Mídias",icon:"📦",paywall:false,action:downloadMediaPack},
                 ] as {label:string;icon:string;paywall:boolean;action?:()=>void}[]).map(opt=>(
                   <button key={opt.label} onClick={()=>{setExportOpen(false);if(opt.paywall)setPaywallOpen(true);else opt.action?.();}}
                     onMouseEnter={e=>{e.currentTarget.style.background="#141414";}}
@@ -2064,7 +2139,7 @@ ${clipEls.join("\n")}
                       {label:"EDL Universal (.edl)",            icon:"📋",paywall:false,action:downloadEDL},
                       {label:"Legendas (.srt)",                 icon:"💬",paywall:false,action:downloadSRT},
                       {label:"Trilha de Fundo (.mp3)",          icon:"🎵",paywall:false,action:downloadMusic},
-                      {label:"Pack de Mídias",                  icon:"📦",paywall:true},
+                      {label:"Pack de Mídias",                  icon:"📦",paywall:false,action:downloadMediaPack},
                     ].map(opt=>(
                       <button key={opt.label}
                         onClick={()=>{setExportOpen(false);if(opt.paywall)setPaywallOpen(true);else opt.action?.();}}

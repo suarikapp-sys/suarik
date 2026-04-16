@@ -19,6 +19,7 @@ export interface Scene {
   vault_category?: string;
   sound_effect?: string;
   broll_search_keywords?: string;
+  broll_search_queries?: string[];
   video_url?: string;
   video_options?: VideoOption[];
   sfx_url?: string;

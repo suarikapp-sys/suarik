@@ -81,7 +81,7 @@ function buildSystemPrompt(videoFormat: string, videoTheme: string): string {
 🎯 ══════════════════════════════════════════════════════════════ 🎯
    VOCABULÁRIO VISUAL — NICHO: ${visual.label.toUpperCase()}
 
-   Para broll_search_keywords, PRIORIZE estas keywords (em inglês):
+   Para broll_search_queries, PRIORIZE estas keywords (em inglês):
    ${visual.keywords.map((k) => `"${k}"`).join(" · ")}
 
    Estilo visual esperado: ${visual.style}
@@ -159,7 +159,24 @@ ${visualBlock}
 🎬 ══════════════════════════════════════════════════════════════ 🎬
 
 REGRAS GERAIS:
-1. broll_search_keywords: INGLÊS · máximo 3 palavras · CONCRETAS e LITERAIS.
+1. broll_search_queries: ARRAY de 4 queries em INGLÊS, cada uma com 2-4 palavras CONCRETAS e LITERAIS.
+   Para CADA cena, gere exatamente 4 ângulos visuais diferentes:
+   - Ângulo 1 (PESSOA + AÇÃO): uma pessoa real fazendo algo relacionado ao tema. Ex: "elderly woman knee pain", "man counting money bills"
+   - Ângulo 2 (AMBIENTE): o cenário ou local. Ex: "modern medical laboratory", "luxury office sunset"
+   - Ângulo 3 (OBJETO / MACRO): close-up de um objeto simbólico. Ex: "pill bottle closeup", "credit card gold"
+   - Ângulo 4 (METÁFORA VISUAL): imagem metafórica que reforça a emoção. Ex: "chain breaking freedom", "clock ticking urgency"
+
+   ✅ BOAS queries: "doctor examining patient", "money stack table closeup", "happy elderly couple walking"
+   ❌ RUINS: "success" (1 palavra, vago), "good health" (abstrato), "transformation" (genérico)
+
+   🎯 CONCEITOS DR QUE MAPEIAM BEM PARA STOCK:
+   - Autoridade → "doctor white coat", "scientist laboratory", "expert speaking podium"
+   - Prova Social → "happy customer testimonial", "crowd cheering event", "five star review phone"
+   - Dor/Problema → "person frustrated pain", "bills piling up desk", "sleepless night bed"
+   - Urgência → "clock ticking closeup", "limited offer countdown", "hourglass sand falling"
+   - Antes/Depois → "tired person morning", "energetic person running", "scale weight loss"
+   - Esperança → "sunrise mountain peak", "open road freedom", "family smiling together"
+
 2. sound_effect: descrição em inglês do efeito sonoro ideal para o corte.
 3. text_animation: descreva em PT-BR o estilo de animação do texto na tela.
 4. vault_category: chave EXATA do Acervo de Vídeo ou null.
@@ -172,7 +189,7 @@ REGRAS GERAIS:
       "segment": "Hook|Body|CTA",
       "text_chunk": "trecho exato do roteiro",
       "visual_idea": "descrição da ideia visual em PT-BR",
-      "broll_search_keywords": "english keywords max 3 words",
+      "broll_search_queries": ["person angle query", "environment query", "object macro query", "visual metaphor query"],
       "sound_effect": "english sfx description",
       "text_animation": "descrição PT-BR da animação de texto",
       "vault_category": "chave_do_vault ou null"
@@ -204,7 +221,7 @@ export async function POST(req: NextRequest) {
     const systemPrompt = buildSystemPrompt(videoFormat, videoTheme);
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o",
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: systemPrompt },
@@ -270,69 +287,85 @@ export async function POST(req: NextRequest) {
     // ── Pexels + Pixabay + Freesound em paralelo por cena ────────────────────
     const orientation = PORTRAIT_FORMATS.includes(videoFormat) ? "portrait" : "landscape";
 
+    // ── Global dedup across scenes ─────────────────────────────────────────
+    const usedUrls = new Set<string>();
+
     if (Array.isArray(parsed.scenes)) {
       await Promise.all(
         parsed.scenes.map(async (scene: Record<string, unknown>) => {
           await Promise.all([
 
-            // ── Pexels + Pixabay: até 4 opções de vídeo HD ───────────────────
+            // ── Multi-query video search (4 angles) + re-ranking ─────────────
             (async () => {
-              const keyword = String(scene.broll_search_keywords ?? "");
-              try {
+              // Support both old format (single string) and new format (array)
+              const rawQueries = scene.broll_search_queries ?? scene.broll_search_keywords;
+              const queries: string[] = Array.isArray(rawQueries)
+                ? rawQueries.map(String).filter(Boolean)
+                : [String(rawQueries ?? "")].filter(Boolean);
 
-                // Busca Pexels e Pixabay em paralelo
-                const [pexelsRes, pixabayRes] = await Promise.all([
+              if (!queries.length) return;
+
+              try {
+                // Fire all queries to both Pexels + Pixabay in parallel
+                const fetches = queries.flatMap(keyword => [
                   fetch(
-                    `https://api.pexels.com/videos/search?query=${encodeURIComponent(keyword)}&per_page=3&orientation=${orientation}`,
+                    `https://api.pexels.com/videos/search?query=${encodeURIComponent(keyword)}&per_page=2&orientation=${orientation}`,
                     { headers: { Authorization: process.env.PEXELS_API_KEY ?? "" } }
-                  ).catch(() => null),
+                  ).then(async r => {
+                    if (!r.ok) return [];
+                    const data = await r.json();
+                    const videos: Array<{ video_files: Array<{ quality: string; width: number; link: string }> }> = data?.videos ?? [];
+                    return videos.map(video => {
+                      const files = video.video_files ?? [];
+                      const hd = files.find(f => f.quality === "hd" && f.width >= 1280) ?? files.sort((a, b) => b.width - a.width)[0];
+                      return hd?.link ? { url: hd.link, source: "Pexels", width: hd.width, query: keyword } : null;
+                    }).filter(Boolean) as { url: string; source: string; width: number; query: string }[];
+                  }).catch(() => [] as { url: string; source: string; width: number; query: string }[]),
+
                   fetch(
-                    `https://pixabay.com/api/videos/?key=${process.env.PIXABAY_API_KEY}&q=${encodeURIComponent(keyword)}&per_page=3&orientation=${orientation === "portrait" ? "vertical" : "horizontal"}&safesearch=true`
-                  ).catch(() => null),
+                    `https://pixabay.com/api/videos/?key=${process.env.PIXABAY_API_KEY}&q=${encodeURIComponent(keyword)}&per_page=2&orientation=${orientation === "portrait" ? "vertical" : "horizontal"}&safesearch=true`
+                  ).then(async r => {
+                    if (!r.ok) return [];
+                    const data = await r.json();
+                    type PxVid = { videos: Record<string, { url: string; width: number }> };
+                    const hits: PxVid[] = data?.hits ?? [];
+                    return hits.map(hit => {
+                      const vids = hit.videos ?? {};
+                      const best = (vids.large?.url ? vids.large : null) ?? (vids.medium?.url ? vids.medium : null) ?? (vids.small?.url ? vids.small : null);
+                      return best?.url ? { url: best.url, source: "Pixabay", width: best.width ?? 640, query: keyword } : null;
+                    }).filter(Boolean) as { url: string; source: string; width: number; query: string }[];
+                  }).catch(() => [] as { url: string; source: string; width: number; query: string }[]),
                 ]);
 
-                const options: { url: string; source: string }[] = [];
+                const allResults = (await Promise.all(fetches)).flat();
 
-                // ── Pexels ───────────────────────────────────────────────────
-                if (pexelsRes?.ok) {
-                  const data = await pexelsRes.json();
-                  const videos: Array<{ video_files: Array<{ quality: string; width: number; link: string }> }> =
-                    data?.videos ?? [];
-                  for (const video of videos) {
-                    const files = video.video_files ?? [];
-                    const hd =
-                      files.find((f) => f.quality === "hd" && f.width >= 1280) ??
-                      files.sort((a: { width: number }, b: { width: number }) => b.width - a.width)[0];
-                    if (hd?.link) options.push({ url: hd.link, source: "Pexels" });
-                  }
+                // ── Re-ranking: deduplicate, prefer HD, diversify sources ──
+                const ranked = allResults
+                  .filter(r => !usedUrls.has(r.url))                    // cross-scene dedup
+                  .sort((a, b) => b.width - a.width);                   // HD first
+
+                // Pick best from each query angle, then fill remaining
+                const picked: typeof ranked = [];
+                const pickedUrls = new Set<string>();
+                for (const query of queries) {
+                  const fromQuery = ranked.find(r => r.query === query && !pickedUrls.has(r.url));
+                  if (fromQuery) { picked.push(fromQuery); pickedUrls.add(fromQuery.url); }
+                }
+                for (const r of ranked) {
+                  if (picked.length >= 8) break;
+                  if (!pickedUrls.has(r.url)) { picked.push(r); pickedUrls.add(r.url); }
                 }
 
-                // ── Pixabay ──────────────────────────────────────────────────
-                if (pixabayRes?.ok) {
-                  const data = await pixabayRes.json();
-                  type PixabayVideo = { videos: Record<string, { url: string; width: number }> };
-                  const hits: PixabayVideo[] = data?.hits ?? [];
-                  for (const hit of hits) {
-                    const videos = hit.videos ?? {};
-                    // Preferência: large (1280p) → medium (960p) → small (640p)
-                    const best =
-                      (videos.large?.url  ? videos.large  : null) ??
-                      (videos.medium?.url ? videos.medium : null) ??
-                      (videos.small?.url  ? videos.small  : null);
-                    if (best?.url) options.push({ url: best.url, source: "Pixabay" });
-                  }
-                }
-
-                if (options.length) {
-                  scene.video_options = options;
-                  scene.video_url     = options[0].url;
-                  log("video_hit", { keyword, count: options.length });
+                if (picked.length) {
+                  scene.video_options = picked.map(r => ({ url: r.url, source: r.source }));
+                  scene.video_url     = picked[0].url;
+                  usedUrls.add(picked[0].url);
+                  log("video_hit", { queries, count: picked.length });
                 } else {
-                  log("video_miss", { keyword });
+                  log("video_miss", { queries });
                 }
-                scene.pexels_search_url =
-                  `https://www.pexels.com/pt-br/procurar/videos/${encodeURIComponent(keyword)}/`;
-              } catch (e) { log("video_error", { keyword, error: String(e) }); }
+                scene.pexels_search_url = `https://www.pexels.com/pt-br/procurar/videos/${encodeURIComponent(queries[0])}/`;
+              } catch (e) { log("video_error", { queries, error: String(e) }); }
             })(),
 
             // ── Freesound: até 2 opções de SFX ────────────────────────────────
