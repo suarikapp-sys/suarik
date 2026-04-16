@@ -574,9 +574,9 @@ export default function LoginPage() {
             {mode !== "reset" && (
               <div style={{ fontSize:11, color:"#252525", textAlign:"center", marginTop:16, lineHeight:1.6 }}>
                 Ao entrar, você concorda com os<br/>
-                <span style={{ color:"#444" }}>Termos de Uso</span>
+                <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color:"#7A7A7A", textDecoration:"underline", textUnderlineOffset:"2px" }}>Termos de Uso</a>
                 {" "}e{" "}
-                <span style={{ color:"#444" }}>Política de Privacidade</span>
+                <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color:"#7A7A7A", textDecoration:"underline", textUnderlineOffset:"2px" }}>Política de Privacidade</a>
               </div>
             )}
           </div>

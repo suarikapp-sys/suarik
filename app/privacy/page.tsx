@@ -33,7 +33,7 @@ export default function PrivacyPage() {
         <p>Mantemos dados enquanto sua conta estiver ativa. Após encerramento, logs de uso podem ser retidos por até 12 meses para auditoria. Conteúdo gerado é apagado em até 30 dias após exclusão da conta.</p>
 
         <h2 className="text-xl font-semibold">5. Seus direitos (LGPD)</h2>
-        <p>Você pode: (i) acessar seus dados; (ii) corrigir dados incorretos; (iii) exportar dados em formato legível; (iv) solicitar exclusão; (v) revogar consentimentos; (vi) reclamar à ANPD. Solicite por <a className="underline" href="mailto:privacidade@suarik.com">privacidade@suarik.com</a>.</p>
+        <p>Você pode: (i) acessar seus dados; (ii) corrigir dados incorretos; (iii) exportar dados em formato legível; (iv) solicitar exclusão; (v) revogar consentimentos; (vi) reclamar à ANPD. Solicite por <a className="underline" href="mailto:privacidade@suarik.com.br">privacidade@suarik.com.br</a>.</p>
 
         <h2 className="text-xl font-semibold">6. Clonagem de voz</h2>
         <p>Você só pode clonar vozes das quais seja titular ou tenha consentimento expresso. As amostras enviadas para clonagem são enviadas à MiniMax exclusivamente para gerar o voice_id e associadas apenas à sua conta.</p>
@@ -51,7 +51,7 @@ export default function PrivacyPage() {
         <p>Mudanças materiais nesta política serão comunicadas com 30 dias de antecedência por email.</p>
 
         <h2 className="text-xl font-semibold">11. Encarregado</h2>
-        <p>Encarregado de Proteção de Dados: <a className="underline" href="mailto:privacidade@suarik.com">privacidade@suarik.com</a>.</p>
+        <p>Encarregado de Proteção de Dados: <a className="underline" href="mailto:privacidade@suarik.com.br">privacidade@suarik.com.br</a>.</p>
       </section>
     </main>
   );
