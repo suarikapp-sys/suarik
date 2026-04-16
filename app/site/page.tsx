@@ -15,11 +15,12 @@ const K = {
 } as const;
 
 // ─── AnimateIn helper ─────────────────────────────────────────────────────────
-function AnimateIn({ children, style, delay = 0 }: { children: React.ReactNode; style?: React.CSSProperties; delay?: number }) {
+function AnimateIn({ children, style, delay = 0, className }: { children: React.ReactNode; style?: React.CSSProperties; delay?: number; className?: string }) {
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, margin: "-70px" });
   return (
     <motion.div ref={ref}
+      className={className}
       initial={{ opacity: 0, y: 24 }}
       animate={inView ? { opacity: 1, y: 0 } : {}}
       transition={{ duration: 0.65, ease: "easeOut", delay }}
@@ -189,10 +190,53 @@ export default function SitePage() {
         @keyframes tc-ring-pulse{0%{transform:scale(1);opacity:.7}100%{transform:scale(1.5);opacity:0}}
         @keyframes fade-up{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
         @keyframes g-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.3)}}
+
+        @media (max-width: 768px) {
+          /* Nav */
+          .site-nav { padding: 0 16px !important; }
+          .site-nav-links { display: none !important; }
+          .site-nav-actions .site-nav-login { display: none !important; }
+
+          /* Hero */
+          .site-hero { padding: 100px 24px 40px !important; }
+          .site-hero-grid { grid-template-columns: 1fr !important; gap: 40px !important; }
+          .site-hero-product { display: none !important; }
+          .site-hero-sub { max-width: 100% !important; }
+
+          /* Pain section */
+          .site-pain { padding: 0 24px !important; }
+          .site-pain-grid { grid-template-columns: 1fr !important; gap: 40px !important; }
+
+          /* Transformation */
+          .site-transform { padding: 0 24px !important; }
+          .site-transform-grid { grid-template-columns: 1fr !important; gap: 24px !important; }
+          .site-transform-arrow { flex-direction: row !important; }
+
+          /* Tools / Ferramentas */
+          .site-tools { padding: 0 24px !important; }
+          .site-tools-header { flex-direction: column !important; align-items: flex-start !important; gap: 16px !important; }
+          .site-tools-grid { grid-template-columns: 1fr !important; }
+          .site-tools-featured { grid-column: span 1 !important; }
+
+          /* Pricing / Planos */
+          .site-plans { padding: 0 24px !important; }
+          .site-plans-grid { grid-template-columns: 1fr !important; gap: 16px !important; }
+
+          /* Testimonials / Cases */
+          .site-cases { padding: 0 24px !important; }
+          .site-cases-grid { grid-template-columns: 1fr !important; gap: 16px !important; }
+
+          /* CTA Final */
+          .site-cta-final { padding: 0 24px !important; }
+
+          /* Footer */
+          .site-footer { flex-direction: column !important; gap: 16px !important; padding: 32px 24px !important; text-align: center; align-items: center !important; }
+          .site-footer-links { flex-wrap: wrap; justify-content: center; }
+        }
       `}</style>
 
       {/* ── NAV ── */}
-      <nav style={{
+      <nav className="site-nav" style={{
         position: "fixed", top: 0, left: 0, right: 0, zIndex: 200,
         padding: "0 48px", height: 58,
         display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -204,13 +248,13 @@ export default function SitePage() {
         <a href="#" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
           <SuarikLogo size={22} showName />
         </a>
-        <div style={{ display: "flex", alignItems: "center", gap: 28 }}>
+        <div className="site-nav-links" style={{ display: "flex", alignItems: "center", gap: 28 }}>
           <a href="#ferramentas" style={{ fontSize: 12, color: K.w3, textDecoration: "none" }}>Ferramentas</a>
           <a href="#planos" style={{ fontSize: 12, color: K.w3, textDecoration: "none" }}>Planos</a>
           <a href="#cases" style={{ fontSize: 12, color: K.w3, textDecoration: "none" }}>Cases</a>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <button onClick={() => router.push("/login")} style={{ fontSize: 12, color: K.w3, background: "none", border: "none", cursor: "pointer" }}>Entrar</button>
+        <div className="site-nav-actions" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <button className="site-nav-login" onClick={() => router.push("/login")} style={{ fontSize: 12, color: K.w3, background: "none", border: "none", cursor: "pointer" }}>Entrar</button>
           <button onClick={() => router.push("/dashboard")} style={{
             fontSize: 12, fontWeight: 600, color: "#fff", background: K.o,
             padding: "8px 18px", borderRadius: 6, border: "none", cursor: "pointer",
@@ -223,7 +267,7 @@ export default function SitePage() {
       </nav>
 
       {/* ── HERO ── */}
-      <section style={{ minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", position: "relative", overflow: "hidden", padding: "80px 48px 40px" }}>
+      <section className="site-hero" style={{ minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", position: "relative", overflow: "hidden", padding: "80px 48px 40px" }}>
         {/* Orbs */}
         <div style={{ position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none" }}>
           <div style={{ position: "absolute", width: 600, height: 600, borderRadius: "50%", filter: "blur(100px)", background: "radial-gradient(circle,rgba(232,81,42,.18),transparent)", top: -100, left: -100, animation: "orb-drift 14s ease-in-out infinite alternate" }} />
@@ -232,7 +276,7 @@ export default function SitePage() {
         {/* Grid */}
         <div style={{ position: "absolute", inset: 0, zIndex: 0, backgroundImage: "linear-gradient(rgba(255,255,255,.022) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.022) 1px,transparent 1px)", backgroundSize: "60px 60px", maskImage: "radial-gradient(ellipse at 40% 50%,black 20%,transparent 70%)" }} />
 
-        <div style={{ position: "relative", zIndex: 2, maxWidth: 1200, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 80, alignItems: "center", margin: "0 auto", width: "100%" }}>
+        <div className="site-hero-grid" style={{ position: "relative", zIndex: 2, maxWidth: 1200, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 80, alignItems: "center", margin: "0 auto", width: "100%" }}>
           {/* Left */}
           <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
             {/* Eyebrow */}
@@ -256,7 +300,7 @@ export default function SitePage() {
 
             {/* Sub */}
             <motion.p initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .8, delay: .35 }}
-              style={{ fontSize: 16, color: K.w2, lineHeight: 1.65, fontWeight: 300, maxWidth: 420, marginBottom: 36 }}>
+              className="site-hero-sub" style={{ fontSize: 16, color: K.w2, lineHeight: 1.65, fontWeight: 300, maxWidth: 420, marginBottom: 36 }}>
               Da copy ao vídeo final em horas.<br/>
               <strong style={{ color: K.w, fontWeight: 500 }}>Storyboard, B-roll, voz, LipSync e avatar</strong> — tudo numa IA calibrada para Direct Response.
             </motion.p>
@@ -293,7 +337,7 @@ export default function SitePage() {
           </div>
 
           {/* Right: product */}
-          <HeroProduct />
+          <div className="site-hero-product"><HeroProduct /></div>
         </div>
       </section>
 
@@ -313,7 +357,7 @@ export default function SitePage() {
 
       {/* ── DOR (Pain) ── */}
       <div style={{ padding: "100px 0", background: `linear-gradient(180deg,${K.k},${K.k2})` }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 48px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 80, alignItems: "start" }}>
+        <div className="site-pain site-pain-grid" style={{ maxWidth: 1200, margin: "0 auto", padding: "0 48px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 80, alignItems: "start" }}>
           <AnimateIn>
             {sec("O problema")}
             {secH(<>Você passa mais tempo <em style={{ fontStyle: "italic", color: K.o }}>garimpando</em> do que editando.</>)}
@@ -342,13 +386,13 @@ export default function SitePage() {
 
       {/* ── TRANSFORMAÇÃO ── */}
       <div style={{ padding: "100px 0", background: K.k2 }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 48px" }}>
+        <div className="site-transform" style={{ maxWidth: 1200, margin: "0 auto", padding: "0 48px" }}>
           <AnimateIn>{sec("A transformação")}</AnimateIn>
           <AnimateIn delay={0.1}>
             {secH(<>O mesmo vídeo.<br/>Uma fração do tempo.</>)}
           </AnimateIn>
           <AnimateIn delay={0.2}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 20, alignItems: "center", marginTop: 48 }}>
+            <div className="site-transform-grid" style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 20, alignItems: "center", marginTop: 48 }}>
               {/* Before */}
               <div style={{ background: K.k3, border: "1px solid rgba(255,255,255,.05)", borderRadius: 16, padding: 28, position: "relative", overflow: "hidden" }}>
                 <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: "rgba(226,75,74,.3)" }} />
@@ -366,7 +410,7 @@ export default function SitePage() {
               </div>
 
               {/* Arrow */}
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+              <div className="site-transform-arrow" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
                 <div style={{ fontFamily: "'Instrument Serif', serif", fontSize: 40, color: K.o, fontStyle: "italic", lineHeight: 1 }}>→</div>
                 <div style={{ fontSize: 11, color: K.o, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase" as const, textAlign: "center" as const }}>10× mais<br/>rápido</div>
               </div>
@@ -393,8 +437,8 @@ export default function SitePage() {
 
       {/* ── FERRAMENTAS ── */}
       <div id="ferramentas" style={{ padding: "100px 0", background: K.k }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 48px" }}>
-          <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 48 }}>
+        <div className="site-tools" style={{ maxWidth: 1200, margin: "0 auto", padding: "0 48px" }}>
+          <div className="site-tools-header" style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 48 }}>
             <div>
               <AnimateIn>{sec("O arsenal completo")}</AnimateIn>
               <AnimateIn delay={0.1}>{secH(<>Sete ferramentas.<br/>Um <em style={{ fontStyle: "italic", color: K.o }}>único</em> lugar.</>)}</AnimateIn>
@@ -406,9 +450,9 @@ export default function SitePage() {
             </AnimateIn>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+          <div className="site-tools-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
             {/* Storyboard — featured */}
-            <AnimateIn style={{ gridColumn: "span 2" }}>
+            <AnimateIn className="site-tools-featured" style={{ gridColumn: "span 2" }}>
               <div onClick={() => router.push("/storyboard")} style={{ background: K.k2, border: "1px solid rgba(255,255,255,.05)", borderRadius: 14, overflow: "hidden", cursor: "pointer", transition: "all .25s" }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,.1)"; e.currentTarget.style.transform = "translateY(-3px)"; }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,.05)"; e.currentTarget.style.transform = ""; }}>
@@ -517,7 +561,7 @@ export default function SitePage() {
 
       {/* ── PLANOS ── */}
       <div id="planos" style={{ padding: "100px 0", background: `linear-gradient(180deg,${K.k},${K.k2})` }}>
-        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 48px" }}>
+        <div className="site-plans" style={{ maxWidth: 1100, margin: "0 auto", padding: "0 48px" }}>
           <AnimateIn style={{ textAlign: "center" }}>
             {sec("Planos", K.o)}
             {secH(<>Construídos para <em style={{ fontStyle: "italic", color: K.o }}>escalar.</em></>)}
@@ -525,7 +569,7 @@ export default function SitePage() {
               Sistema de créditos — use em qualquer ferramenta, sem desperdício.
             </p>
           </AnimateIn>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginTop: 48 }}>
+          <div className="site-plans-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginTop: 48 }}>
             {[
               { n: "Starter",  role: "Freelancer",   p: "R$97",  credits: "1.000 créditos / mês", hot: false, fs: ["Storyboard + Audio Studio", "B-Roll Studio", "40+ vozes TTS", "Export profissional"], cta: "Começar →", ctaStyle: "ghost" },
               { n: "Pro",      role: "Editor DR",     p: "R$197", credits: "5.000 créditos / mês", hot: true,  fs: ["Todas as ferramentas", "LipSync Studio", "DreamAct · Avatar animado", "Voice Clone proprietário", "Upload A-roll MP4"], cta: "Começar →", ctaStyle: "fill" },
@@ -575,10 +619,10 @@ export default function SitePage() {
 
       {/* ── PROOF (Testimonials) ── */}
       <div id="cases" style={{ padding: "100px 0", background: K.k2 }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 48px" }}>
+        <div className="site-cases" style={{ maxWidth: 1200, margin: "0 auto", padding: "0 48px" }}>
           <AnimateIn>{sec("Quem já usa")}</AnimateIn>
           <AnimateIn delay={0.1}>{secH(<>Editores reais.<br/><em style={{ fontStyle: "italic", color: K.o }}>Resultados reais.</em></>)}</AnimateIn>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginTop: 48 }}>
+          <div className="site-cases-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginTop: 48 }}>
             {[
               { q: `"Colei o roteiro, 40 segundos depois o mapa estava pronto. Uma VSL que levava 2 dias agora leva 4 horas. Mudou meu negócio."`, strong: "Uma VSL que levava 2 dias agora leva 4 horas.", av: "MR", avBg: "#1A0A05", avC: K.o, name: "Marcos R.", role: "Editor DR · São Paulo" },
               { q: `"A IA pensa como diretor de DR. Ela entende o gancho, a dor, o momento certo. Nenhuma outra ferramenta faz isso."`, strong: "Ela entende o gancho, a dor, o momento certo.", av: "CF", avBg: "#051020", avC: "#7B71D8", name: "Carolina F.", role: "Produtora · Rio de Janeiro" },
@@ -608,7 +652,7 @@ export default function SitePage() {
       {/* ── CTA FINAL ── */}
       <div style={{ padding: "120px 0", background: K.k, position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at 50% 100%,rgba(232,81,42,.12),transparent 60%)" }} />
-        <div style={{ maxWidth: 700, margin: "0 auto", padding: "0 48px", textAlign: "center", position: "relative", zIndex: 2 }}>
+        <div className="site-cta-final" style={{ maxWidth: 700, margin: "0 auto", padding: "0 48px", textAlign: "center", position: "relative", zIndex: 2 }}>
           <AnimateIn>{sec("Comece agora", K.o)}</AnimateIn>
           <AnimateIn delay={0.1}>
             <div style={{ fontFamily: "'Instrument Serif', serif", fontSize: "clamp(40px,5vw,68px)", lineHeight: .93, letterSpacing: "-.025em", marginBottom: 20 }}>
@@ -662,9 +706,9 @@ export default function SitePage() {
       </div>
 
       {/* ── FOOTER ── */}
-      <footer style={{ padding: "32px 48px", borderTop: "1px solid rgba(255,255,255,.04)", display: "flex", alignItems: "center", justifyContent: "space-between", background: K.k }}>
+      <footer className="site-footer" style={{ padding: "32px 48px", borderTop: "1px solid rgba(255,255,255,.04)", display: "flex", alignItems: "center", justifyContent: "space-between", background: K.k }}>
         <span style={{ fontFamily: "'Geist', sans-serif", fontSize: 15, fontWeight: 700, color: K.w3, letterSpacing: "-.03em" }}>Suarik</span>
-        <div style={{ display: "flex", gap: 24 }}>
+        <div className="site-footer-links" style={{ display: "flex", gap: 24 }}>
           {([
             ["Termos", "/terms"],
             ["Privacidade", "/privacy"],

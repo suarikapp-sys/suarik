@@ -219,12 +219,27 @@ export default function LoginPage() {
 
         /* ── scrollbar hide on right panel ── */
         .right-panel::-webkit-scrollbar { width:0; }
+
+        /* ── mobile: single column, hide left panel ── */
+        @media (max-width: 768px) {
+          .lp-root {
+            grid-template-columns: 1fr;
+          }
+          .lp-left {
+            display: none !important;
+          }
+          .right-panel {
+            min-height: 100vh;
+            padding: 32px 24px !important;
+            border-left: none !important;
+          }
+        }
       `}</style>
 
       <div className="lp-root">
 
         {/* ════════════════ LEFT: visual ════════════════ */}
-        <div style={{
+        <div className="lp-left" style={{
           position:"relative", overflow:"hidden",
           background:"#060606", display:"flex", flexDirection:"column",
         }}>

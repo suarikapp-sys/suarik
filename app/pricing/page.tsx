@@ -303,7 +303,7 @@ export default function PricingPage() {
   }
 
   return (
-    <div style={{
+    <div className="pricing-root" style={{
       ...themeVars, ...colorVars,
       fontFamily: "'Geist',system-ui,sans-serif",
       WebkitFontSmoothing: "antialiased",
@@ -316,8 +316,84 @@ export default function PricingPage() {
       overflow: "hidden",
     } as React.CSSProperties}>
 
+      {/* ── MOBILE RESPONSIVE STYLES ─────────────────────────────────────── */}
+      <style>{`
+        @media (max-width: 768px) {
+          .pricing-topbar {
+            padding: 0 12px !important;
+            gap: 6px !important;
+          }
+          .pricing-topbar-logo {
+            display: none !important;
+          }
+          .pricing-topbar-label {
+            display: none !important;
+          }
+          .pricing-topbar-credits {
+            font-size: 10px !important;
+            padding: 3px 7px !important;
+          }
+          .pricing-scroll {
+            padding: 20px 16px 40px !important;
+          }
+          .pricing-header {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 14px !important;
+            margin-bottom: 20px !important;
+          }
+          .pricing-header h1 {
+            font-size: 28px !important;
+          }
+          .pricing-toggle-wrap {
+            align-self: flex-start !important;
+          }
+          .pricing-banner {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 10px !important;
+            padding: 12px 14px !important;
+          }
+          .pricing-plans-grid {
+            grid-template-columns: 1fr !important;
+            gap: 12px !important;
+          }
+          .pricing-compare-header,
+          .pricing-compare-section,
+          .pricing-compare-row {
+            grid-template-columns: 1.4fr repeat(4, 1fr) !important;
+            font-size: 9px !important;
+          }
+          .pricing-compare-wrap {
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+          }
+          .pricing-compare-wrap > div {
+            min-width: 560px !important;
+          }
+          .pricing-topups-grid {
+            grid-template-columns: 1fr !important;
+            gap: 12px !important;
+          }
+          .pricing-faq-grid {
+            grid-template-columns: 1fr !important;
+            gap: 8px !important;
+          }
+          .pricing-footer {
+            flex-direction: column !important;
+            gap: 10px !important;
+          }
+          .pricing-guarantee {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 8px !important;
+            padding: 12px 14px !important;
+          }
+        }
+      `}</style>
+
       {/* ── TOPBAR ─────────────────────────────────────────────────────────── */}
-      <div style={{ height: 46, background: "var(--bg)", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", padding: "0 20px", gap: 10, flexShrink: 0, zIndex: 100 }}>
+      <div className="pricing-topbar" style={{ height: 46, background: "var(--bg)", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", padding: "0 20px", gap: 10, flexShrink: 0, zIndex: 100 }}>
         <button
           onClick={() => router.push("/dashboard")}
           style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--text3)", cursor: "pointer", padding: "5px 8px", borderRadius: 6, transition: "all .15s", border: "none", background: "none", fontFamily: "inherit" }}
@@ -328,14 +404,14 @@ export default function PricingPage() {
           Voltar
         </button>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "0 10px", borderLeft: "1px solid var(--border)", borderRight: "1px solid var(--border)" }}>
+        <div className="pricing-topbar-logo" style={{ display: "flex", alignItems: "center", gap: 7, padding: "0 10px", borderLeft: "1px solid var(--border)", borderRight: "1px solid var(--border)" }}>
           <SuarikLogo size={18} showName />
         </div>
 
-        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text2)" }}>Planos</span>
+        <span className="pricing-topbar-label" style={{ fontSize: 12, fontWeight: 600, color: "var(--text2)" }}>Planos</span>
 
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 10px", background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 11, color: "var(--text2)" }}>
+          <div className="pricing-topbar-credits" style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 10px", background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 11, color: "var(--text2)" }}>
             <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#F5A623", boxShadow: "0 0 6px #F5A623", flexShrink: 0 }} />
             <span>{currentPlan.name} · {creditsLoading ? "…" : fmtCoins(userCredits)} moedas</span>
           </div>
@@ -358,10 +434,10 @@ export default function PricingPage() {
       </div>
 
       {/* ── SCROLLABLE CONTENT ─────────────────────────────────────────────── */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "32px 24px 48px" }}>
+      <div className="pricing-scroll" style={{ flex: 1, overflowY: "auto", padding: "32px 24px 48px" }}>
 
         {/* ── HEADER ── */}
-        <div style={{ maxWidth: 960, margin: "0 auto 28px", display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
+        <div className="pricing-header" style={{ maxWidth: 960, margin: "0 auto 28px", display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
           <div>
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--o)", marginBottom: 8, display: "flex", alignItems: "center", gap: 7 }}>
               <span style={{ width: 16, height: 1, background: "var(--o)", opacity: .5, display: "inline-block" }} />
@@ -376,7 +452,7 @@ export default function PricingPage() {
           </div>
 
           {/* Billing toggle */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <div className="pricing-toggle-wrap" style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
             <span style={{ fontSize: 12, fontWeight: 500, color: annual ? "var(--text3)" : "var(--text)", cursor: "pointer", transition: "color .2s" }} onClick={() => setAnnual(false)}>
               Mensal
             </span>
@@ -396,7 +472,7 @@ export default function PricingPage() {
         </div>
 
         {/* ── CURRENT PLAN BANNER ── */}
-        <div style={{ maxWidth: 960, margin: "0 auto 20px", background: "var(--as)", border: "1px solid rgba(245,166,35,.2)", borderRadius: "var(--r2)", padding: "14px 18px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+        <div className="pricing-banner" style={{ maxWidth: 960, margin: "0 auto 20px", background: "var(--as)", border: "1px solid rgba(245,166,35,.2)", borderRadius: "var(--r2)", padding: "14px 18px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
           <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(245,166,35,.12)", border: "1px solid rgba(245,166,35,.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             <svg width="16" height="16" viewBox="0 0 18 18" fill="none">
               <path d="M9 1L6.5 7H1l4.5 3.5L4 16l5-3.5L14 16l-1.5-5.5L17 7H11.5L9 1z" stroke="#F5A623" strokeWidth="1.3" strokeLinejoin="round"/>
@@ -423,7 +499,7 @@ export default function PricingPage() {
         </div>
 
         {/* ── PLANS GRID ── */}
-        <div style={{ maxWidth: 960, margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, alignItems: "start" }}>
+        <div className="pricing-plans-grid" style={{ maxWidth: 960, margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, alignItems: "start" }}>
           {PLANS.map(plan => (
             <PlanCard key={plan.id} plan={plan} annual={annual} loadingPlan={loadingPlan} onCheckout={handleCheckout} isCurrentPlan={plan.id === normalizedPlan} />
           ))}
@@ -442,9 +518,9 @@ export default function PricingPage() {
           </button>
 
           {compareOpen && (
-            <div style={{ border: "1px solid var(--border)", borderRadius: "var(--r2)", overflow: "hidden" }}>
+            <div className="pricing-compare-wrap" style={{ border: "1px solid var(--border)", borderRadius: "var(--r2)", overflow: "hidden" }}>
               {/* Header */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr repeat(4,1fr)", background: "var(--bg3)", borderBottom: "1px solid var(--border)" }}>
+              <div className="pricing-compare-header" style={{ display: "grid", gridTemplateColumns: "1fr repeat(4,1fr)", background: "var(--bg3)", borderBottom: "1px solid var(--border)" }}>
                 {(["Funcionalidade", "Starter", "Pro", "Growth", "Enterprise"] as const).map((h, i) => (
                   <div key={h} style={{ padding: "10px 12px", fontSize: 11, fontWeight: 600, textAlign: i === 0 ? "left" : "center", color: i === 0 ? "var(--text3)" : i === 1 ? "#F5A623" : i === 2 ? "var(--o)" : i === 4 ? "var(--purple)" : "var(--text2)" }}>
                     {h}
@@ -455,14 +531,14 @@ export default function PricingPage() {
               {COMPARE_ROWS.map((row, ri) => {
                 if (row.type === "section") {
                   return (
-                    <div key={ri} style={{ display: "grid", gridTemplateColumns: "1fr repeat(4,1fr)", background: "var(--bg3)", borderBottom: "1px solid var(--border)" }}>
+                    <div key={ri} className="pricing-compare-section" style={{ display: "grid", gridTemplateColumns: "1fr repeat(4,1fr)", background: "var(--bg3)", borderBottom: "1px solid var(--border)" }}>
                       <div style={{ padding: "9px 12px", fontSize: 10, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--text4)" }}>{row.label}</div>
                       {[0,1,2,3].map(i => <div key={i} style={{ padding: "9px 12px" }} />)}
                     </div>
                   );
                 }
                 return (
-                  <div key={ri} style={{ display: "grid", gridTemplateColumns: "1fr repeat(4,1fr)", borderBottom: ri < COMPARE_ROWS.length - 1 ? "1px solid var(--border)" : "none" }}>
+                  <div key={ri} className="pricing-compare-row" style={{ display: "grid", gridTemplateColumns: "1fr repeat(4,1fr)", borderBottom: ri < COMPARE_ROWS.length - 1 ? "1px solid var(--border)" : "none" }}>
                     <div style={{ padding: "9px 12px", fontSize: 11, color: "var(--text2)", display: "flex", alignItems: "center" }}>{row.label}</div>
                     {row.vals.map((v, vi) => {
                       const isVal  = row.type === "val";
@@ -490,7 +566,7 @@ export default function PricingPage() {
         </div>
 
         {/* ── GUARANTEE ── */}
-        <div style={{ maxWidth: 960, margin: "20px auto 0", background: "rgba(62,207,142,.07)", border: "1px solid rgba(62,207,142,.18)", borderRadius: "var(--r2)", padding: "12px 18px", display: "flex", alignItems: "center", gap: 12 }}>
+        <div className="pricing-guarantee" style={{ maxWidth: 960, margin: "20px auto 0", background: "rgba(62,207,142,.07)", border: "1px solid rgba(62,207,142,.18)", borderRadius: "var(--r2)", padding: "12px 18px", display: "flex", alignItems: "center", gap: 12 }}>
           <svg width="18" height="18" viewBox="0 0 20 20" fill="none" style={{ flexShrink: 0 }}>
             <path d="M10 2L3 6v5c0 4 3 7.5 7 8.5C14 18.5 17 15 17 11V6L10 2z" stroke="#3ECF8E" strokeWidth="1.3" strokeLinejoin="round"/>
             <path d="M7 10l2 2 4-4" stroke="#3ECF8E" strokeWidth="1.3" strokeLinecap="round"/>
@@ -516,7 +592,7 @@ export default function PricingPage() {
             <div style={{ fontSize: 11, color: "var(--text3)" }}>Compra avulsa · sem mensalidade adicional</div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
+          <div className="pricing-topups-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
             {TOPUP_PACKAGES.map(pkg => (
               <div key={pkg.key} style={{ background: pkg.highlight ? "linear-gradient(170deg,rgba(232,81,42,.05),var(--card) 40%)" : "var(--card)", border: `1px solid ${pkg.highlight ? "rgba(232,81,42,.2)" : "var(--border)"}`, borderRadius: "var(--r2)", padding: 18, transition: "all .2s", position: "relative" }}>
                 {pkg.highlight && (
@@ -551,7 +627,7 @@ export default function PricingPage() {
         {/* ── FAQ ── */}
         <div style={{ maxWidth: 960, margin: "24px auto 0" }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text2)", marginBottom: 10 }}>Dúvidas frequentes</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+          <div className="pricing-faq-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
             {FAQ.map((item, i) => (
               <div key={i} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--r)", padding: "12px 14px", cursor: "default", transition: "border-color .15s" }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 4 }}>{item.q}</div>
@@ -562,7 +638,7 @@ export default function PricingPage() {
         </div>
 
         {/* ── Footer legal ── */}
-        <div style={{ padding: "24px 0 32px", display: "flex", alignItems: "center", justifyContent: "center", gap: 24, borderTop: "1px solid var(--border)", marginTop: 12 }}>
+        <div className="pricing-footer" style={{ padding: "24px 0 32px", display: "flex", alignItems: "center", justifyContent: "center", gap: 24, borderTop: "1px solid var(--border)", marginTop: 12 }}>
           <a href="/terms" style={{ fontSize: 11, color: "var(--text3)", textDecoration: "none" }}>Termos de Uso</a>
           <a href="/privacy" style={{ fontSize: 11, color: "var(--text3)", textDecoration: "none" }}>Privacidade & LGPD</a>
           <span style={{ fontSize: 11, color: "var(--text3)" }}>© {new Date().getFullYear()} Suarik</span>
