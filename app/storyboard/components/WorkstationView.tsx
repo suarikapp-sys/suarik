@@ -265,7 +265,6 @@ export function WorkstationView({ result, copy: initialCopy, drScenes: initialDr
   const [trackAVVisible,    setTrackAVVisible]    = useState(true);
   const [trackAVMuted,      setTrackAVMuted]      = useState(false);
   const [trackSfxMuted,     setTrackSfxMuted]     = useState(false);
-  const [trackA1Muted,      setTrackA1Muted]      = useState(false);
   const [avatarVolume,      setAvatarVolume]      = useState(1.0);
   // ── Timeline zoom ─────────────────────────────────────────────────────
   const [timelineZoom,      setTimelineZoom]      = useState(1);
@@ -381,8 +380,8 @@ export function WorkstationView({ result, copy: initialCopy, drScenes: initialDr
   useEffect(()=>{
     const a = ttsAudioRef.current;
     if(!a || !ttsAudioUrl) return;
-    a.muted = trackA1Muted;
-  },[trackA1Muted, ttsAudioUrl]);
+    a.muted = trackAVMuted;
+  },[trackAVMuted, ttsAudioUrl]);
 
   // ── TTS: preview voice ────────────────────────────────────────────────────
   const previewUrlRef = useRef<string|null>(null);
@@ -2649,12 +2648,12 @@ ${clipEls.join("\n")}
               </div>
 
               {/* ══ TRILHA AV — Avatar / A-Roll ══ */}
-              <div className="flex border-b" style={{borderColor:"rgba(255,255,255,0.04)"}}>
-                <div className="w-20 shrink-0 flex flex-col items-start justify-center border-r gap-1 px-2 py-1.5"
-                  style={{borderColor:"rgba(255,255,255,0.06)",background:selectedLayer==="avatar"?"rgba(148,163,184,0.07)":"rgba(148,163,184,0.02)"}}>
+              <div className="flex border-b" style={{borderColor:"#131313"}}>
+                <div className="w-[72px] shrink-0 flex items-center justify-between border-r gap-1 px-2"
+                  style={{borderColor:"#131313",background:selectedLayer==="avatar"?"rgba(148,163,184,0.07)":"rgba(148,163,184,0.02)"}}>
                   <span className="text-[8px] font-black tracking-widest"
                     style={{color:selectedLayer==="avatar"?"rgba(148,163,184,1)":trackAVVisible?"rgba(148,163,184,0.6)":"rgba(148,163,184,0.2)"}}>AVATAR</span>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-0.5">
                     <button title={trackAVVisible?"Ocultar":"Mostrar"} onClick={e=>{e.stopPropagation();setTrackAVVisible(v=>!v)}}
                       className="p-0.5 rounded transition-colors hover:bg-white/8">
                       {trackAVVisible?<Eye className="w-2.5 h-2.5 text-slate-500"/>:<EyeOff className="w-2.5 h-2.5 text-red-500/60"/>}
@@ -2665,9 +2664,9 @@ ${clipEls.join("\n")}
                     </button>
                   </div>
                 </div>
-                <div className="flex-1 relative h-11 flex items-center px-1 cursor-pointer"
+                <div className="flex-1 relative h-[30px] flex items-center px-1 cursor-pointer"
                   onClick={()=>{setSelectedLayer(v=>v==="avatar"?null:"avatar");setLeftTab("inspector");}}>
-                  <div className="absolute left-1 right-1 top-1.5 bottom-1.5 rounded-lg overflow-hidden transition-all duration-150"
+                  <div className="absolute left-1 right-1 top-1 bottom-1 rounded-md overflow-hidden transition-all duration-150"
                     style={{
                       background: selectedLayer==="avatar" ? "rgba(148,163,184,0.1)" : "rgba(100,116,139,0.08)",
                       border: `1px solid rgba(148,163,184,${selectedLayer==="avatar"?0.4:0.15})`,
@@ -2690,10 +2689,10 @@ ${clipEls.join("\n")}
               </div>
 
               {/* ══ TRILHA V2 — B-Roll (clips coloridos sobre o avatar, com gaps) ══ */}
-              <div className="flex border-b" style={{borderColor:"rgba(255,255,255,0.04)"}}>
+              <div className="flex border-b" style={{borderColor:"#131313"}}>
                 {/* Track Header — V2 */}
-                <div className="w-[72px] h-20 shrink-0 flex flex-col items-start justify-center border-r gap-1 px-2"
-                  style={{borderColor:"rgba(255,255,255,0.06)",background:"rgba(232,89,60,0.03)"}}>
+                <div className="w-[72px] h-[60px] shrink-0 flex flex-col items-start justify-center border-r gap-1 px-2"
+                  style={{borderColor:"#131313",background:"rgba(232,89,60,0.03)"}}>
                   <span className="text-[10px] font-black tracking-wide" style={{color:trackBrollVisible?"rgba(232,89,60,1)":"rgba(232,89,60,0.25)"}}>🎬 B-ROLL</span>
                   <button title={trackBrollVisible?"Ocultar B-Rolls":"Mostrar B-Rolls"}
                     onClick={()=>setTrackBrollVisible(v=>!v)}
@@ -2703,7 +2702,7 @@ ${clipEls.join("\n")}
                       :<EyeOff className="w-3 h-3" style={{color:"rgba(239,68,68,0.7)"}}/>}
                   </button>
                 </div>
-                <div className="flex-1 relative h-20">
+                <div className="flex-1 relative h-[60px]">
                   {/* ── Gap indicators — "Avatar respira aqui" ── */}
                   {localDrScenes.length>0 && effectiveClips.map((clip,ci)=>{
                     const gapStart = clip.startSec + clip.durSec;
@@ -2828,44 +2827,23 @@ ${clipEls.join("\n")}
                 </div>
               </div>
 
-              {/* ── T1: Subtitle ── */}
-              <div className="flex border-b" style={{borderColor:"rgba(255,255,255,0.04)"}}>
-                <div className="w-[72px] h-8 shrink-0 flex items-center justify-center border-r cursor-pointer transition-colors"
-                  style={{
-                    borderColor:"rgba(255,255,255,0.05)",
-                    background: selectedLayer==="subtitle"?"rgba(234,179,8,0.08)":"transparent",
-                  }}
-                  onClick={()=>{setSelectedLayer(v=>v==="subtitle"?null:"subtitle");setLeftTab("inspector");}}>
-                  <span className="text-[8px] font-black tracking-widest"
-                    style={{color:selectedLayer==="subtitle"?"rgba(234,179,8,0.9)":"rgba(234,179,8,0.45)"}}>SUB</span>
+              {/* ── TRILHA (Music) ── */}
+              <div className="flex border-b" style={{borderColor:"#131313"}}>
+                <div className="w-[72px] h-[30px] shrink-0 flex items-center justify-center border-r"
+                  style={{borderColor:"#131313"}}>
+                  <span className="text-[8px] font-black tracking-widest text-red-600/40">TRILHA</span>
                 </div>
-                <div className="flex-1 relative h-8 cursor-pointer"
-                  onClick={()=>{setSelectedLayer(v=>v==="subtitle"?null:"subtitle");setLeftTab("inspector");}}>
-                  {(localDrScenes.length>0?localDrScenes:localScenes).map((_row,i)=>{
-                    const dur=localDrScenes.length?(localDrScenes[i] as DirectResponseScene).duration:(localScenes[i] as Scene).estimated_duration_seconds??5;
-                    const text=localDrScenes.length?(localDrScenes[i] as DirectResponseScene).textSnippet:((localScenes[i] as Scene).text_chunk??(localScenes[i] as Scene).segment??"");
-                    const left=(sceneStarts[i]/totalDur)*100;
-                    const width=(dur/totalDur)*100;
-                    const isActive=activeScene===i;
-                    const isSel=selectedLayer==="subtitle";
-                    return(
-                      <div key={i} className="absolute top-0.5 bottom-0.5 rounded overflow-hidden flex items-center px-1.5"
-                        style={{
-                          left:`calc(${left}% + 1px)`,width:`calc(${width}% - 2px)`,
-                          background:isSel?"rgba(234,179,8,0.12)":isActive?"rgba(234,179,8,0.1)":"rgba(234,179,8,0.04)",
-                          border:`1px solid rgba(234,179,8,${isSel?0.4:isActive?0.3:0.1})`,
-                        }}>
-                        <span className="text-[6px] font-medium text-yellow-500/60 truncate">{text.slice(0,40)}</span>
-                      </div>
-                    );
-                  })}
+                <div className="flex-1 h-[30px] flex items-end overflow-hidden gap-px px-1">
+                  {Array.from({length:120}).map((_,i)=>(
+                    <div key={i} className="flex-1 rounded-sm" style={{background:"#ef4444",opacity:0.25,height:`${8+Math.abs(Math.sin(i*2.3+1)*Math.cos(i*0.7))*92}%`}}/>
+                  ))}
                 </div>
               </div>
 
               {/* ── SFX ── */}
-              <div className="flex border-b" style={{borderColor:"rgba(255,255,255,0.04)"}}>
-                <div className="w-[72px] h-9 shrink-0 flex items-center justify-between border-r px-2"
-                  style={{borderColor:"rgba(255,255,255,0.05)"}}>
+              <div className="flex border-b" style={{borderColor:"#131313"}}>
+                <div className="w-[72px] h-[30px] shrink-0 flex items-center justify-between border-r px-2"
+                  style={{borderColor:"#131313"}}>
                   <span className="text-[8px] font-black tracking-widest text-amber-600/60">SFX</span>
                   <button title={trackSfxMuted?"Ativar":"Mutar"} onClick={()=>setTrackSfxMuted(m=>!m)}
                     className="p-0.5 rounded transition-colors hover:bg-white/8">
@@ -2874,7 +2852,7 @@ ${clipEls.join("\n")}
                       :<Volume2 className="w-2.5 h-2.5 text-amber-600/40"/>}
                   </button>
                 </div>
-                <div className="flex-1 relative h-9 overflow-visible" style={{opacity:trackSfxMuted?0.2:1,transition:"opacity 0.2s"}}>
+                <div className="flex-1 relative h-[30px] overflow-visible" style={{opacity:trackSfxMuted?0.2:1,transition:"opacity 0.2s"}}>
                   {sfxMarkers.length===0 && (
                     <div className="absolute inset-0 flex items-center px-2">
                       <span className="text-[7px] text-gray-800 italic">Nenhum gatilho detectado</span>
@@ -2932,36 +2910,37 @@ ${clipEls.join("\n")}
                 </div>
               </div>
 
-              {/* ── A1: Voz ── */}
-              <div className="flex border-b" style={{borderColor:"rgba(255,255,255,0.04)"}}>
-                <div className="w-[72px] h-10 shrink-0 flex items-center justify-between border-r px-2"
-                  style={{borderColor:"rgba(255,255,255,0.05)"}}>
-                  <span className="text-[8px] font-black tracking-widest text-emerald-600/60">VOZ</span>
-                  <button title={trackA1Muted?"Ativar":"Mutar"} onClick={()=>setTrackA1Muted(m=>!m)}
-                    className="p-0.5 rounded transition-colors hover:bg-white/8">
-                    {trackA1Muted
-                      ?<VolumeX className="w-2.5 h-2.5 text-red-500/60"/>
-                      :<Volume2 className="w-2.5 h-2.5 text-emerald-600/40"/>}
-                  </button>
-                </div>
-                <div className="flex-1 h-10 flex items-end overflow-hidden gap-px px-1"
-                  style={{opacity:trackA1Muted?0.1:1,transition:"opacity 0.2s"}}>
-                  {Array.from({length:120}).map((_,i)=>(
-                    <div key={i} className="flex-1 rounded-sm" style={{background:"#10b981",opacity:0.5,height:`${12+Math.abs(Math.sin(i*1.7)*Math.cos(i*0.5))*88}%`}}/>
-                  ))}
-                </div>
-              </div>
-
-              {/* ── A2: Trilha ── */}
+              {/* ── LEGENDA (Subtitle) ── */}
               <div className="flex">
-                <div className="w-[72px] h-9 shrink-0 flex items-center justify-center border-r"
-                  style={{borderColor:"rgba(255,255,255,0.05)"}}>
-                  <span className="text-[8px] font-black tracking-widest text-red-600/40">TRILHA</span>
+                <div className="w-[72px] h-[30px] shrink-0 flex items-center justify-center border-r cursor-pointer transition-colors"
+                  style={{
+                    borderColor:"#131313",
+                    background: selectedLayer==="subtitle"?"rgba(234,179,8,0.08)":"transparent",
+                  }}
+                  onClick={()=>{setSelectedLayer(v=>v==="subtitle"?null:"subtitle");setLeftTab("inspector");}}>
+                  <span className="text-[8px] font-black tracking-widest"
+                    style={{color:selectedLayer==="subtitle"?"rgba(234,179,8,0.9)":"rgba(234,179,8,0.45)"}}>LEGENDA</span>
                 </div>
-                <div className="flex-1 h-9 flex items-end overflow-hidden gap-px px-1">
-                  {Array.from({length:120}).map((_,i)=>(
-                    <div key={i} className="flex-1 rounded-sm" style={{background:"#ef4444",opacity:0.25,height:`${8+Math.abs(Math.sin(i*2.3+1)*Math.cos(i*0.7))*92}%`}}/>
-                  ))}
+                <div className="flex-1 relative h-[30px] cursor-pointer"
+                  onClick={()=>{setSelectedLayer(v=>v==="subtitle"?null:"subtitle");setLeftTab("inspector");}}>
+                  {(localDrScenes.length>0?localDrScenes:localScenes).map((_row,i)=>{
+                    const dur=localDrScenes.length?(localDrScenes[i] as DirectResponseScene).duration:(localScenes[i] as Scene).estimated_duration_seconds??5;
+                    const text=localDrScenes.length?(localDrScenes[i] as DirectResponseScene).textSnippet:((localScenes[i] as Scene).text_chunk??(localScenes[i] as Scene).segment??"");
+                    const left=(sceneStarts[i]/totalDur)*100;
+                    const width=(dur/totalDur)*100;
+                    const isActive=activeScene===i;
+                    const isSel=selectedLayer==="subtitle";
+                    return(
+                      <div key={i} className="absolute top-0.5 bottom-0.5 rounded overflow-hidden flex items-center px-1.5"
+                        style={{
+                          left:`calc(${left}% + 1px)`,width:`calc(${width}% - 2px)`,
+                          background:isSel?"rgba(234,179,8,0.12)":isActive?"rgba(234,179,8,0.1)":"rgba(234,179,8,0.04)",
+                          border:`1px solid rgba(234,179,8,${isSel?0.4:isActive?0.3:0.1})`,
+                        }}>
+                        <span className="text-[6px] font-medium text-yellow-500/60 truncate">{text.slice(0,40)}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
