@@ -1301,69 +1301,91 @@ ${clipEls.join("\n")}
       style={{background:"#060606",color:"#F5F3F0",fontFamily:"'Geist',sans-serif",display:"grid",gridTemplateRows:"42px 1fr 196px 28px",height:"100vh",overflow:"hidden"}}>
 
       {/* ══ TOPBAR (42px) ══════════════════════════════════════════════════ */}
-      <div style={{display:"flex",alignItems:"center",gap:"10px",padding:"0 14px",background:"#09090B",borderBottom:"1px solid #131313",flexShrink:0,overflow:"hidden",zIndex:20}}>
+      <div style={{display:"flex",alignItems:"center",gap:"8px",padding:"0 12px",background:"#09090B",borderBottom:"1px solid #131313",flexShrink:0,overflow:"hidden",zIndex:20}}>
+        {/* Left cluster: Back · Logo · Project */}
         <button onClick={onBack}
-          style={{padding:"5px",borderRadius:"8px",color:"#6b7280",background:"transparent",border:"1px solid rgba(255,255,255,0.07)",cursor:"pointer",display:"flex",alignItems:"center",flexShrink:0,transition:"border-color .15s"}}
+          style={{padding:"5px",borderRadius:"6px",color:"#7A7A7A",background:"transparent",border:"1px solid transparent",cursor:"pointer",display:"flex",alignItems:"center",flexShrink:0,transition:"all .12s"}}
+          onMouseEnter={e=>{e.currentTarget.style.background="#0F0F0F";e.currentTarget.style.color="#EAEAEA";}}
+          onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color="#7A7A7A";}}
           title="Voltar ao início">
-          <ArrowLeft style={{width:"15px",height:"15px"}}/>
+          <ArrowLeft style={{width:"14px",height:"14px"}}/>
         </button>
-        <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"17px",color:"#E8593C",letterSpacing:"1px",flexShrink:0}}>SUARIK</span>
-        <span style={{fontSize:"11px",color:"#374151",flexShrink:0}}>›</span>
-        <span style={{fontSize:"12px",fontWeight:600,color:"#9ca3af",flexShrink:0,maxWidth:"160px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+        <div style={{display:"flex",alignItems:"center",gap:"7px",paddingRight:"10px",borderRight:"1px solid #131313",flexShrink:0}}>
+          <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"15px",color:"#E8512A",letterSpacing:"1px"}}>SUARIK</span>
+        </div>
+        <span style={{fontSize:"12px",color:"#7A7A7A",flexShrink:0,maxWidth:"180px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
           {result.music_style||"Storyboard"}
         </span>
-        {/* Status dot with glow */}
+        <div style={{width:"1px",height:"14px",background:"#131313",flexShrink:0,marginLeft:"2px"}}/>
+        {/* Status dot */}
         <div style={{display:"flex",alignItems:"center",gap:"5px",flexShrink:0}}>
-          <div style={{width:"6px",height:"6px",borderRadius:"50%",background:"#22c55e",flexShrink:0,boxShadow:"0 0 6px rgba(34,197,94,0.8),0 0 12px rgba(34,197,94,0.4)"}}/>
-          <span style={{fontSize:"9px",fontWeight:700,color:"rgba(34,197,94,0.75)",letterSpacing:"0.06em"}}>IA ativa</span>
+          <div style={{width:"6px",height:"6px",borderRadius:"50%",background:"#3ECF8E",boxShadow:"0 0 6px #3ECF8E"}}/>
+          <span style={{fontSize:"11px",color:"#444"}}>IA ativa</span>
         </div>
-        <div style={{flex:1}}/>
-        {/* Scene chip with star */}
-        <span style={{fontSize:"11px",fontWeight:700,color:"#FF7A5C",background:"rgba(232,89,60,0.1)",border:"1px solid rgba(232,89,60,0.25)",padding:"2px 9px",borderRadius:"20px",flexShrink:0,display:"flex",alignItems:"center",gap:"4px"}}>
-          <svg width="8" height="8" viewBox="0 0 10 10" fill="#FF7A5C"><polygon points="5,0 6.2,3.8 10,3.8 7,6.1 8.1,10 5,7.7 1.9,10 3,6.1 0,3.8 3.8,3.8"/></svg>
-          Cena {activeScene+1}/{localDrScenes.length||localScenes.length}
-        </span>
-        <span style={{fontFamily:"monospace",fontSize:"11px",fontWeight:700,color:"#F0563A",flexShrink:0,letterSpacing:"0.02em"}}>
-          {fmtTime(currentTime)}<span style={{color:"#374151",margin:"0 3px"}}>/</span>{fmtTime(totalDur)}
-        </span>
-        <div style={{flex:1}}/>
-        {/* Credits block */}
-        <div style={{display:"flex",alignItems:"center",gap:"5px",padding:"3px 10px",borderRadius:"20px",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",flexShrink:0}}>
-          <svg width="11" height="11" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" fill="#E8512A" opacity=".2"/><circle cx="7" cy="7" r="3.5" fill="#E8512A"/></svg>
-          <span style={{fontSize:"10px",fontWeight:700,color:"#e4e4e7",fontFamily:"monospace"}}>{(result as {credits_used?:number}).credits_used ?? "—"}</span>
-          <span style={{fontSize:"9px",color:"#444",fontWeight:500}}>/ 15k</span>
+
+        {/* Center cluster: TC */}
+        <div style={{flex:1,display:"flex",justifyContent:"center",alignItems:"center",gap:"8px"}}>
+          <span style={{fontSize:"11px",color:"#E8512A",fontWeight:600,letterSpacing:"0.04em",background:"rgba(232,81,42,0.07)",border:"1px solid rgba(232,81,42,0.16)",padding:"3px 9px",borderRadius:"12px",textTransform:"uppercase",display:"flex",alignItems:"center",gap:"5px"}}>
+            <svg width="8" height="8" viewBox="0 0 10 10" fill="#E8512A" opacity="0.8"><polygon points="5,0 6.2,3.8 10,3.8 7,6.1 8.1,10 5,7.7 1.9,10 3,6.1 0,3.8 3.8,3.8"/></svg>
+            Cena {activeScene+1} / {localDrScenes.length||localScenes.length}
+          </span>
+          <span style={{fontSize:"13px",fontWeight:600,color:"#EAEAEA",fontVariantNumeric:"tabular-nums",letterSpacing:"0.04em"}}>
+            {fmtTime(currentTime)}
+            <span style={{color:"#252525",margin:"0 4px"}}>/</span>
+            <span style={{color:"#444",fontWeight:400}}>{fmtTime(totalDur)}</span>
+          </span>
         </div>
-        {/* v3 history button */}
-        <button style={{padding:"3px 8px",borderRadius:"6px",fontSize:"9px",fontWeight:700,color:"#555",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",cursor:"pointer",letterSpacing:"0.04em",flexShrink:0}}>v3</button>
-        <div style={{position:"relative"}}>
-          <button onClick={()=>setExportOpen(v=>!v)}
-            style={{display:"flex",alignItems:"center",gap:"5px",padding:"5px 10px",borderRadius:"8px",fontSize:"11px",fontWeight:700,color:"#9ca3af",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",cursor:"pointer"}}>
-            <Download style={{width:"12px",height:"12px"}}/>Exportar<ChevronUp style={{width:"11px",height:"11px",transform:exportOpen?"":"rotate(180deg)",transition:"transform .2s"}}/>
+
+        {/* Right cluster: Credits · v3 · Export · Premiere */}
+        <div style={{display:"flex",alignItems:"center",gap:"4px",flexShrink:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:"4px",padding:"3px 8px",borderRadius:"6px",background:"#0F0F0F",border:"1px solid #131313"}}>
+            <svg width="10" height="10" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" fill="#E8512A" opacity=".18"/><circle cx="7" cy="7" r="3" fill="#E8512A"/></svg>
+            <span style={{fontSize:"11px",fontWeight:600,color:"#EAEAEA",fontVariantNumeric:"tabular-nums"}}>{(result as {credits_used?:number}).credits_used ?? "—"}</span>
+            <span style={{fontSize:"10px",color:"#444"}}>/ 15k</span>
+          </div>
+          <button
+            onMouseEnter={e=>{e.currentTarget.style.background="#0F0F0F";e.currentTarget.style.color="#EAEAEA";}}
+            onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color="#7A7A7A";}}
+            style={{padding:"5px 10px",borderRadius:"6px",fontSize:"11px",fontWeight:500,color:"#7A7A7A",background:"transparent",border:"1px solid #1A1A1A",cursor:"pointer",transition:"all .12s"}}>
+            v3
           </button>
-          {exportOpen&&(
-            <div style={{position:"absolute",top:"calc(100% + 4px)",right:0,width:"220px",background:"#111",border:"1px solid rgba(255,255,255,0.08)",borderRadius:"12px",overflow:"hidden",zIndex:50,boxShadow:"0 20px 40px rgba(0,0,0,0.7)"}}>
-              {([
-                {label:"Premiere Pro / CapCut (.fcpxml)",icon:"🎬",paywall:false,action:downloadXML},
-                {label:"DaVinci Resolve (.xml)",icon:"🎞",paywall:false,action:downloadDaVinci},
-                {label:"EDL Universal (.edl)",icon:"📋",paywall:false,action:downloadEDL},
-                {label:"Legendas (.srt)",icon:"💬",paywall:false,action:downloadSRT},
-                {label:"Trilha de Fundo (.mp3)",icon:"🎵",paywall:false,action:downloadMusic},
-                {label:"Pack de Mídias",icon:"📦",paywall:true},
-              ] as {label:string;icon:string;paywall:boolean;action?:()=>void}[]).map(opt=>(
-                <button key={opt.label} onClick={()=>{setExportOpen(false);if(opt.paywall)setPaywallOpen(true);else opt.action?.();}}
-                  style={{width:"100%",display:"flex",alignItems:"center",gap:"10px",padding:"9px 14px",fontSize:"11px",textAlign:"left" as const,background:"none",border:"none",borderBottom:"1px solid rgba(255,255,255,0.05)",color:"#d1d5db",cursor:"pointer"}}>
-                  <span>{opt.icon}</span><span style={{flex:1}}>{opt.label}</span>
-                  {opt.paywall&&<Lock style={{width:"11px",height:"11px",color:"#f59e0b"}}/>}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        <button onClick={downloadXML}
-          style={{display:"flex",alignItems:"center",gap:"6px",padding:"6px 12px",borderRadius:"8px",fontSize:"11px",fontWeight:800,color:"#fff",background:"#E8593C",border:"1px solid rgba(255,255,255,0.15)",cursor:"pointer",boxShadow:"0 3px 12px rgba(232,89,60,0.4)",flexShrink:0}}>
-          <FileCode2 style={{width:"13px",height:"13px"}}/>Premiere XML
-        </button>
-      </div>
+          <div style={{position:"relative"}}>
+            <button onClick={()=>setExportOpen(v=>!v)}
+              onMouseEnter={e=>{e.currentTarget.style.background="#0F0F0F";e.currentTarget.style.color="#EAEAEA";}}
+              onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color="#7A7A7A";}}
+              style={{display:"flex",alignItems:"center",gap:"4px",padding:"5px 10px",borderRadius:"6px",fontSize:"11px",fontWeight:500,color:"#7A7A7A",background:"transparent",border:"1px solid #1A1A1A",cursor:"pointer",transition:"all .12s"}}>
+              <Download style={{width:"11px",height:"11px"}}/>Exportar
+              <ChevronUp style={{width:"10px",height:"10px",transform:exportOpen?"":"rotate(180deg)",transition:"transform .2s"}}/>
+            </button>
+            {exportOpen&&(
+              <div style={{position:"absolute",top:"calc(100% + 4px)",right:0,width:"220px",background:"#0F0F0F",border:"1px solid #131313",borderRadius:"8px",overflow:"hidden",zIndex:50,boxShadow:"0 12px 28px rgba(0,0,0,0.6)"}}>
+                {([
+                  {label:"Premiere Pro / CapCut (.fcpxml)",icon:"🎬",paywall:false,action:downloadXML},
+                  {label:"DaVinci Resolve (.xml)",icon:"🎞",paywall:false,action:downloadDaVinci},
+                  {label:"EDL Universal (.edl)",icon:"📋",paywall:false,action:downloadEDL},
+                  {label:"Legendas (.srt)",icon:"💬",paywall:false,action:downloadSRT},
+                  {label:"Trilha de Fundo (.mp3)",icon:"🎵",paywall:false,action:downloadMusic},
+                  {label:"Pack de Mídias",icon:"📦",paywall:true},
+                ] as {label:string;icon:string;paywall:boolean;action?:()=>void}[]).map(opt=>(
+                  <button key={opt.label} onClick={()=>{setExportOpen(false);if(opt.paywall)setPaywallOpen(true);else opt.action?.();}}
+                    onMouseEnter={e=>{e.currentTarget.style.background="#141414";}}
+                    onMouseLeave={e=>{e.currentTarget.style.background="transparent";}}
+                    style={{width:"100%",display:"flex",alignItems:"center",gap:"10px",padding:"8px 12px",fontSize:"11px",textAlign:"left" as const,background:"transparent",border:"none",borderBottom:"1px solid #131313",color:"#EAEAEA",cursor:"pointer",transition:"background .12s"}}>
+                    <span>{opt.icon}</span><span style={{flex:1}}>{opt.label}</span>
+                    {opt.paywall&&<Lock style={{width:"10px",height:"10px",color:"#F5A623"}}/>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <button onClick={downloadXML}
+            onMouseEnter={e=>{e.currentTarget.style.background="#FF6B3D";}}
+            onMouseLeave={e=>{e.currentTarget.style.background="#E8512A";}}
+            style={{display:"flex",alignItems:"center",gap:"5px",padding:"5px 11px",borderRadius:"6px",fontSize:"11px",fontWeight:600,color:"#fff",background:"#E8512A",border:"1px solid #E8512A",cursor:"pointer",flexShrink:0,transition:"background .12s"}}>
+            <FileCode2 style={{width:"11px",height:"11px"}}/>Premiere XML
+          </button>
+        </div>{/* end right cluster */}
+      </div>{/* end topbar */}
 
       {/* ══ MAIN: 3 colunas ═════════════════════════════════════════════════ */}
       <div style={{display:"flex",overflow:"hidden",minHeight:0}}>
@@ -2978,24 +3000,20 @@ ${clipEls.join("\n")}
 
 
       {/* ══ STATUSBAR (28px) ══════════════════════════════════════════════════ */}
-      <div style={{height:"28px",flexShrink:0,display:"flex",alignItems:"center",gap:"16px",padding:"0 14px",background:"#09090B",borderTop:"1px solid #131313",fontSize:"10px",color:"rgba(255,255,255,0.3)",fontFamily:"'Geist',sans-serif",zIndex:10,overflow:"hidden"}}>
-        {/* Project saved */}
-        <div style={{display:"flex",alignItems:"center",gap:"5px",flexShrink:0}}>
-          <div style={{width:"5px",height:"5px",borderRadius:"50%",background:"#22c55e",boxShadow:"0 0 5px rgba(34,197,94,0.6)"}}/>
-          <span style={{fontWeight:500}}>Projeto salvo</span>
+      <div style={{height:"28px",flexShrink:0,display:"flex",alignItems:"center",gap:"10px",padding:"0 12px",background:"#0F0F0F",borderTop:"1px solid #131313",fontSize:"10px",color:"#444",fontFamily:"'Geist',sans-serif",zIndex:10,overflow:"hidden"}}>
+        <div style={{display:"flex",alignItems:"center",gap:"4px",flexShrink:0}}>
+          <div style={{width:"5px",height:"5px",borderRadius:"50%",background:"#3ECF8E"}}/>
+          <span>Projeto salvo</span>
         </div>
-        <span style={{color:"rgba(255,255,255,0.1)"}}>·</span>
-        {/* Duration */}
         <span style={{flexShrink:0}}>{fmtTime(totalDur)} total</span>
-        <span style={{color:"rgba(255,255,255,0.1)"}}>·</span>
-        {/* Scene count */}
         <span style={{flexShrink:0}}>{localDrScenes.length||localScenes.length} cenas</span>
-        <span style={{color:"rgba(255,255,255,0.1)"}}>·</span>
-        {/* Resolution / fps */}
         <span style={{flexShrink:0}}>1920×1080 · 30fps</span>
         <div style={{flex:1}}/>
-        {/* Playhead */}
-        <span style={{fontFamily:"monospace",color:"#F0563A",fontWeight:700,flexShrink:0}}>{fmtTime(currentTime)}</span>
+        <span style={{flexShrink:0,display:"flex",alignItems:"center",gap:"4px"}}>
+          playhead: <span style={{fontFamily:"monospace",color:"#7A7A7A",fontVariantNumeric:"tabular-nums"}}>{fmtTime(currentTime)}</span>
+        </span>
+        <span style={{flexShrink:0}}>snap: <span style={{color:snapOn?"#E8512A":"#7A7A7A"}}>{snapOn?"on":"off"}</span></span>
+        <span style={{flexShrink:0}}>tool: <span style={{color:"#7A7A7A"}}>{timelineTool}</span></span>
       </div>
 
       {paywallOpen&&<UpsellModal onClose={()=>setPaywallOpen(false)}/>}
