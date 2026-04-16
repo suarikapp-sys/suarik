@@ -105,6 +105,16 @@ const TOOL_META: Record<string, { icon: string; route: string; color: string; la
 };
 
 // ─── Quick Picks ──────────────────────────────────────────────────────────────
+const DEMO_SCRIPT = `Você sabia que 93% dos adultos com mais de 60 anos sofrem com dor nas articulações todos os dias?
+
+Mas hoje eu vou te mostrar uma descoberta que está transformando a vida dessas pessoas — e que a indústria farmacêutica não quer que você saiba.
+
+Existe uma substância 100% natural, extraída de uma planta amazônica, que reduz a inflamação em até 80% e restaura a mobilidade das articulações em apenas 3 semanas.
+
+Milhares de brasileiros já recuperaram a liberdade de se mover sem dor. E agora chegou a sua vez.
+
+Clique no botão abaixo e descubra como isso pode funcionar para você. Mas atenção — essa oferta especial é por tempo limitado.`;
+
 const QUICK_PICKS = [
   { label: "VSL Suplemento",  prompt: "Crie um VSL de 3 minutos para um suplemento natural de energia e foco. Tom persuasivo, ganchos emocionais, CTA forte no final." },
   { label: "Financeiro DR",   prompt: "Crie um vídeo estilo Direct Response para um curso de finanças pessoais. Abordagem problema-solução, prova social, urgência." },
@@ -620,6 +630,15 @@ function DashboardContent() {
                   {qp.label}
                 </button>
               ))}
+              <button
+                onClick={() => {
+                  setHeroText(DEMO_SCRIPT);
+                  trackEvent("demo_quickpick", {});
+                  setTimeout(() => textareaRef.current?.focus(), 50);
+                }}
+                style={{ fontSize: 12, color: "#3ECF8E", padding: "5px 12px", background: "rgba(62,207,142,.06)", border: "1px solid rgba(62,207,142,.18)", borderRadius: 20, cursor: "pointer" }}>
+                Usar exemplo completo
+              </button>
             </div>
 
             {/* ── Tools Level 1: Featured Storyboard ─────────────────────── */}
@@ -950,12 +969,23 @@ function DashboardContent() {
                     </div>
                   ))}
                 </div>
-                <button
-                  onClick={() => router.push("/storyboard")}
-                  style={{ background: "#E8512A", color: "#fff", fontSize: 13, fontWeight: 700, padding: "12px 24px", borderRadius: 8, border: "none", cursor: "pointer", marginBottom: 10 }}>
-                  Criar meu primeiro projeto
-                </button>
-                <p style={{ fontSize: 11, color: T.text4, margin: 0 }}>500 moedas grátis · sem cartão de crédito</p>
+                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <button
+                    onClick={() => router.push("/storyboard")}
+                    style={{ background: "#E8512A", color: "#fff", fontSize: 13, fontWeight: 700, padding: "12px 24px", borderRadius: 8, border: "none", cursor: "pointer" }}>
+                    Criar meu primeiro projeto
+                  </button>
+                  <button
+                    onClick={() => {
+                      trackEvent("demo_project", {});
+                      sessionStorage.setItem("suarik_draft_script", DEMO_SCRIPT);
+                      router.push("/storyboard");
+                    }}
+                    style={{ background: "transparent", color: "#3ECF8E", fontSize: 13, fontWeight: 600, padding: "12px 20px", borderRadius: 8, border: "1px solid rgba(62,207,142,0.25)", cursor: "pointer" }}>
+                    Experimentar com exemplo
+                  </button>
+                </div>
+                <p style={{ fontSize: 11, color: T.text4, margin: "10px 0 0" }}>500 moedas grátis · sem cartão de crédito</p>
               </div>
             )}
 
