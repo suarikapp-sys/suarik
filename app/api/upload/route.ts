@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl }                from "@aws-sdk/s3-request-presigner";
 import { createClient }                from "@/lib/supabase/server";
+import { rateLimit }                   from "@/app/lib/rateLimit";
 
 // ── S3-compatible client apontando para o Cloudflare R2 ─────────────────────
 // requestChecksumCalculation: "WHEN_REQUIRED" prevents the SDK from injecting
@@ -46,6 +47,11 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+
+  // ── Rate limit: 10 uploads per user per minute ──────────────────────────
+  if (!await rateLimit(`upload:${user.id}`, 10, 60_000)) {
+    return NextResponse.json({ error: "Muitas requisições. Aguarde 1 minuto." }, { status: 429 });
+  }
 
   try {
     const { filename, contentType } = (await req.json()) as {

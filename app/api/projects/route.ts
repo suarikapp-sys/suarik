@@ -3,11 +3,17 @@
 // POST → salva novo projeto
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { rateLimit } from "@/app/lib/rateLimit";
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // ── Rate limit: 30 requests per user per minute ──────────────────────────
+  if (!await rateLimit(`projects:${user.id}`, 30, 60_000)) {
+    return NextResponse.json({ error: "Muitas requisições. Aguarde 1 minuto." }, { status: 429 });
+  }
 
   const page  = Math.max(0, parseInt(req.nextUrl.searchParams.get("page") ?? "0", 10));
   const limit = Math.min(50, Math.max(1, parseInt(req.nextUrl.searchParams.get("limit") ?? "50", 10)));
@@ -32,6 +38,11 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // ── Rate limit: 30 requests per user per minute ──────────────────────────
+  if (!await rateLimit(`projects:${user.id}`, 30, 60_000)) {
+    return NextResponse.json({ error: "Muitas requisições. Aguarde 1 minuto." }, { status: 429 });
+  }
 
   const body = await req.json() as {
     tool:        string;
@@ -66,6 +77,11 @@ export async function DELETE(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // ── Rate limit: 30 requests per user per minute ──────────────────────────
+  if (!await rateLimit(`projects:${user.id}`, 30, 60_000)) {
+    return NextResponse.json({ error: "Muitas requisições. Aguarde 1 minuto." }, { status: 429 });
+  }
 
   const { id } = await req.json() as { id: string };
   if (!id) return NextResponse.json({ error: "id obrigatório" }, { status: 400 });
