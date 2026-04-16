@@ -2101,18 +2101,106 @@ ${clipEls.join("\n")}
           )}
         </div>
 
-        {rightTab==="inspector" && (
-          <div className="flex-1 overflow-y-auto p-4 flex flex-col items-center justify-center text-center gap-2" style={{color:"#7A7A7A"}}>
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" style={{opacity:0.3}}>
-              <path d="M12 2l9 4.5v11L12 22l-9-4.5v-11L12 2z" stroke="currentColor" strokeWidth="1.2"/>
-              <path d="M12 2v20M3 6.5l18 11M21 6.5l-18 11" stroke="currentColor" strokeWidth="1.2" opacity="0.4"/>
-            </svg>
-            <p className="text-[11px] font-medium">Inspector</p>
-            <p className="text-[10px] leading-relaxed max-w-[200px]" style={{color:"#444"}}>
-              Selecione um clip, avatar ou legenda na timeline para ajustar propriedades.
-            </p>
-          </div>
-        )}
+        {rightTab==="inspector" && (()=>{
+          const layerType =
+            selectedLayer==="avatar"   ? "avatar"   :
+            selectedLayer==="subtitle" ? "subtitle" :
+            selectedLayer && effectiveClips.find(c=>c.id===selectedLayer) ? "broll" :
+            null;
+          const selClip = layerType==="broll" ? effectiveClips.find(c=>c.id===selectedLayer)! : null;
+          const avT = avatarTransform;
+          const brollT = selClip ? (clipTransforms[selClip.id]??{scale:100,x:0,y:0}) : {scale:100,x:0,y:0};
+          const sc = subtitleConfig;
+
+          if(!layerType){
+            return (
+              <div className="flex-1 overflow-y-auto p-4 flex flex-col items-center justify-center text-center gap-2" style={{color:"#7A7A7A"}}>
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" style={{opacity:0.3}}>
+                  <path d="M12 2l9 4.5v11L12 22l-9-4.5v-11L12 2z" stroke="currentColor" strokeWidth="1.2"/>
+                  <path d="M12 2v20M3 6.5l18 11M21 6.5l-18 11" stroke="currentColor" strokeWidth="1.2" opacity="0.4"/>
+                </svg>
+                <p className="text-[11px] font-medium">Inspector</p>
+                <p className="text-[10px] leading-relaxed max-w-[200px]" style={{color:"#444"}}>
+                  Selecione um clip, avatar ou legenda na timeline para ajustar propriedades.
+                </p>
+                <div className="grid grid-cols-3 gap-1.5 w-full mt-3">
+                  {[
+                    {label:"Avatar",layer:"avatar" as const,color:"#5A9ACA"},
+                    {label:"Legenda",layer:"subtitle" as const,color:"#489880"},
+                    {label:"B-Roll",layer:null,color:"#E8512A"},
+                  ].map(({label,layer,color})=>(
+                    <button key={label}
+                      onClick={()=>{if(layer)setSelectedLayer(layer);}}
+                      className="py-2.5 rounded-lg flex flex-col items-center gap-1 transition-all hover:bg-white/4"
+                      style={{border:"1px dashed #131313",opacity:layer?1:0.4,cursor:layer?"pointer":"default"}}>
+                      <div className="w-2 h-2 rounded-full" style={{background:color}}/>
+                      <span className="text-[9px] font-medium" style={{color:"#7A7A7A"}}>{label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          }
+
+          const accent = layerType==="avatar"?"#5A9ACA":layerType==="subtitle"?"#489880":"#E8512A";
+          const Row = ({k,v}:{k:string;v:React.ReactNode})=>(
+            <div className="flex items-center justify-between py-1.5 border-b" style={{borderColor:"#131313"}}>
+              <span className="text-[10px]" style={{color:"#7A7A7A"}}>{k}</span>
+              <span className="text-[10px] font-mono tabular-nums" style={{color:"#EAEAEA"}}>{v}</span>
+            </div>
+          );
+
+          return (
+            <div className="flex-1 overflow-y-auto p-3">
+              {/* Header */}
+              <div className="flex items-center gap-2 pb-3 mb-2 border-b" style={{borderColor:"#131313"}}>
+                <div className="w-1.5 h-5 rounded-full shrink-0" style={{background:accent}}/>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-semibold truncate" style={{color:"#EAEAEA"}}>
+                    {layerType==="avatar"?"Avatar / A-Roll":layerType==="subtitle"?"Legendas":selClip?.label}
+                  </p>
+                  <p className="text-[9px] truncate" style={{color:"#444"}}>
+                    {layerType==="avatar"?"Vídeo base":
+                     layerType==="subtitle"?"Estilo e posição":
+                     selClip ? `${selClip.startSec.toFixed(2)}s → ${(selClip.startSec+selClip.durSec).toFixed(2)}s`:""}
+                  </p>
+                </div>
+                <button onClick={()=>setSelectedLayer(null)}
+                  className="text-[14px] leading-none p-1 transition-colors"
+                  style={{color:"#444"}} title="Desselecionar">✕</button>
+              </div>
+
+              {/* Properties */}
+              <div className="rounded-lg p-3 mb-2" style={{background:"#0F0F0F",border:"1px solid #131313"}}>
+                <p className="text-[9px] font-bold uppercase tracking-[0.14em] mb-1.5" style={{color:"#7A7A7A"}}>Propriedades</p>
+                {layerType==="avatar" && (<>
+                  <Row k="Escala" v={`${avT.scale}%`}/>
+                  <Row k="Posição X" v={`${avT.x}%`}/>
+                  <Row k="Posição Y" v={`${avT.y}%`}/>
+                </>)}
+                {layerType==="broll" && selClip && (<>
+                  <Row k="Início" v={`${selClip.startSec.toFixed(2)}s`}/>
+                  <Row k="Duração" v={`${selClip.durSec.toFixed(2)}s`}/>
+                  <Row k="Escala" v={`${brollT.scale}%`}/>
+                  <Row k="Posição" v={`${brollT.x}, ${brollT.y}`}/>
+                  <Row k="Mídia" v={selClip.url||selClip.thumb?"Definida":"Placeholder"}/>
+                </>)}
+                {layerType==="subtitle" && (<>
+                  <Row k="Estilo" v={sc.style}/>
+                  <Row k="Posição" v={sc.position==="top"?"Topo":sc.position==="center"?"Centro":"Base"}/>
+                  <Row k="Tamanho" v={`${sc.fontSize}%`}/>
+                  <Row k="Regras de cor" v={`${sc.colorRules.length}`}/>
+                </>)}
+              </div>
+
+              <button onClick={()=>setLeftTab("inspector")}
+                className="w-full py-2 rounded-lg text-[10px] font-semibold transition-all hover:opacity-80"
+                style={{background:"rgba(232,81,42,0.08)",border:"1px solid rgba(232,81,42,0.25)",color:"#E8512A"}}>
+                Editar no painel esquerdo →
+              </button>
+            </div>
+          );
+        })()}
 
         {rightTab==="audio" && (
           <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
