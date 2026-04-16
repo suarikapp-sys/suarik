@@ -268,6 +268,10 @@ export function WorkstationView({ result, copy: initialCopy, drScenes: initialDr
   const [avatarVolume,      setAvatarVolume]      = useState(1.0);
   // ── Timeline zoom ─────────────────────────────────────────────────────
   const [timelineZoom,      setTimelineZoom]      = useState(1);
+  // ── Snap toggle ───────────────────────────────────────────────────────
+  const [snapOn,            setSnapOn]            = useState(true);
+  // ── Active timeline tool ──────────────────────────────────────────────
+  const [timelineTool,      setTimelineTool]      = useState<"select"|"cut"|"slip">("select");
   // ── Clip drag-to-reorder (within V2 track) ───────────────────────────
   const [dragClipSceneIdx,  setDragClipSceneIdx]  = useState<number|null>(null);
   // ── Clip overrides: free-drag position/duration on timeline ──────────
@@ -1288,6 +1292,10 @@ ${clipEls.join("\n")}
       .ws-in{animation:wsIn .35s ease both}
       .v1clip:hover .v1clip-overlay{opacity:1!important}
       .v1clip-overlay{opacity:0;transition:opacity .15s ease}
+      .ws-in ::-webkit-scrollbar{width:3px;height:3px}
+      .ws-in ::-webkit-scrollbar-track{background:transparent}
+      .ws-in ::-webkit-scrollbar-thumb{background:#1A1A1A;border-radius:2px}
+      .ws-in ::-webkit-scrollbar-thumb:hover{background:#222}
     `}</style>
     <div className="ws-in"
       style={{background:"#060606",color:"#F5F3F0",fontFamily:"'Geist',sans-serif",display:"grid",gridTemplateRows:"42px 1fr 196px 28px",height:"100vh",overflow:"hidden"}}>
@@ -2479,25 +2487,31 @@ ${clipEls.join("\n")}
       {/* ══ BOTTOM PANEL: AI Strip + Mixer + Timeline (196px full-width) ══ */}
       <div style={{height:"196px",display:"flex",flexDirection:"column",background:"#09090B",borderTop:"1px solid #131313",overflow:"hidden"}}>
         {/* ── AI Suggestion Strip ── */}
-        <div className="mx-3 mt-2 mb-0 px-4 py-2 rounded-xl shrink-0 flex items-center gap-2.5"
-          style={{background:"rgba(138,43,226,0.07)",border:"1px solid rgba(138,43,226,0.18)"}}>
-          <div style={{width:"6px",height:"6px",borderRadius:"50%",background:"#a855f7",flexShrink:0,boxShadow:"0 0 6px rgba(168,85,247,0.6)"}}/>
-          <span style={{fontSize:"10px",color:"rgba(168,85,247,0.85)",fontWeight:500,flex:1}}>
-            ✦ Sugestão IA: adicione um B-roll de transição na cena {activeScene+1} para aumentar a retenção
+        <div className="px-3.5 py-1.5 shrink-0 flex items-center gap-2"
+          style={{background:"rgba(155,143,248,0.08)",borderTop:"1px solid rgba(155,143,248,0.2)",borderBottom:"1px solid #131313"}}>
+          <div className="flex items-center justify-center shrink-0" style={{width:"16px",height:"16px",borderRadius:"50%",background:"rgba(155,143,248,0.2)"}}>
+            <span style={{fontSize:"9px",color:"#B8B0F8"}}>✦</span>
+          </div>
+          <span style={{fontSize:"11px",color:"#7A7A7A",flex:1,lineHeight:"1.4"}}>
+            <strong style={{color:"#B8B0F8",fontWeight:500}}>Sugestão IA:</strong> adicione um B-roll de transição na cena {activeScene+1} para aumentar a retenção
           </span>
-          <button style={{fontSize:"9px",fontWeight:700,color:"rgba(168,85,247,0.7)",background:"rgba(168,85,247,0.1)",border:"1px solid rgba(168,85,247,0.2)",borderRadius:"6px",padding:"2px 8px",cursor:"pointer",flexShrink:0}}>Aplicar</button>
-          <button style={{fontSize:"10px",color:"rgba(255,255,255,0.2)",background:"none",border:"none",cursor:"pointer",flexShrink:0,lineHeight:1}}>✕</button>
+          <button style={{fontSize:"10px",color:"#B8B0F8",background:"transparent",border:"1px solid rgba(155,143,248,0.2)",borderRadius:"8px",padding:"3px 10px",cursor:"pointer",flexShrink:0,transition:"background .12s"}}
+            onMouseEnter={e=>e.currentTarget.style.background="rgba(155,143,248,0.08)"}
+            onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+            Aplicar
+          </button>
+          <button style={{fontSize:"12px",color:"#444",background:"none",border:"none",cursor:"pointer",flexShrink:0,lineHeight:1,padding:"2px 4px"}}>✕</button>
         </div>
 
         {/* ── Audio Mixer ── */}
-        <div className="mx-3 mb-0 mt-1 px-4 py-2.5 rounded-xl shrink-0 flex items-center gap-4"
-          style={{background:"rgba(0,0,0,0.55)",border:"1px solid rgba(255,255,255,0.06)"}}>
+        <div className="px-3.5 py-1.5 shrink-0 flex items-center gap-4"
+          style={{background:"#09090B",borderTop:"1px solid #131313",borderBottom:"1px solid #131313"}}>
           <span className="text-[9px] font-black uppercase tracking-[0.14em] text-gray-500 shrink-0">Mixer</span>
           {/* 🎙️ Avatar fader */}
           <div className="flex items-center gap-2 flex-1">
             <span className="text-[10px] shrink-0">🎙️</span>
             <span className="text-[9px] font-bold text-gray-500 shrink-0 w-10">Avatar</span>
-            <div className="relative flex-1 h-1.5 rounded-full cursor-pointer" style={{background:"rgba(255,255,255,0.08)"}}>
+            <div className="relative flex-1 h-[2px] rounded-full cursor-pointer" style={{background:"#1A1A1A"}}>
               <div className="absolute left-0 top-0 h-full rounded-full pointer-events-none transition-all"
                 style={{width:`${avatarVolume*100}%`,background:"linear-gradient(90deg,#FF7A5C,#E8593C)"}}/>
               <input type="range" min="0" max="1" step="0.01" value={avatarVolume}
@@ -2515,7 +2529,7 @@ ${clipEls.join("\n")}
           <div className="flex items-center gap-2 flex-1">
             <span className="text-[10px] shrink-0">🎵</span>
             <span className="text-[9px] font-bold text-gray-500 shrink-0 w-10">Trilha</span>
-            <div className="relative flex-1 h-1.5 rounded-full cursor-pointer" style={{background:"rgba(255,255,255,0.08)"}}>
+            <div className="relative flex-1 h-[2px] rounded-full cursor-pointer" style={{background:"#1A1A1A"}}>
               <div className="absolute left-0 top-0 h-full rounded-full pointer-events-none transition-all"
                 style={{width:`${bgVolume*100}%`,background:"linear-gradient(90deg,#FF7A5C,#E8593C)"}}/>
               <input type="range" min="0" max="1" step="0.01" value={bgVolume}
@@ -2532,7 +2546,7 @@ ${clipEls.join("\n")}
           <div className="flex items-center gap-2 flex-1">
             <span className="text-[10px] shrink-0">💥</span>
             <span className="text-[9px] font-bold text-gray-500 shrink-0 w-10">SFX</span>
-            <div className="relative flex-1 h-1.5 rounded-full cursor-pointer" style={{background:"rgba(255,255,255,0.08)"}}>
+            <div className="relative flex-1 h-[2px] rounded-full cursor-pointer" style={{background:"#1A1A1A"}}>
               <div className="absolute left-0 top-0 h-full rounded-full pointer-events-none transition-all"
                 style={{width:"80%",background:"linear-gradient(90deg,#a78bfa,#7c3aed)"}}/>
               <input type="range" min="0" max="1" step="0.01" defaultValue="0.8"
@@ -2543,79 +2557,85 @@ ${clipEls.join("\n")}
         </div>
 
         {/* ── Timeline (extracted) ── */}
-        <div className="flex-1 min-h-0 flex flex-col px-3 pb-3">
-          <div className="flex-1 min-h-0 rounded-xl overflow-hidden flex flex-col"
-            style={{background:"#080808",border:"1px solid rgba(255,255,255,0.06)"}}>
+        <div className="flex-1 min-h-0 flex flex-col">
+          <div className="flex-1 min-h-0 overflow-hidden flex flex-col"
+            style={{background:"#09090B"}}>
 
             {/* ── Timeline Toolbar ── */}
-            <div className="flex items-center gap-2 px-4 py-2.5 border-b shrink-0"
-              style={{borderColor:"rgba(255,255,255,0.08)",background:"rgba(0,0,0,0.4)"}}>
+            <div className="flex items-center gap-1 px-2.5 border-b shrink-0"
+              style={{borderColor:"#131313",background:"#0F0F0F",height:"30px"}}>
 
               {/* Tool buttons: Selecionar / Corte / Slip */}
-              <div className="flex items-center gap-1 shrink-0">
-                {([
-                  {id:"select",label:"S",title:"Selecionar (V)"},
-                  {id:"cut",label:"✂",title:"Corte (C)"},
-                  {id:"slip",label:"⇄",title:"Slip (Y)"},
-                ] as {id:string;label:string;title:string}[]).map(tool=>(
-                  <button key={tool.id} title={tool.title}
-                    className="w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-bold transition-all hover:scale-105 active:scale-95"
+              {([
+                {id:"select" as const,label:"◱",title:"Selecionar (V)"},
+                {id:"cut"    as const,label:"✂",title:"Corte (C)"},
+                {id:"slip"   as const,label:"⇄",title:"Slip (Y)"},
+              ]).map(tool=>{
+                const active = timelineTool===tool.id;
+                return (
+                  <button key={tool.id} title={tool.title} onClick={()=>setTimelineTool(tool.id)}
+                    className="flex items-center justify-center transition-colors"
                     style={{
-                      background: tool.id==="select" ? "rgba(232,81,42,0.18)" : "rgba(255,255,255,0.05)",
-                      border: tool.id==="select" ? "1px solid rgba(232,81,42,0.4)" : "1px solid rgba(255,255,255,0.1)",
-                      color: tool.id==="select" ? "#F0563A" : "#9ca3af",
+                      width:"22px",height:"22px",borderRadius:"4px",
+                      background: active ? "#1A1A1A" : "transparent",
+                      border: active ? "1px solid #222" : "1px solid transparent",
+                      color: active ? "#EAEAEA" : "#444",
+                      fontSize:"11px",cursor:"pointer",
                     }}>
                     {tool.label}
                   </button>
-                ))}
-              </div>
+                );
+              })}
 
-              <div className="w-px h-4 shrink-0" style={{background:"rgba(255,255,255,0.08)"}}/>
+              <div className="w-px h-[14px] mx-1 shrink-0" style={{background:"#131313"}}/>
 
-              {/* Snap toggle */}
-              <button title="Snap ao grid (S)"
-                className="flex items-center gap-1 px-2.5 h-7 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all"
-                style={{background:"rgba(34,197,94,0.1)",border:"1px solid rgba(34,197,94,0.25)",color:"rgba(34,197,94,0.8)"}}>
-                <svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M2 5h6M5 2v6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
-                SNAP
-              </button>
-
-              <div className="w-px h-4 shrink-0" style={{background:"rgba(255,255,255,0.08)"}}/>
-
-              {/* Label */}
-              <span className="text-[11px] font-black uppercase tracking-widest shrink-0"
-                style={{color:"rgba(240,86,58,0.7)"}}>🔍</span>
-
-              {/* Zoom Out */}
-              <button onClick={()=>setTimelineZoom(z=>Math.max(0.25,z*0.75))}
-                className="w-8 h-8 rounded-lg flex items-center justify-center font-black text-lg transition-all hover:scale-105 active:scale-95"
-                style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.12)",color:"#e4e4e7"}}>
-                −
-              </button>
-
-              {/* Zoom level */}
-              <div className="w-16 h-8 rounded-lg flex items-center justify-center text-[13px] font-black"
-                style={{background:"rgba(240,86,58,0.15)",border:"1px solid rgba(240,86,58,0.35)",color:"#F0563A"}}>
-                {Math.round(timelineZoom*100)}%
-              </div>
-
-              {/* Zoom In */}
-              <button onClick={()=>setTimelineZoom(z=>Math.min(8,z*1.33))}
-                className="w-8 h-8 rounded-lg flex items-center justify-center font-black text-lg transition-all hover:scale-105 active:scale-95"
-                style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.12)",color:"#e4e4e7"}}>
-                +
-              </button>
-
-              {/* FIT */}
-              <button onClick={()=>setTimelineZoom(1)}
-                className="px-3 h-8 rounded-lg text-[11px] font-black transition-all hover:scale-105 active:scale-95"
-                style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",color:"#a1a1aa"}}>
-                FIT
+              {/* Snap toggle — real switch */}
+              <button onClick={()=>setSnapOn(v=>!v)} title="Snap ao grid (S)"
+                className="flex items-center gap-1.5 px-1.5 h-[22px] rounded transition-colors"
+                style={{background:"transparent",border:"none",cursor:"pointer"}}>
+                <span className="text-[10px]" style={{color:"#7A7A7A"}}>Snap</span>
+                <div className="relative" style={{
+                  width:"24px",height:"13px",borderRadius:"7px",
+                  background: snapOn ? "#E8512A" : "#1A1A1A",
+                  transition:"background .15s",
+                }}>
+                  <div style={{
+                    position:"absolute",top:"2px",
+                    [snapOn?"right":"left"]:"2px",
+                    width:"9px",height:"9px",borderRadius:"50%",
+                    background:"#fff",transition:"all .15s",
+                  } as React.CSSProperties}/>
+                </div>
               </button>
 
               <div className="flex-1"/>
-              <span className="text-[10px] font-medium" style={{color:"rgba(255,255,255,0.2)"}}>
-                ✦ Ctrl+scroll para zoom &nbsp;·&nbsp; arraste clips para reordenar
+
+              {/* Zoom cluster */}
+              <button onClick={()=>setTimelineZoom(z=>Math.max(0.25,z*0.75))}
+                title="Zoom out"
+                className="flex items-center justify-center transition-colors"
+                style={{width:"18px",height:"18px",borderRadius:"3px",background:"#141414",border:"1px solid #131313",color:"#7A7A7A",fontSize:"10px",cursor:"pointer"}}>
+                −
+              </button>
+              <span className="text-[10px] tabular-nums text-center" style={{color:"#EAEAEA",minWidth:"34px"}}>
+                {Math.round(timelineZoom*100)}%
+              </span>
+              <button onClick={()=>setTimelineZoom(z=>Math.min(8,z*1.33))}
+                title="Zoom in"
+                className="flex items-center justify-center transition-colors"
+                style={{width:"18px",height:"18px",borderRadius:"3px",background:"#141414",border:"1px solid #131313",color:"#7A7A7A",fontSize:"10px",cursor:"pointer"}}>
+                +
+              </button>
+              <button onClick={()=>setTimelineZoom(1)} title="Fit (0)"
+                className="flex items-center justify-center transition-colors ml-1"
+                style={{height:"18px",padding:"0 7px",borderRadius:"3px",background:"#141414",border:"1px solid #131313",color:"#7A7A7A",fontSize:"9px",fontWeight:600,letterSpacing:"0.04em",cursor:"pointer"}}>
+                FIT
+              </button>
+
+              <div className="w-px h-[14px] mx-1 shrink-0" style={{background:"#131313"}}/>
+
+              <span className="text-[10px] shrink-0" style={{color:"#444"}}>
+                {timelineClips.length} clips · {localDrScenes.length||localScenes.length} cenas
               </span>
             </div>
 
